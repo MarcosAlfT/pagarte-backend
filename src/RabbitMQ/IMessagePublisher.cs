@@ -7,5 +7,6 @@ namespace Shared.RabbitMQ
     public interface IMessagePublisher
     {
         Task PublishAsync<T>(T message, string exchange, string routingKey) where T : class;
+        Task PublishJsonAsync(string json, string exchange, string routingKey);
     }
 }

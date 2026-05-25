@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Pagarte.Services.Infrastructure;
 
@@ -11,9 +12,11 @@ using Pagarte.Services.Infrastructure;
 namespace Pagarte.Services.Migrations
 {
     [DbContext(typeof(PagarteDbContext))]
-    partial class PagarteDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260522164426_AddOutboxMessages")]
+    partial class AddOutboxMessages
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

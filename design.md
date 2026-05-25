@@ -22,7 +22,7 @@ RabbitMQ
 Pagarte.Engine
 ```
 
-`AppHost` is local development orchestration only. Production should run each service independently and should provide production infrastructure such as RabbitMQ, SQL Server, logs, metrics, and secrets outside Aspire.
+`AppHost` is local development orchestration only. Production should run each service independently and should provide production infrastructure such as RabbitMQ, SQL Server, logs, metrics, and secrets outside Aspire. AppHost does not provision RabbitMQ; it passes the configured external RabbitMQ connection string to the services that need it.
 
 ## General Architecture
 
@@ -398,7 +398,8 @@ Responsibilities:
 - Payment and quote persistence.
 - Payment operator resolution for card registration and payment confirmation.
 - Payment operator charge call during confirmation.
-- Publishing payment messages to RabbitMQ after a card charge succeeds.
+- Recording payment messages in the SQL outbox after a card charge succeeds.
+- Publishing outbox messages to RabbitMQ with retries.
 
 This project was previously named `Pagarte.Worker`. It is not only a background worker, so `Pagarte.Services` is the clearer name.
 
@@ -527,7 +528,8 @@ credit card id
 11. If charge succeeds, marks quote `Paid`.
 12. Saves `OperatorProvider` and `OperatorPaymentId`.
 13. Updates payment to `CardCharged`.
-14. Publishes `PaymentRequestMessage` to RabbitMQ.
+14. Records `PaymentRequestMessage` in the SQL outbox.
+15. The outbox publisher sends the message to RabbitMQ with retries.
 
 The credit card charge is intentionally synchronous. The client should know immediately whether the card was charged or rejected. The Engine only continues the asynchronous company/payment-delivery flow after a successful card charge.
 
@@ -667,6 +669,17 @@ email.send.dlq
 
 Both `Pagarte.Services` and `Pagarte.Engine` declare the Pagarte topology on startup, making startup idempotent.
 
+`Pagarte.Services` publishes to RabbitMQ through a SQL outbox. Payment confirmation stores the post-charge `PaymentRequestMessage` in the same database save as the `CardCharged` payment state, then a hosted outbox publisher retries pending messages until RabbitMQ accepts them. This prevents a successful card charge from being lost when RabbitMQ is temporarily unavailable.
+
+Production should provide RabbitMQ through environment variables, secrets, or platform configuration:
+
+```text
+RabbitMQ__Mode=FromEnvironment
+ConnectionStrings__PagQueue=amqp://app_user:<password>@10.10.0.4:5672/%2F
+```
+
+Do not log RabbitMQ connection strings because they contain credentials.
+
 ## Local Development
 
 AppHost wires local services:
@@ -676,13 +689,14 @@ AppHost wires local services:
 - Pagarte API
 - Pagarte Services
 - Pagarte Engine
-- RabbitMQ
 
 For local development, AppHost injects:
 
 ```text
 AuthSettings__Authority
 PagarteServices__GrpcUrl
+RabbitMQ__Mode
+ConnectionStrings__PagQueue
 ```
 
 Production should configure these values through environment variables, secrets, or cloud service configuration.

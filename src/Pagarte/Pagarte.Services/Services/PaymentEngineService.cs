@@ -2,8 +2,9 @@ using Pagarte.Messaging;
 using Pagarte.Messaging.Messages;
 using Pagarte.Services.Domain.Entities;
 using Pagarte.Services.Domain.Enums;
+using Pagarte.Services.Infrastructure;
 using Pagarte.Services.Interfaces;
-using Shared.RabbitMQ;
+using System.Text.Json;
 
 namespace Pagarte.Services.Services
 {
@@ -26,7 +27,7 @@ namespace Pagarte.Services.Services
 		IServiceRepository serviceRepository,
 		IFeeConfigurationRepository feeConfigRepository,
 		IPaymentOperatorResolver paymentOperatorResolver,
-		IMessagePublisher messagePublisher,
+		PagarteDbContext dbContext,
 		ILogger<PaymentEngineService> logger)
 	{
 		private readonly IPaymentRepository _paymentRepository = paymentRepository;
@@ -35,7 +36,7 @@ namespace Pagarte.Services.Services
 		private readonly IServiceRepository _serviceRepository = serviceRepository;
 		private readonly IFeeConfigurationRepository _feeConfigRepository = feeConfigRepository;
 		private readonly IPaymentOperatorResolver _paymentOperatorResolver = paymentOperatorResolver;
-		private readonly IMessagePublisher _messagePublisher = messagePublisher;
+		private readonly PagarteDbContext _dbContext = dbContext;
 		private readonly ILogger<PaymentEngineService> _logger = logger;
 
 		public async Task<PaymentQuoteResult> CreateQuoteAsync(
@@ -130,29 +131,34 @@ namespace Pagarte.Services.Services
 			}
 
 			quote.MarkPaid();
-			await _paymentQuoteRepository.UpdateAsync(quote);
 
 			payment.SetOperatorPaymentId(chargeResult.OperatorPaymentId!);
 			payment.UpdateStatus(TransactionStatus.CardCharged);
-			await _paymentRepository.UpdateAsync(payment);
 
-			// Publish to Engine for async company processing
-			await _messagePublisher.PublishAsync(
-				new PaymentRequestMessage
-				{
-					PaymentId = payment.Id,
-					CompanyId = quote.Service.CompanyId,
-					OperatorProvider = payment.OperatorProvider,
-					OperatorPaymentId = chargeResult.OperatorPaymentId!,
-					Amount = quote.TotalAmount,
-					Currency = quote.Currency,
-					Reference = payment.Reference,
-					ClientId = clientId
-				},
+			var paymentRequestMessage = new PaymentRequestMessage
+			{
+				PaymentId = payment.Id,
+				CompanyId = quote.Service.CompanyId,
+				OperatorProvider = payment.OperatorProvider,
+				OperatorPaymentId = chargeResult.OperatorPaymentId!,
+				Amount = quote.TotalAmount,
+				Currency = quote.Currency,
+				Reference = payment.Reference,
+				ClientId = clientId
+			};
+
+			var outboxMessage = OutboxMessage.Create(
+				typeof(PaymentRequestMessage).FullName ?? nameof(PaymentRequestMessage),
+				JsonSerializer.Serialize(paymentRequestMessage),
 				PagarteQueues.Exchanges.Payments,
 				PagarteQueues.Queues.PaymentRequest);
 
-			_logger.LogInformation("Payment {Reference} charged, published to Engine",
+			_dbContext.PaymentQuotes.Update(quote);
+			_dbContext.Payments.Update(payment);
+			_dbContext.OutboxMessages.Add(outboxMessage);
+			await _dbContext.SaveChangesAsync();
+
+			_logger.LogInformation("Payment {Reference} charged, queued for Engine publishing",
 				payment.Reference);
 
 			return new PaymentResult(true, payment.Id, payment.Reference,
