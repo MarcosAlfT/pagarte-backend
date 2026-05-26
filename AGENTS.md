@@ -120,10 +120,10 @@ public sealed class LoginWithPasswordUseCase
 When making changes in this project, the AI agent must follow this GitHub workflow:
 
 - Check the current branch before committing.
-# - Do not commit directly to `main` unless explicitly requested.
+- Do not commit directly to `main` unless explicitly requested.
 - Use small, focused commits.
 - Use clear commit messages.
 - Do not commit secrets, tokens, passwords, connection strings, `.env` files, or local configuration files.
 - Before pushing, verify that `origin` points to the expected GitHub repository.
 - Before committing, verify the repository Git identity is configured with the expected user name and email.
-#- Push only the branch related to the current work.
+- Push only the branch related to the current work.

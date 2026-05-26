@@ -25,10 +25,7 @@ namespace Shared.RabbitMQ
             {
                 if (_connection == null || !_connection.IsOpen)
                 {
-
 					var connectionString = BuildConnectionString();
-
-                    Console.WriteLine($"RabbitMQ connection string: {connectionString}");
 
 					var factory = new ConnectionFactory
 					{

@@ -25,10 +25,14 @@ public class RabbitMQPublisher : IMessagePublisher, IDisposable
 
 	public async Task PublishAsync<T>(T message, string exchange, string routingKey) where T : class
 	{
-		var channel = await GetChannelAsync();
 		var json = JsonSerializer.Serialize(message);
-		var body = Encoding.UTF8.GetBytes(json);
+		await PublishJsonAsync(json, exchange, routingKey);
+	}
 
+	public async Task PublishJsonAsync(string json, string exchange, string routingKey)
+	{
+		var channel = await GetChannelAsync();
+		var body = Encoding.UTF8.GetBytes(json);
 		var properties = new BasicProperties
 		{
 			Persistent = true,

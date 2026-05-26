@@ -27,6 +27,7 @@ namespace Pagarte.Engine
 
                     // RabbitMQ
                     services.AddRabbitMq(configuration);
+                    services.AddScoped<IMessagePublisher, RabbitMQPublisher>();
 
                     // Each consumer listens to one queue.
                     services.AddHostedService<PaymentRequestConsumer>();

@@ -2,8 +2,9 @@ using Pagarte.Messaging;
 using Pagarte.Messaging.Messages;
 using Pagarte.Services.Domain.Entities;
 using Pagarte.Services.Domain.Enums;
+using Pagarte.Services.Infrastructure;
 using Pagarte.Services.Interfaces;
-using Shared.RabbitMQ;
+using System.Text.Json;
 
 namespace Pagarte.Services.Services
 {
@@ -26,6 +27,7 @@ namespace Pagarte.Services.Services
 		IServiceRepository serviceRepository,
 		IFeeConfigurationRepository feeConfigRepository,
 		IPaymentOperatorResolver paymentOperatorResolver,
+		PagarteDbContext dbContext,
 		IMessagePublisher messagePublisher,
 		ILogger<PaymentEngineService> logger)
 	{
@@ -35,6 +37,7 @@ namespace Pagarte.Services.Services
 		private readonly IServiceRepository _serviceRepository = serviceRepository;
 		private readonly IFeeConfigurationRepository _feeConfigRepository = feeConfigRepository;
 		private readonly IPaymentOperatorResolver _paymentOperatorResolver = paymentOperatorResolver;
+		private readonly PagarteDbContext _dbContext = dbContext;
 		private readonly IMessagePublisher _messagePublisher = messagePublisher;
 		private readonly ILogger<PaymentEngineService> _logger = logger;
 
@@ -130,6 +133,34 @@ namespace Pagarte.Services.Services
 			}
 
 			quote.MarkPaid();
+
+			payment.SetOperatorPaymentId(chargeResult.OperatorPaymentId!);
+			payment.UpdateStatus(TransactionStatus.CardCharged);
+
+			var paymentRequestMessage = new PaymentRequestMessage
+			{
+				PaymentId = payment.Id,
+				CompanyId = quote.Service.CompanyId,
+				OperatorProvider = payment.OperatorProvider,
+				OperatorPaymentId = chargeResult.OperatorPaymentId!,
+				Amount = quote.TotalAmount,
+				Currency = quote.Currency,
+				Reference = payment.Reference,
+				ClientId = clientId
+			};
+
+			var outboxMessage = OutboxMessage.Create(
+				typeof(PaymentRequestMessage).FullName ?? nameof(PaymentRequestMessage),
+				JsonSerializer.Serialize(paymentRequestMessage),
+				PagarteQueues.Exchanges.Payments,
+				PagarteQueues.Queues.PaymentRequest);
+
+			_dbContext.PaymentQuotes.Update(quote);
+			_dbContext.Payments.Update(payment);
+			_dbContext.OutboxMessages.Add(outboxMessage);
+			await _dbContext.SaveChangesAsync();
+
+			_logger.LogInformation("Payment {Reference} charged, queued for Engine publishing",
 			await _paymentQuoteRepository.UpdateAsync(quote);
 
 			payment.SetOperatorPaymentId(chargeResult.OperatorPaymentId!);

@@ -36,6 +36,7 @@ namespace Pagarte.Services
 			// Business services
 			builder.Services.AddScoped<IPaymentOperatorResolver, PaymentOperatorResolver>();
 			builder.Services.AddScoped<PaymentEngineService>();
+			builder.Services.AddHostedService<OutboxPublisherService>();
 
 			// gRPC server
 			builder.Services.AddGrpc();
