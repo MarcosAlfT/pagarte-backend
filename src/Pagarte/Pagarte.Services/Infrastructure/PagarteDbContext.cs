@@ -17,7 +17,6 @@ namespace Pagarte.Services.Infrastructure
 		public DbSet<Company> Companies { get; set; }
 		public DbSet<FeeConfiguration> FeeConfigurations { get; set; }
 		public DbSet<PaymentOperator> PaymentOperators { get; set; }
-		public DbSet<OutboxMessage> OutboxMessages { get; set; }
 
 		protected override void OnModelCreating(ModelBuilder modelBuilder)
 		{
@@ -129,17 +128,6 @@ namespace Pagarte.Services.Infrastructure
 				entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
 				entity.HasIndex(e => e.Code).IsUnique();
 				entity.HasIndex(e => new { e.Scope, e.IsActive, e.Priority });
-			});
-
-			modelBuilder.Entity<OutboxMessage>(entity =>
-			{
-				entity.HasKey(e => e.Id);
-				entity.Property(e => e.MessageType).IsRequired().HasMaxLength(500);
-				entity.Property(e => e.Payload).IsRequired();
-				entity.Property(e => e.Exchange).IsRequired().HasMaxLength(200);
-				entity.Property(e => e.RoutingKey).IsRequired().HasMaxLength(200);
-				entity.Property(e => e.ErrorMessage).HasMaxLength(1000);
-				entity.HasIndex(e => new { e.PublishedAt, e.NextAttemptAt });
 			});
 		}
 	}

@@ -36,6 +36,18 @@ Identity, Clients, and Pagarte are separate bounded contexts:
 - `Pagarte.Services` owns payment persistence and synchronous card/payment operations.
 - `Pagarte.Engine` owns asynchronous post-charge orchestration.
 
+## General Architecture
+
+Backend projects should follow the Application Use Case Pattern. Controllers and endpoints are thin HTTP adapters. Business workflows live in focused Application use cases. Domain entities own business rules and state transitions. Infrastructure and Persistence implement technical details behind Application interfaces.
+
+Identity, Clients, and Pagarte are separate bounded contexts:
+
+- `ClientIdentityService` owns client-user authentication and token issuance.
+- `Clients.API` owns client profile data.
+- `Pagarte.API` is the public payment HTTP boundary.
+- `Pagarte.Services` owns payment persistence and synchronous card/payment operations.
+- `Pagarte.Engine` owns asynchronous post-charge orchestration.
+
 ## Projects
 
 ### `ClientIdentityService`

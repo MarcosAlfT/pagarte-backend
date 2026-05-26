@@ -28,6 +28,7 @@ namespace Pagarte.Services.Services
 		IFeeConfigurationRepository feeConfigRepository,
 		IPaymentOperatorResolver paymentOperatorResolver,
 		PagarteDbContext dbContext,
+		IMessagePublisher messagePublisher,
 		ILogger<PaymentEngineService> logger)
 	{
 		private readonly IPaymentRepository _paymentRepository = paymentRepository;
@@ -37,6 +38,7 @@ namespace Pagarte.Services.Services
 		private readonly IFeeConfigurationRepository _feeConfigRepository = feeConfigRepository;
 		private readonly IPaymentOperatorResolver _paymentOperatorResolver = paymentOperatorResolver;
 		private readonly PagarteDbContext _dbContext = dbContext;
+		private readonly IMessagePublisher _messagePublisher = messagePublisher;
 		private readonly ILogger<PaymentEngineService> _logger = logger;
 
 		public async Task<PaymentQuoteResult> CreateQuoteAsync(
@@ -159,6 +161,29 @@ namespace Pagarte.Services.Services
 			await _dbContext.SaveChangesAsync();
 
 			_logger.LogInformation("Payment {Reference} charged, queued for Engine publishing",
+			await _paymentQuoteRepository.UpdateAsync(quote);
+
+			payment.SetOperatorPaymentId(chargeResult.OperatorPaymentId!);
+			payment.UpdateStatus(TransactionStatus.CardCharged);
+			await _paymentRepository.UpdateAsync(payment);
+
+			// Publish to Engine for async company processing
+			await _messagePublisher.PublishAsync(
+				new PaymentRequestMessage
+				{
+					PaymentId = payment.Id,
+					CompanyId = quote.Service.CompanyId,
+					OperatorProvider = payment.OperatorProvider,
+					OperatorPaymentId = chargeResult.OperatorPaymentId!,
+					Amount = quote.TotalAmount,
+					Currency = quote.Currency,
+					Reference = payment.Reference,
+					ClientId = clientId
+				},
+				PagarteQueues.Exchanges.Payments,
+				PagarteQueues.Queues.PaymentRequest);
+
+			_logger.LogInformation("Payment {Reference} charged, published to Engine",
 				payment.Reference);
 
 			return new PaymentResult(true, payment.Id, payment.Reference,
