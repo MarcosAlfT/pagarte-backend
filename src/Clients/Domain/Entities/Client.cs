@@ -1,9 +1,9 @@
-﻿namespace Clients.API.Domain.Entities
+namespace Clients.API.Domain.Entities
 {
 	public class Client
 	{
 		public Guid Id { get; set; }
-		public string UserId { get; set; } = string.Empty; //from IdentityService
+		public string UserId { get; set; } = string.Empty; // from ClientIdentityService
 		public ClientType Type { get; set; }
 		public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 		public bool IsDeleted { get; set; } = false;

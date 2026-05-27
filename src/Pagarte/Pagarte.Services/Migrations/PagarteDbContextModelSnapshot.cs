@@ -47,7 +47,7 @@ namespace Pagarte.Services.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Companies");
+                    b.ToTable("Companies", (string)null);
                 });
 
             modelBuilder.Entity("Pagarte.Services.Domain.Entities.CreditCard", b =>
@@ -113,7 +113,7 @@ namespace Pagarte.Services.Migrations
 
                     b.HasIndex("ClientId");
 
-                    b.ToTable("CreditCards");
+                    b.ToTable("CreditCards", (string)null);
                 });
 
             modelBuilder.Entity("Pagarte.Services.Domain.Entities.FeeConfiguration", b =>
@@ -148,7 +148,58 @@ namespace Pagarte.Services.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("FeeConfigurations");
+                    b.ToTable("FeeConfigurations", (string)null);
+                });
+
+            modelBuilder.Entity("Pagarte.Services.Domain.Entities.OutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Exchange")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("LastAttemptAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("MessageType")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("NextAttemptAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RoutingKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublishedAt", "NextAttemptAt");
+
+                    b.ToTable("OutboxMessages", (string)null);
                 });
 
             modelBuilder.Entity("Pagarte.Services.Domain.Entities.Payment", b =>
@@ -227,7 +278,7 @@ namespace Pagarte.Services.Migrations
 
                     b.HasIndex("Status");
 
-                    b.ToTable("Payments");
+                    b.ToTable("Payments", (string)null);
                 });
 
             modelBuilder.Entity("Pagarte.Services.Domain.Entities.PaymentDetail", b =>
@@ -259,7 +310,7 @@ namespace Pagarte.Services.Migrations
 
                     b.HasIndex("PaymentId");
 
-                    b.ToTable("PaymentDetails");
+                    b.ToTable("PaymentDetails", (string)null);
                 });
 
             modelBuilder.Entity("Pagarte.Services.Domain.Entities.PaymentOperator", b =>
@@ -300,7 +351,7 @@ namespace Pagarte.Services.Migrations
 
                     b.HasIndex("Scope", "IsActive", "Priority");
 
-                    b.ToTable("PaymentOperators");
+                    b.ToTable("PaymentOperators", (string)null);
                 });
 
             modelBuilder.Entity("Pagarte.Services.Domain.Entities.PaymentQuote", b =>
@@ -347,7 +398,7 @@ namespace Pagarte.Services.Migrations
 
                     b.HasIndex("Status");
 
-                    b.ToTable("PaymentQuotes");
+                    b.ToTable("PaymentQuotes", (string)null);
                 });
 
             modelBuilder.Entity("Pagarte.Services.Domain.Entities.PaymentQuoteDetail", b =>
@@ -380,7 +431,7 @@ namespace Pagarte.Services.Migrations
 
                     b.HasIndex("PaymentQuoteId");
 
-                    b.ToTable("PaymentQuoteDetails");
+                    b.ToTable("PaymentQuoteDetails", (string)null);
                 });
 
             modelBuilder.Entity("Pagarte.Services.Domain.Entities.Service", b =>
@@ -421,7 +472,7 @@ namespace Pagarte.Services.Migrations
 
                     b.HasIndex("CompanyId");
 
-                    b.ToTable("Services");
+                    b.ToTable("Services", (string)null);
                 });
 
             modelBuilder.Entity("Pagarte.Services.Domain.Entities.Payment", b =>

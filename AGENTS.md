@@ -47,7 +47,7 @@ Pagarte.Messaging
   -> Referenced by Pagarte.Services and Pagarte.Engine
 
 Responses
-  -> Referenced by IdentityService, Clients.API, Pagarte.API, and Pagarte.Services
+  -> Referenced by ClientIdentityService, Clients.API, Pagarte.API, and Pagarte.Services
 
 # ClientIdentityService instructions
 
