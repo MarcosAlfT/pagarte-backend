@@ -1,4 +1,4 @@
-using Pagarte.Connections.PaymentOperators;
+using ExternalConnections.CardOperators.PaymentOperators;
 
 namespace Pagarte.Services.Interfaces
 {

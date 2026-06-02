@@ -1,5 +1,5 @@
-using Pagarte.Connections.Companies;
-using Pagarte.Connections.PaymentOperators;
+using ExternalConnections.CompanyPayments;
+using ExternalConnections.CardOperators.PaymentOperators;
 using Pagarte.Engine.Interfaces;
 using Pagarte.Messaging;
 using Pagarte.Messaging.Messages;

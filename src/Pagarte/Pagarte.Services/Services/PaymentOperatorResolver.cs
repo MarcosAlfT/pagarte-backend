@@ -1,4 +1,4 @@
-using Pagarte.Connections.PaymentOperators;
+using ExternalConnections.CardOperators.PaymentOperators;
 using Pagarte.Services.Domain.Enums;
 using Pagarte.Services.Interfaces;
 

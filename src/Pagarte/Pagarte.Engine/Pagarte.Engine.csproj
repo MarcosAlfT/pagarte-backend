@@ -13,7 +13,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\RabbitMQ\RabbitMQ.csproj" />
-    <ProjectReference Include="..\Pagarte.Connections\Pagarte.Connections.csproj" />
+    <ProjectReference Include="..\..\ExternalConnections\ExternalConnections.CardOperators\ExternalConnections.CardOperators.csproj" />
     <ProjectReference Include="..\Pagarte.Messaging\Pagarte.Messaging.csproj" />
   </ItemGroup>
 </Project>
