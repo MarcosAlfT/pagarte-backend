@@ -1,6 +1,6 @@
 using OpenIddict.Validation.AspNetCore;
-using Pagarte.API.GrpcClients;
 using Pagarte.Contracts;
+using Pagarte.API.GrpcClients;
 
 namespace Pagarte.API
 {
@@ -28,17 +28,7 @@ namespace Pagarte.API
 			builder.Services.AddGrpcClient<CreditCardService.CreditCardServiceClient>(
 				o => o.Address = new Uri(workerUrl))
 				.ConfigurePrimaryHttpMessageHandler(() => CreateGrpcHttpHandler(allowUntrustedWorkerCertificate));
-			builder.Services.AddGrpcClient<PaymentService.PaymentServiceClient>(
-				o => o.Address = new Uri(workerUrl))
-				.ConfigurePrimaryHttpMessageHandler(() => CreateGrpcHttpHandler(allowUntrustedWorkerCertificate));
-			builder.Services.AddGrpcClient<ServiceCatalogService.ServiceCatalogServiceClient>(
-				o => o.Address = new Uri(workerUrl))
-				.ConfigurePrimaryHttpMessageHandler(() => CreateGrpcHttpHandler(allowUntrustedWorkerCertificate));
-
-			// gRPC client wrappers
 			builder.Services.AddScoped<CreditCardGrpcClient>();
-			builder.Services.AddScoped<PaymentGrpcClient>();
-			builder.Services.AddScoped<ServiceCatalogGrpcClient>();
 
 			// OpenIddict validation
 			builder.Services.AddOpenIddict()
