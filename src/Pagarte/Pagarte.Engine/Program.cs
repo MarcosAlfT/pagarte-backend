@@ -1,4 +1,4 @@
-using Pagarte.Connections.Config;
+using ExternalConnections.CardOperators.Config;
 using Pagarte.Engine.Consumers;
 using Pagarte.Engine.Interfaces;
 using Pagarte.Engine.Services;
@@ -17,7 +17,7 @@ namespace Pagarte.Engine
                     var configuration = context.Configuration;
 
                     // External connections (payment operator, companies) with Polly resilience.
-                    services.AddPagarteConnections(configuration);
+                    services.AddExternalConnections(configuration);
 
                     // Repository uses raw SQL to PagarteDb to avoid referencing Worker.
                     services.AddScoped<IPaymentStatusRepository, PaymentStatusRepository>();

@@ -76,6 +76,10 @@ service PaymentService {
   rpc GetPaymentHistory (GetPaymentHistoryRequest) returns (GetPaymentHistoryResponse);
 }
 
+service PaymentExecutionService {
+  rpc ConfirmQuote (ConfirmQuoteRequest) returns (ConfirmQuoteResponse);
+}
+
 message CreatePaymentQuoteRequest {
   string client_id = 1;
   string service_id = 2;
@@ -93,6 +97,20 @@ message ConfirmPaymentRequest {
   string credit_card_id = 3;
 }
 message ProcessPaymentResponse {
+  bool success = 1;
+  string payment_id = 2;
+  string reference = 3;
+  string status = 4;
+  string error_message = 5;
+}
+
+message ConfirmQuoteRequest {
+  string client_id = 1;
+  string quote_id = 2;
+  string credit_card_id = 3;
+}
+
+message ConfirmQuoteResponse {
   bool success = 1;
   string payment_id = 2;
   string reference = 3;

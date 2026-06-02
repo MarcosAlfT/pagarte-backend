@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using Pagarte.Connections.Config;
+using ExternalConnections.CardOperators.Config;
 using Pagarte.Messaging;
 using Pagarte.Services.GrpcServices;
 using Pagarte.Services.Infrastructure;
@@ -31,7 +31,7 @@ namespace Pagarte.Services
 			builder.Services.AddScoped<IMessagePublisher, RabbitMQPublisher>();
 
 			// External connections (payment operator, companies) with Polly resilience
-			builder.Services.AddPagarteConnections(configuration);
+			builder.Services.AddExternalConnections(configuration);
 
 			// Business services
 			builder.Services.AddScoped<IPaymentOperatorResolver, PaymentOperatorResolver>();
@@ -62,6 +62,7 @@ namespace Pagarte.Services
 			// gRPC endpoints - only accessible from private subnet
 			app.MapGrpcService<CreditCardGrpcService>();
 			app.MapGrpcService<PaymentGrpcService>();
+			app.MapGrpcService<PaymentExecutionGrpcService>();
 			app.MapGrpcService<ServiceCatalogGrpcService>();
 
 			app.Lifetime.ApplicationStarted.Register(() =>

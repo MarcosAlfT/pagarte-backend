@@ -11,12 +11,4 @@ namespace Pagarte.API.DTOs
 	public record UpdateCreditCardRequest(
 		string CardHolderName,
 		bool IsDefault);
-
-	public record CreatePaymentQuoteRequest(
-		string ServiceId,
-		string Currency);
-
-	public record ConfirmPaymentRequest(
-		string QuoteId,
-		string CreditCardId);
 }
