@@ -2,28 +2,28 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 var rabbitConnectionString = builder.AddParameter("rabbit-connection-string", secret: true);
 
-// Client Identity Service
-var identity = builder.AddProject<Projects.ClientIdentity_Api>("client-identity", launchProfileName: "https");
+// Identity client API
+var identityClientApi = builder.AddProject<Projects.Identity_Client_Api>("identity-client-api", launchProfileName: "https");
 
-// Clients API
-var clientsApi = builder.AddProject<Projects.Clients_API>("clients", launchProfileName: "https")
-	.WithReference(identity)
-	.WithEnvironment("AuthSettings__Authority", identity.GetEndpoint("https"));
+// Client profiles API
+var clientProfilesApi = builder.AddProject<Projects.ClientProfiles_Api>("client-profiles-api", launchProfileName: "https")
+	.WithReference(identityClientApi)
+	.WithEnvironment("AuthSettings__Authority", identityClientApi.GetEndpoint("https"));
 
-// Pagarte Services
-var pagarteServices = builder.AddProject<Projects.Pagarte_Services>("pagarte-services", launchProfileName: "Pagarte.Services")
+// Payment switch processor
+var paymentSwitchProcessor = builder.AddProject<Projects.PaymentSwitch_Processor>("payment-switch-processor", launchProfileName: "PaymentSwitch.Processor")
 	.WithEnvironment("RabbitMQ__Mode", "FromEnvironment")
 	.WithEnvironment("ConnectionStrings__PagQueue", rabbitConnectionString);
 
-// Pagarte API
-var pagarteApi = builder.AddProject<Projects.Pagarte_API>("pagarte-api")
-	.WithReference(identity)
-	.WithReference(pagarteServices)
-	.WithEnvironment("AuthSettings__Authority", identity.GetEndpoint("https"))
-	.WithEnvironment("PagarteServices__GrpcUrl", pagarteServices.GetEndpoint("https"));
+// Payments API
+var paymentsApi = builder.AddProject<Projects.Payments_Api>("payments-api")
+	.WithReference(identityClientApi)
+	.WithReference(paymentSwitchProcessor)
+	.WithEnvironment("AuthSettings__Authority", identityClientApi.GetEndpoint("https"))
+	.WithEnvironment("PaymentSwitchProcessor__GrpcUrl", paymentSwitchProcessor.GetEndpoint("https"));
 
-// Pagarte Engine
-builder.AddProject<Projects.Pagarte_Engine>("pagarte-engine")
+// Payment switch worker
+builder.AddProject<Projects.PaymentSwitch_Worker>("payment-switch-worker")
 	.WithEnvironment("RabbitMQ__Mode", "FromEnvironment")
 	.WithEnvironment("ConnectionStrings__PagQueue", rabbitConnectionString);
 

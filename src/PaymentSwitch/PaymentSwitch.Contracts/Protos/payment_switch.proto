@@ -1,0 +1,203 @@
+syntax = "proto3";
+option csharp_namespace = "PaymentSwitch.Contracts";
+package payment_switch;
+
+// Ã¢â€â‚¬Ã¢â€â‚¬ Credit Card Service Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+
+service CreditCardService {
+  rpc GetCards (GetCardsRequest) returns (GetCardsResponse);
+  rpc GetCard (GetCardRequest) returns (GetCardResponse);
+  rpc RegisterCard (RegisterCardRequest) returns (RegisterCardResponse);
+  rpc UpdateCard (UpdateCardRequest) returns (MutationResponse);
+  rpc DeleteCard (DeleteCardRequest) returns (MutationResponse);
+}
+
+message GetCardsRequest { string client_id = 1; }
+message GetCardsResponse { repeated CreditCardDto cards = 1; }
+
+message GetCardRequest {
+  string card_id = 1;
+  string client_id = 2;
+}
+message GetCardResponse {
+  bool found = 1;
+  CreditCardDto card = 2;
+}
+
+message RegisterCardRequest {
+  string client_id = 1;
+  string card_number = 2;
+  string cvv = 3;
+  string card_holder_name = 4;
+  bool is_default = 5;
+  int32 expiry_month = 6;
+  int32 expiry_year = 7;
+}
+message RegisterCardResponse {
+  bool success = 1;
+  string card_id = 2;
+  string last4_digits = 3;
+  string card_type = 4;
+  string error_message = 5;
+  int32 expiry_month = 6;
+  int32 expiry_year = 7;
+}
+
+message UpdateCardRequest {
+  string card_id = 1;
+  string client_id = 2;
+  string card_holder_name = 3;
+  bool is_default = 4;
+}
+
+message DeleteCardRequest {
+  string card_id = 1;
+  string client_id = 2;
+}
+
+message CreditCardDto {
+  string id = 1;
+  string card_holder_name = 2;
+  string last4_digits = 3;
+  string card_type = 4;
+  int32 expiry_month = 5;
+  int32 expiry_year = 6;
+  bool is_default = 7;
+  string created_at = 8;
+  string operator_provider = 9;
+}
+
+// Ã¢â€â‚¬Ã¢â€â‚¬ Payment Service Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+
+service PaymentService {
+  rpc CreatePaymentQuote (CreatePaymentQuoteRequest) returns (CreatePaymentQuoteResponse);
+  rpc ConfirmPayment (ConfirmPaymentRequest) returns (ProcessPaymentResponse);
+  rpc GetPayment (GetPaymentRequest) returns (GetPaymentResponse);
+  rpc GetPaymentHistory (GetPaymentHistoryRequest) returns (GetPaymentHistoryResponse);
+}
+
+service PaymentExecutionService {
+  rpc ConfirmQuote (ConfirmQuoteRequest) returns (ConfirmQuoteResponse);
+}
+
+message CreatePaymentQuoteRequest {
+  string client_id = 1;
+  string service_id = 2;
+  string currency = 3;
+}
+message CreatePaymentQuoteResponse {
+  bool success = 1;
+  PaymentQuoteDto quote = 2;
+  string error_message = 3;
+}
+
+message ConfirmPaymentRequest {
+  string client_id = 1;
+  string quote_id = 2;
+  string credit_card_id = 3;
+}
+message ProcessPaymentResponse {
+  bool success = 1;
+  string payment_id = 2;
+  string reference = 3;
+  string status = 4;
+  string error_message = 5;
+}
+
+message ConfirmQuoteRequest {
+  string client_id = 1;
+  string quote_id = 2;
+  string credit_card_id = 3;
+}
+
+message ConfirmQuoteResponse {
+  bool success = 1;
+  string payment_id = 2;
+  string reference = 3;
+  string status = 4;
+  string error_message = 5;
+}
+
+message GetPaymentRequest {
+  string payment_id = 1;
+  string client_id = 2;
+}
+message GetPaymentResponse {
+  bool found = 1;
+  PaymentDto payment = 2;
+}
+
+message GetPaymentHistoryRequest {
+  string client_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+message GetPaymentHistoryResponse {
+  repeated PaymentDto payments = 1;
+  int32 total = 2;
+}
+
+message PaymentDto {
+  string id = 1;
+  string reference = 2;
+  string status = 3;
+  string currency = 4;
+  double total_amount = 5;
+  string created_at = 6;
+  string processed_at = 7;
+  string error_message = 8;
+  string service_name = 9;
+  repeated PaymentDetailDto details = 10;
+  string operator_provider = 11;
+}
+
+message PaymentDetailDto {
+  string type = 1;
+  string description = 2;
+  double amount = 3;
+  string currency = 4;
+}
+
+message PaymentQuoteDto {
+  string id = 1;
+  string status = 2;
+  string currency = 3;
+  double total_amount = 4;
+  string created_at = 5;
+  string expires_at = 6;
+  string service_id = 7;
+  string service_name = 8;
+  repeated PaymentDetailDto details = 9;
+}
+
+// Ã¢â€â‚¬Ã¢â€â‚¬ Service Catalog Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+
+service ServiceCatalogService {
+  rpc GetServices (GetServicesRequest) returns (GetServicesResponse);
+  rpc GetService (GetServiceRequest) returns (GetServiceResponse);
+}
+
+message GetServicesRequest { string category = 1; }
+message GetServicesResponse { repeated ServiceDto services = 1; }
+
+message GetServiceRequest { string service_id = 1; }
+message GetServiceResponse {
+  bool found = 1;
+  ServiceDto service = 2;
+}
+
+message ServiceDto {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string category = 4;
+  double base_amount = 5;
+  string currency = 6;
+}
+
+// Ã¢â€â‚¬Ã¢â€â‚¬ Shared Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+
+message MutationResponse {
+  bool success = 1;
+  string error_message = 2;
+}
