@@ -1,0 +1,14 @@
+@Identity.Client.Api_HostAddress = http://localhost:5200
+
+GET {{Identity.Client.Api_HostAddress}}/openapi/v1.json
+Accept: application/json
+
+###
+
+POST {{Identity.Client.Api_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "client@example.com",
+  "password": "ChangeMe123!"
+}

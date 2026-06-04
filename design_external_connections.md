@@ -1,38 +1,38 @@
 # ExternalConnections Design
 
-`ExternalConnections` is the shared adapter layer for external payment and company integrations. It replaces the old `Pagarte.Connections` assembly.
+`ExternalConnections` is the shared adapter layer for external payment and company integrations. It isolates third-party integration details from the application and domain layers.
 
 ## Scope
 
-This layer is for infrastructure adapters only. It should not own business rules, persistence, or workflow orchestration.
+This area contains:
 
-It currently contains:
-
-- `ExternalConnections.CardOperators`
+- `ExternalConnections.PaymentOperators`
 - `ExternalConnections.CompanyPayments`
 
 ## Runtime Boundary
 
 ```text
-ExternalConnections.CardOperators
+ExternalConnections.PaymentOperators
   -> payment operator adapters
-  -> adapter factory
-  -> resilience-enabled HttpClient configuration
+  -> register card
+  -> charge card
+  -> refund card
 
 ExternalConnections.CompanyPayments
-  -> company payment adapter
-  -> outbound HTTP calls to company APIs
+  -> company payment adapters
+  -> catalogue/feed bridge
+  -> company payment delivery
 ```
 
 ## Responsibilities
 
-- Provide the payment-operator adapter factory used by `Pagarte.Services` and `Pagarte.Engine`.
-- Provide card registration, charge, and refund adapters for supported operators.
-- Provide the company-payment adapter used by `Pagarte.Engine`.
-- Keep outbound HTTP concerns isolated from the application and domain layers.
+- Provide the payment-operator adapter factory used by `PaymentSwitch.Processor` and `PaymentSwitch.Worker`.
+- Keep provider-specific charge, registration, and refund details outside the payment core.
+- Provide the company-payment adapter used by `PaymentSwitch.Worker`.
+- Provide the company-payment feed bridge used by `PayableServices` catalogue sync.
 
 ## Notes
 
-- Operator selection is configured and resolved through the application/database model, not hardcoded in the business flow.
-- Card operator tokens and payment ids are provider-specific and must retain the provider they came from.
-- The catalogue sync bridge in `PaymentServices` also relies on the current company-payment feed path while the split is in progress.
+- This layer should not own business state.
+- It should not expose public HTTP APIs.
+- It should adapt third-party contracts into internal application abstractions.

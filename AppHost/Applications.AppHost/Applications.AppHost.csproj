@@ -16,11 +16,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Pagarte\Pagarte.API\Pagarte.API.csproj" />
-    <ProjectReference Include="..\..\src\Pagarte\Pagarte.Engine\Pagarte.Engine.csproj" />
-    <ProjectReference Include="..\..\src\Pagarte\Pagarte.Services\Pagarte.Services.csproj" />
-    <ProjectReference Include="..\..\src\Clients\Clients.API.csproj" />
-    <ProjectReference Include="..\..\src\ClientIdentityService\ClientIdentity.Api\ClientIdentity.Api.csproj" />
+    <ProjectReference Include="..\..\src\Payments\Payments.Api\Payments.Api.csproj" />
+    <ProjectReference Include="..\..\src\PaymentSwitch\PaymentSwitch.Worker\PaymentSwitch.Worker.csproj" />
+    <ProjectReference Include="..\..\src\PaymentSwitch\PaymentSwitch.Processor\PaymentSwitch.Processor.csproj" />
+    <ProjectReference Include="..\..\src\ClientProfiles\ClientProfiles.Api\ClientProfiles.Api.csproj" />
+    <ProjectReference Include="..\..\src\Identity\Identity.Client\Identity.Client.Api\Identity.Client.Api.csproj" />
+    <ProjectReference Include="..\..\src\PayableServices\PayableServices.Api\PayableServices.Api.csproj" />
   </ItemGroup>
 
 </Project>

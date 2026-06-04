@@ -1,0 +1,9 @@
+namespace PayableServices.Domain.Entities;
+
+public sealed class PaymentNetwork
+{
+	public Guid Id { get; set; }
+	public string Name { get; set; } = string.Empty;
+	public Guid CountryId { get; set; }
+	public bool IsActive { get; set; }
+}
