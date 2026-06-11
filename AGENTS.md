@@ -37,6 +37,7 @@ For backend/API projects, prefer the Application Use Case Pattern to organize bu
 
 ## GitHub Workflow Instructions
 
+- Before starting coding work, fetch `origin` and verify the latest `origin/main` state.
 - Check the current branch before committing.
 - Do not commit directly to `main` unless explicitly requested.
 - Use small, focused commits.

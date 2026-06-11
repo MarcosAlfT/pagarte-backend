@@ -1,6 +1,6 @@
 # Identity.Client Design
 
-`Identity.Client` is the client-user identity bounded context. It issues OpenIddict tokens for the public APIs and owns the user lifecycle, authentication flow, and token policy rules.
+`Identity.Client` is the client-user identity bounded context. It issues OpenIddict access tokens for the public APIs and owns the user lifecycle, authentication flow, and token policy rules.
 
 ## Scope
 
@@ -42,6 +42,12 @@ Identity.Client.Persistence
 - Refresh and revoke tokens.
 - Support password reset and password change.
 - Enforce configuration-based password, token, lockout, email confirmation, and password reset policies.
+
+## Token Ownership
+
+- OpenIddict signs and validates access tokens for the HTTP boundary.
+- The `Identity.Client` domain owns refresh-token issuance, hashing, rotation, and revocation.
+- Application use cases drive refresh-token workflows so controllers remain transport adapters.
 
 ## Domain Notes
 

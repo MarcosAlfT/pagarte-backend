@@ -15,6 +15,7 @@ public sealed class AuthController(
     RegisterUserUseCase registerUser,
     ConfirmEmailUseCase confirmEmail,
     LoginWithPasswordUseCase loginWithPassword,
+    RefreshTokenUseCase refreshToken,
     LogoutUseCase logout,
     ForgotPasswordUseCase forgotPassword,
     ResetPasswordUseCase resetPassword,
@@ -62,7 +63,7 @@ public sealed class AuthController(
         return request.GrantType switch
         {
             OpenIddictConstants.GrantTypes.Password => await ExchangePasswordGrantAsync(request, cancellationToken),
-            OpenIddictConstants.GrantTypes.RefreshToken => await ExchangeRefreshTokenGrantAsync(),
+            OpenIddictConstants.GrantTypes.RefreshToken => await ExchangeRefreshTokenGrantAsync(request, cancellationToken),
             _ => ForbidOpenIddict(OpenIddictConstants.Errors.UnsupportedGrantType, "The specified grant type is not supported.")
         };
     }
@@ -119,7 +120,7 @@ public sealed class AuthController(
         }
 
         var result = await loginWithPassword.ExecuteAsync(
-            new LoginWithPasswordRequest(request.Username, request.Password),
+            new LoginWithPasswordRequest(request.Username, request.Password, null, null),
             cancellationToken);
 
         if (result.IsFailed)
@@ -127,18 +128,39 @@ public sealed class AuthController(
             return ForbidOpenIddict(OpenIddictConstants.Errors.InvalidGrant, string.Join(" ", result.Errors.Select(error => error.Message)));
         }
 
-        return SignIn(result.Value.Principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+        return SignIn(
+            result.Value.Principal,
+            CreateTokenResponseProperties(result.Value.RefreshToken),
+            OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 
-    private async Task<IActionResult> ExchangeRefreshTokenGrantAsync()
+    private async Task<IActionResult> ExchangeRefreshTokenGrantAsync(OpenIddictRequest request, CancellationToken cancellationToken)
     {
-        var result = await HttpContext.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
-        if (!result.Succeeded || result.Principal is null)
+        if (string.IsNullOrWhiteSpace(request.RefreshToken))
         {
             return ForbidOpenIddict(OpenIddictConstants.Errors.InvalidGrant, "Refresh token is invalid.");
         }
 
-        return SignIn(result.Principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+        var result = await refreshToken.ExecuteAsync(
+            new RefreshTokenRequest(request.RefreshToken, null, null),
+            cancellationToken);
+
+        if (result.IsFailed)
+        {
+            return ForbidOpenIddict(OpenIddictConstants.Errors.InvalidGrant, string.Join(" ", result.Errors.Select(error => error.Message)));
+        }
+
+        return SignIn(
+            result.Value.Principal,
+            CreateTokenResponseProperties(result.Value.RefreshToken),
+            OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+    }
+
+    private static AuthenticationProperties CreateTokenResponseProperties(string refreshToken)
+    {
+        var properties = new AuthenticationProperties();
+        properties.SetParameter(OpenIddictConstants.Parameters.RefreshToken, refreshToken);
+        return properties;
     }
 
     private ForbidResult ForbidOpenIddict(string error, string description)
