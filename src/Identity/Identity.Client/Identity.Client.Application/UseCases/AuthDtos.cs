@@ -11,9 +11,11 @@ public sealed record ConfirmEmailRequest([property: Required] string Token);
 
 public sealed record LoginWithPasswordRequest(
     [property: Required, EmailAddress] string Email,
-    [property: Required] string Password);
+    [property: Required] string Password,
+    string? DeviceId,
+    string? DeviceName);
 
-public sealed record LoginWithPasswordResponse(ClaimsPrincipal Principal);
+public sealed record LoginWithPasswordResponse(ClaimsPrincipal Principal, string RefreshToken);
 
 public sealed record RefreshTokenRequest(
     [property: Required] string RefreshToken,
