@@ -1,5 +1,6 @@
 using Identity.Client.Application.Abstractions;
 using Identity.Client.Application.Common;
+using Identity.Client.Domain.Tokens;
 using Identity.Client.Domain.Users;
 using FluentResults;
 
@@ -7,7 +8,10 @@ namespace Identity.Client.Application.UseCases;
 
 public sealed class LoginWithPasswordUseCase(
     IUserRepository users,
+    IRefreshTokenRepository refreshTokens,
     IPasswordHasher passwordHasher,
+    ITokenGenerator tokenGenerator,
+    ITokenHasher tokenHasher,
     ITokenService tokenService,
     IPolicyProvider policyProvider,
     ICurrentActorProvider actorProvider,
@@ -38,7 +42,7 @@ public sealed class LoginWithPasswordUseCase(
         }
 
         await TrackSuccessfulLoginAsync(user, now, actor, cancellationToken);
-        var tokens = IssueTokens(user);
+        var tokens = await IssueTokensAsync(user, request, now, actor, cancellationToken);
         await AuditLoginAsync(cancellationToken);
 
         return tokens;
@@ -97,9 +101,30 @@ public sealed class LoginWithPasswordUseCase(
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
-    private Result<LoginWithPasswordResponse> IssueTokens(User user)
+    private async Task<Result<LoginWithPasswordResponse>> IssueTokensAsync(
+        User user,
+        LoginWithPasswordRequest request,
+        DateTime now,
+        string actor,
+        CancellationToken cancellationToken)
     {
-        return Result.Ok(new LoginWithPasswordResponse(tokenService.CreatePrincipal(user)));
+        var tokenPolicy = policyProvider.GetTokenPolicy();
+        var rawRefreshToken = tokenGenerator.GenerateUrlSafeToken();
+        var refreshToken = RefreshToken.Create(
+            user.Id,
+            tokenHasher.Hash(rawRefreshToken),
+            now.AddDays(tokenPolicy.RefreshTokenDays),
+            request.DeviceId,
+            request.DeviceName,
+            actorProvider.GetUserAgent(),
+            actorProvider.GetIpAddress(),
+            now,
+            actor);
+
+        await refreshTokens.AddAsync(refreshToken, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return Result.Ok(new LoginWithPasswordResponse(tokenService.CreatePrincipal(user), rawRefreshToken));
     }
 
     private static Task AuditLoginAsync(CancellationToken cancellationToken)

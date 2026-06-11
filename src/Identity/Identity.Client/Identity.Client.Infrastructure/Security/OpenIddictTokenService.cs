@@ -26,7 +26,7 @@ public sealed class OpenIddictTokenService(IConfiguration configuration) : IToke
         var principal = new ClaimsPrincipal(identity);
 
         principal.SetAudiences(audiences);
-        principal.SetScopes(OpenIddictConstants.Scopes.OfflineAccess, OpenIddictConstants.Scopes.Profile, "api");
+        principal.SetScopes(OpenIddictConstants.Scopes.Profile, "api");
         principal.SetResources(audiences);
         principal.SetDestinations(static claim => claim.Type switch
         {

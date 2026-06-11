@@ -6,7 +6,7 @@ This file is the system-level map for the repository. It describes the main proj
 
 ```text
 Identity.Client
-  -> issues OpenIddict tokens
+  -> issues OpenIddict access tokens
   -> serves ClientProfiles.Api and Payments.Api
 
 ClientProfiles.Api
