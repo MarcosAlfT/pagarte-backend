@@ -12,6 +12,8 @@ Identity.Client
 ClientProfiles.Api
   -> validates Identity.Client tokens
   -> owns client profile data
+  -> delegates workflows to ClientProfiles.Application
+  -> persists through ClientProfiles.Persistence
 
 Payments.Api
   -> validates Identity.Client tokens
