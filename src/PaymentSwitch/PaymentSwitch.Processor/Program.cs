@@ -1,8 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using ExternalConnections.PaymentOperators.Config;
 using PaymentSwitch.Messaging;
+using PaymentSwitch.Processor.Application.Abstractions;
+using PaymentSwitch.Processor.Application.UseCases;
+using PaymentSwitch.Processor.Domain.Services;
 using PaymentSwitch.Processor.GrpcServices;
 using PaymentSwitch.Processor.Infrastructure;
+using PaymentSwitch.Processor.Infrastructure.Gateways;
+using PaymentSwitch.Processor.Infrastructure.Outbox;
 using PaymentSwitch.Processor.Infrastructure.Repository;
 using PaymentSwitch.Processor.Interfaces;
 using PaymentSwitch.Processor.Services;
@@ -17,7 +22,7 @@ namespace PaymentSwitch.Processor
 			var builder = WebApplication.CreateBuilder(args);
 			var configuration = builder.Configuration;
 
-			// Database - Worker owns PaymentDb
+			// Database - Processor owns PaymentDb
 			builder.Services.AddDbContext<PaymentDbContext>(options =>
 				options.UseSqlServer(configuration.GetConnectionString("PaymentDb")));
 
@@ -28,6 +33,10 @@ namespace PaymentSwitch.Processor
 			builder.Services.AddScoped<IPaymentOperatorRepository, PaymentOperatorRepository>();
 			builder.Services.AddScoped<IServiceRepository, ServiceRepository>();
 			builder.Services.AddScoped<IFeeConfigurationRepository, FeeConfigurationRepository>();
+			builder.Services.AddScoped<IOutboxRepository, OutboxRepository>();
+			builder.Services.AddScoped<IUnitOfWork>(provider =>
+				provider.GetRequiredService<PaymentDbContext>());
+			builder.Services.AddSingleton<IClock, SystemClock>();
 			builder.Services.AddScoped<IMessagePublisher, RabbitMqPublisher>();
 
 			// External connections (payment operator, companies) with Polly resilience
@@ -35,7 +44,26 @@ namespace PaymentSwitch.Processor
 
 			// Business services
 			builder.Services.AddScoped<IPaymentOperatorResolver, PaymentOperatorResolver>();
-			builder.Services.AddScoped<PaymentEngineService>();
+			builder.Services.AddScoped<
+				ICardAuthorizationGateway,
+				PaymentOperatorCardAuthorizationGateway>();
+			builder.Services.AddScoped<
+				ICreditCardRegistrationGateway,
+				PaymentOperatorCreditCardRegistrationGateway>();
+			builder.Services.AddScoped<IPaymentQuotePricingService, PaymentQuotePricingService>();
+			builder.Services.AddScoped<IPaymentRequestOutbox, PaymentRequestOutbox>();
+			builder.Services.AddScoped<CreatePaymentQuoteUseCase>();
+			builder.Services.AddScoped<ConfirmPaymentQuoteUseCase>();
+			builder.Services.AddScoped<RegisterCreditCardUseCase>();
+			builder.Services.AddScoped<UpdateCreditCardUseCase>();
+			builder.Services.AddScoped<DeleteCreditCardUseCase>();
+			builder.Services.AddScoped<GetServiceCatalogUseCase>();
+			builder.Services.AddScoped<GetServiceUseCase>();
+			builder.Services.AddScoped<GetCreditCardsUseCase>();
+			builder.Services.AddScoped<GetCreditCardUseCase>();
+			builder.Services.AddScoped<GetPaymentUseCase>();
+			builder.Services.AddScoped<GetPaymentHistoryUseCase>();
+			builder.Services.AddScoped<PublishPendingOutboxMessagesUseCase>();
 			builder.Services.AddHostedService<OutboxPublisherService>();
 
 			// gRPC server
@@ -53,8 +81,9 @@ namespace PaymentSwitch.Processor
 				logger.LogInformation("Applying Payment database migrations.");
 
 				var db = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
+				var clock = scope.ServiceProvider.GetRequiredService<IClock>();
 				await db.Database.MigrateAsync();
-				await PaymentDbSeeder.SeedAsync(db, configuration);
+				await PaymentDbSeeder.SeedAsync(db, configuration, clock);
 
 				logger.LogInformation("Payment database migrations and seed data completed.");
 			}

@@ -1,3 +1,4 @@
+using PaymentSwitch.Messaging;
 using PaymentSwitch.Processor.Domain.Enums;
 
 namespace PaymentSwitch.Processor.Domain.Entities
@@ -12,13 +13,14 @@ namespace PaymentSwitch.Processor.Domain.Entities
 		public string OperatorProvider { get; set; } = string.Empty;
 		public string? OperatorPaymentId { get; set; }
 		public string? CompanyReference { get; set; }
-		public TransactionStatus Status { get; set; } = TransactionStatus.Confirmed;
+		public PaymentTransactionStatus Status { get; set; } =
+			PaymentTransactionStatus.Confirmed;
 		public string Currency { get; set; } = string.Empty;
 		public string Reference { get; set; } = string.Empty;
 		public string? ErrorMessage { get; set; }
 		public int RetryCount { get; set; } = 0;
 		public DateTime? NextRetryAt { get; set; }
-		public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+		public DateTime CreatedAt { get; set; }
 		public DateTime? ProcessedAt { get; set; }
 		public DateTime? LastUpdatedAt { get; set; }
 
@@ -28,7 +30,7 @@ namespace PaymentSwitch.Processor.Domain.Entities
 		public ICollection<PaymentDetail> Details { get; set; } = [];
 
 		public static Payment Create(string clientId, Guid quoteId, Guid creditCardId,
-			Guid serviceId, string currency, string operatorProvider)
+			Guid serviceId, string currency, string operatorProvider, DateTime utcNow)
 		{
 			return new Payment
 			{
@@ -39,48 +41,51 @@ namespace PaymentSwitch.Processor.Domain.Entities
 				ServiceId = serviceId,
 				OperatorProvider = operatorProvider,
 				Currency = currency,
-				Reference = GenerateReference(),
-				Status = TransactionStatus.Confirmed,
-				CreatedAt = DateTime.UtcNow
+				Reference = GenerateReference(utcNow),
+				Status = PaymentTransactionStatus.Confirmed,
+				CreatedAt = utcNow
 			};
 		}
 
-		public void UpdateStatus(TransactionStatus status, string? errorMessage = null)
+		public void UpdateStatus(
+			PaymentTransactionStatus status,
+			DateTime utcNow,
+			string? errorMessage = null)
 		{
 			Status = status;
 			ErrorMessage = errorMessage;
-			LastUpdatedAt = DateTime.UtcNow;
+			LastUpdatedAt = utcNow;
 
-			if (status is TransactionStatus.Completed
-				or TransactionStatus.CompanyPaymentFailed
-				or TransactionStatus.Failed
-				or TransactionStatus.Refunded
-				or TransactionStatus.RefundFailed)
+			if (status is PaymentTransactionStatus.Completed
+				or PaymentTransactionStatus.CompanyPaymentFailed
+				or PaymentTransactionStatus.Failed
+				or PaymentTransactionStatus.Refunded
+				or PaymentTransactionStatus.RefundFailed)
 			{
-				ProcessedAt = DateTime.UtcNow;
+				ProcessedAt = utcNow;
 			}
 		}
 
-		public void SetOperatorPaymentId(string operatorPaymentId)
+		public void SetOperatorPaymentId(string operatorPaymentId, DateTime utcNow)
 		{
 			OperatorPaymentId = operatorPaymentId;
-			LastUpdatedAt = DateTime.UtcNow;
+			LastUpdatedAt = utcNow;
 		}
 
-		public void SetCompanyReference(string companyReference)
+		public void SetCompanyReference(string companyReference, DateTime utcNow)
 		{
 			CompanyReference = companyReference;
-			LastUpdatedAt = DateTime.UtcNow;
+			LastUpdatedAt = utcNow;
 		}
 
-		public void IncrementRetry()
+		public void IncrementRetry(DateTime utcNow)
 		{
 			RetryCount++;
-			NextRetryAt = DateTime.UtcNow.AddMinutes(5);
-			LastUpdatedAt = DateTime.UtcNow;
+			NextRetryAt = utcNow.AddMinutes(5);
+			LastUpdatedAt = utcNow;
 		}
 
-		private static string GenerateReference() =>
-			$"PAG-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..8].ToUpper()}";
+		private static string GenerateReference(DateTime utcNow) =>
+			$"PAG-{utcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..8].ToUpper()}";
 	}
 }

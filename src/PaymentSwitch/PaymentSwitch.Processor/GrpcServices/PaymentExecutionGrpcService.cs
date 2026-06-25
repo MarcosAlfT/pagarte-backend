@@ -1,15 +1,17 @@
 using Grpc.Core;
 using PaymentSwitch.Contracts;
-using PaymentSwitch.Processor.Services;
+using PaymentSwitch.Processor.Application.Models;
+using PaymentSwitch.Processor.Application.UseCases;
 
 namespace PaymentSwitch.Processor.GrpcServices;
 
 public sealed class PaymentExecutionGrpcService(
-	PaymentEngineService paymentEngine,
+	ConfirmPaymentQuoteUseCase confirmPaymentQuoteUseCase,
 	ILogger<PaymentExecutionGrpcService> logger)
 	: PaymentExecutionService.PaymentExecutionServiceBase
 {
-	private readonly PaymentEngineService _paymentEngine = paymentEngine;
+	private readonly ConfirmPaymentQuoteUseCase _confirmPaymentQuoteUseCase =
+		confirmPaymentQuoteUseCase;
 	private readonly ILogger<PaymentExecutionGrpcService> _logger = logger;
 
 	public override async Task<ConfirmQuoteResponse> ConfirmQuote(
@@ -21,10 +23,12 @@ public sealed class PaymentExecutionGrpcService(
 			request.QuoteId,
 			request.ClientId);
 
-		var result = await _paymentEngine.ConfirmAsync(
-			request.ClientId,
-			Guid.Parse(request.QuoteId),
-			Guid.Parse(request.CreditCardId));
+		var result = await _confirmPaymentQuoteUseCase.ExecuteAsync(
+			new ConfirmPaymentCommand(
+				request.ClientId,
+				Guid.Parse(request.QuoteId),
+				Guid.Parse(request.CreditCardId)),
+			context.CancellationToken);
 
 		return new ConfirmQuoteResponse
 		{

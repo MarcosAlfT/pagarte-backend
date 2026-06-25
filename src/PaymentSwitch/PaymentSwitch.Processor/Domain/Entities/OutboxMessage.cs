@@ -7,10 +7,10 @@ namespace PaymentSwitch.Processor.Domain.Entities
 		public string Payload { get; set; } = string.Empty;
 		public string Exchange { get; set; } = string.Empty;
 		public string RoutingKey { get; set; } = string.Empty;
-		public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+		public DateTime CreatedAt { get; set; }
 		public DateTime? PublishedAt { get; set; }
 		public DateTime? LastAttemptAt { get; set; }
-		public DateTime NextAttemptAt { get; set; } = DateTime.UtcNow;
+		public DateTime NextAttemptAt { get; set; }
 		public int Attempts { get; set; }
 		public string? ErrorMessage { get; set; }
 
@@ -18,7 +18,8 @@ namespace PaymentSwitch.Processor.Domain.Entities
 			string messageType,
 			string payload,
 			string exchange,
-			string routingKey)
+			string routingKey,
+			DateTime utcNow)
 		{
 			return new OutboxMessage
 			{
@@ -27,26 +28,26 @@ namespace PaymentSwitch.Processor.Domain.Entities
 				Payload = payload,
 				Exchange = exchange,
 				RoutingKey = routingKey,
-				CreatedAt = DateTime.UtcNow,
-				NextAttemptAt = DateTime.UtcNow
+				CreatedAt = utcNow,
+				NextAttemptAt = utcNow
 			};
 		}
 
-		public void MarkPublished()
+		public void MarkPublished(DateTime utcNow)
 		{
-			PublishedAt = DateTime.UtcNow;
-			LastAttemptAt = DateTime.UtcNow;
+			PublishedAt = utcNow;
+			LastAttemptAt = utcNow;
 			ErrorMessage = null;
 		}
 
-		public void MarkFailed(string errorMessage)
+		public void MarkFailed(string errorMessage, DateTime utcNow)
 		{
 			Attempts++;
-			LastAttemptAt = DateTime.UtcNow;
+			LastAttemptAt = utcNow;
 			ErrorMessage = errorMessage;
 
 			var retryDelayMinutes = Math.Min(Attempts, 10);
-			NextAttemptAt = DateTime.UtcNow.AddMinutes(retryDelayMinutes);
+			NextAttemptAt = utcNow.AddMinutes(retryDelayMinutes);
 		}
 	}
 }

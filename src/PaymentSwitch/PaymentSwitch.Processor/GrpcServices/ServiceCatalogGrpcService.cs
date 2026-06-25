@@ -1,19 +1,22 @@
 using Grpc.Core;
 using PaymentSwitch.Contracts;
-using PaymentSwitch.Processor.Interfaces;
+using PaymentSwitch.Processor.Application.UseCases;
 
 namespace PaymentSwitch.Processor.GrpcServices
 {
 	public class ServiceCatalogGrpcService(
-		IServiceRepository serviceRepository)
+		GetServiceCatalogUseCase getServiceCatalogUseCase,
+		GetServiceUseCase getServiceUseCase)
 		: PaymentSwitch.Contracts.ServiceCatalogService.ServiceCatalogServiceBase
 	{
-		private readonly IServiceRepository _serviceRepository = serviceRepository;
+		private readonly GetServiceCatalogUseCase _getServiceCatalogUseCase =
+			getServiceCatalogUseCase;
+		private readonly GetServiceUseCase _getServiceUseCase = getServiceUseCase;
 
 		public override async Task<GetServicesResponse> GetServices(
 			GetServicesRequest request, ServerCallContext context)
 		{
-			var services = await _serviceRepository.GetAllActiveAsync(
+			var services = await _getServiceCatalogUseCase.ExecuteAsync(
 				string.IsNullOrEmpty(request.Category) ? null : request.Category);
 			var response = new GetServicesResponse();
 			response.Services.AddRange(services.Select(MapService));
@@ -23,7 +26,8 @@ namespace PaymentSwitch.Processor.GrpcServices
 		public override async Task<GetServiceResponse> GetService(
 			GetServiceRequest request, ServerCallContext context)
 		{
-			var service = await _serviceRepository.GetByIdAsync(Guid.Parse(request.ServiceId));
+			var service = await _getServiceUseCase.ExecuteAsync(
+				Guid.Parse(request.ServiceId));
 			if (service == null)
 				return new GetServiceResponse { Found = false };
 
