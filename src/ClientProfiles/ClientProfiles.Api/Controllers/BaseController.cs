@@ -1,4 +1,4 @@
-using ClientProfiles.Api.Constants;
+using ClientProfiles.Application.Constants;
 using Microsoft.AspNetCore.Mvc;
 using OpenIddict.Abstractions;
 using Utilities.Responses;

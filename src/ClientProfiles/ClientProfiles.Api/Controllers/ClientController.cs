@@ -1,5 +1,5 @@
-using ClientProfiles.Api.DTOs;
-using ClientProfiles.Api.Interfaces;
+using ClientProfiles.Application.DTOs;
+using ClientProfiles.Application.UseCases.Clients;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Utilities.Responses;
@@ -9,97 +9,91 @@ namespace ClientProfiles.Api.Controllers
 	[ApiController]
 	[Authorize]
 	[Route("api/client")]
-	public class ClientController(IClientService clientService) : BaseController
+	public class ClientController(
+		GetClientByUserIdUseCase getClientByUserId,
+		CreatePersonClientUseCase createPersonClient,
+		CreateOrganizationClientUseCase createOrganizationClient,
+		UpdatePersonClientUseCase updatePersonClient,
+		UpdateOrganizationClientUseCase updateOrganizationClient,
+		DeleteClientUseCase deleteClient) : BaseController
 	{
-		private readonly IClientService _clientService = clientService;
-
 		[HttpGet]
-		public async Task<IActionResult> GetAsync()
+		public async Task<IActionResult> GetAsync(CancellationToken cancellationToken)
 		{
 			// Validate user ID return null if valid, otherwise return an IActionResult with the error response
 			var validation = ValidateUserId();
 			if (validation != null) return validation;
 
-			var response = await _clientService.GetByUserIdAsync(GetUserId()!);
+			var response = await getClientByUserId.ExecuteAsync(GetUserId()!, cancellationToken);
 			return Ok(response);
 		}
 
 		[HttpPost("person")]
-		public async Task<IActionResult> CreatePersonAsync([FromBody] CreatePersonRequest request)
+		public async Task<IActionResult> CreatePersonAsync([FromBody] CreatePersonRequest request, CancellationToken cancellationToken)
 		{
 			// Validate user ID return null if valid, otherwise return an IActionResult with the error response
 			var validation = ValidateUserId();
 			if (validation != null) return validation;
 
-			var response = await _clientService.CreatePersonClientAsync(
-				GetUserId()!, request.FirstName, request.MiddleName,
-				request.LastName, request.DateOfBirth, request.IdType,
-				request.IdentificationNumber);
+			var response = await createPersonClient.ExecuteAsync(GetUserId()!, request, cancellationToken);
 			return Ok(response);
 		}
 
 
 		[HttpPut("person")]
-		public async Task<IActionResult> UpdatePersonAsync([FromBody] UpdatePersonRequest request)
+		public async Task<IActionResult> UpdatePersonAsync([FromBody] UpdatePersonRequest request, CancellationToken cancellationToken)
 		{
 			// Validate user ID return null if valid, otherwise return an IActionResult with the error response
 			var validation = ValidateUserId();
 			if (validation != null) return validation;
 
-			var clientResponse = await _clientService.GetByUserIdAsync(GetUserId()!);
+			var clientResponse = await getClientByUserId.ExecuteAsync(GetUserId()!, cancellationToken);
 			if (!clientResponse.Success)
 				return Ok(clientResponse);
 
-			var response = await _clientService.UpdatePersonAsync(
-				clientResponse.Data!.Id, request.FirstName, request.MiddleName,
-				request.LastName, request.DateOfBirth, request.IdType,
-				request.IdentificationNumber);
+			var response = await updatePersonClient.ExecuteAsync(clientResponse.Data!.Id, request, cancellationToken);
 			return Ok(response);
 		}
 
 		[HttpPost("organization")]
-		public async Task<IActionResult> CreateOrganizationAsync([FromBody] CreateOrganizationRequest request)
+		public async Task<IActionResult> CreateOrganizationAsync([FromBody] CreateOrganizationRequest request, CancellationToken cancellationToken)
 		{
 			// Validate user ID return null if valid, otherwise return an IActionResult with the error response
 			var validation = ValidateUserId();
 			if (validation != null) return validation;
 
-			var response = await _clientService.CreateOrganizationClientAsync(
-				GetUserId()!, request.Name, request.Industry,
-				request.IdentificationNumber);
+			var response = await createOrganizationClient.ExecuteAsync(GetUserId()!, request, cancellationToken);
 			return Ok(response);
 		}
 
 
 		[HttpPut("organization")]
-		public async Task<IActionResult> UpdateOrganizationAsync([FromBody] UpdateOrganizationRequest request)
+		public async Task<IActionResult> UpdateOrganizationAsync([FromBody] UpdateOrganizationRequest request, CancellationToken cancellationToken)
 		{
 			// Validate user ID return null if valid, otherwise return an IActionResult with the error response
 			var validation = ValidateUserId();
 			if (validation != null) return validation;
 
-			var clientResponse = await _clientService.GetByUserIdAsync(GetUserId()!);
+			var clientResponse = await getClientByUserId.ExecuteAsync(GetUserId()!, cancellationToken);
 			if (!clientResponse.Success)
 				return Ok(clientResponse);
 
-			var response = await _clientService.UpdateOrganizationAsync(
-				clientResponse.Data!.Id, request.Name, request.Industry,
-				request.IdentificationNumber);
+			var response = await updateOrganizationClient.ExecuteAsync(clientResponse.Data!.Id, request, cancellationToken);
 			return Ok(response);
 		}
 
 		[HttpDelete]
-		public async Task<IActionResult> DeleteAsync()
+		public async Task<IActionResult> DeleteAsync(CancellationToken cancellationToken)
 		{
 			// Validate user ID return null if valid, otherwise return an IActionResult with the error response
 			var validation = ValidateUserId();
 			if (validation != null) return validation;
 
-			var clientResponse = await _clientService.GetByUserIdAsync(GetUserId()!);
+			var clientResponse = await getClientByUserId.ExecuteAsync(GetUserId()!, cancellationToken);
 			if (!clientResponse.Success)
 				return Ok(clientResponse);
 
-			var response = await _clientService.DeleteAsync(clientResponse.Data!.Id);
+			var response = await deleteClient.ExecuteAsync(clientResponse.Data!.Id, cancellationToken);
 			return Ok(response);
 		}
 	}

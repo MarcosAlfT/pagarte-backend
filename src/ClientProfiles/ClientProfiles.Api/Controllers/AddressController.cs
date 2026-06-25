@@ -1,5 +1,6 @@
-using ClientProfiles.Api.DTOs;
-using ClientProfiles.Api.Interfaces;
+using ClientProfiles.Application.DTOs;
+using ClientProfiles.Application.UseCases.Addresses;
+using ClientProfiles.Application.UseCases.Clients;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,72 +9,85 @@ namespace ClientProfiles.Api.Controllers
 	[ApiController]
 	[Authorize]
 	[Route("api/client/address")]
-	public class AddressController(IAddressService addressService, IClientService clientService) : BaseController
+	public class AddressController(
+		GetClientByUserIdUseCase getClientByUserId,
+		GetAddressesByClientUseCase getAddressesByClient,
+		CreateAddressUseCase createAddress,
+		UpdateAddressUseCase updateAddress,
+		SetPrimaryAddressUseCase setPrimaryAddress,
+		DeleteAddressUseCase deleteAddress) : BaseController
 	{
-		private readonly IAddressService _addressService = addressService;
-		private readonly IClientService _clientService = clientService;
-
 		[HttpGet]
-		public async Task<IActionResult> GetByClientAsync()
+		public async Task<IActionResult> GetByClientAsync(CancellationToken cancellationToken)
 		{
 			// Validate user ID return null if valid, otherwise return an IActionResult with the error response
 			var validation = ValidateUserId();
 			if (validation != null) return validation;
 
-			var clientResponse = await _clientService.GetByUserIdAsync(GetUserId()!);
+			var clientResponse = await getClientByUserId.ExecuteAsync(GetUserId()!, cancellationToken);
 			if (!clientResponse.Success)
 				return Ok(clientResponse);
 
-			var response = await _addressService.GetByClientIdAsync(clientResponse.Data!.Id);
+			var response = await getAddressesByClient.ExecuteAsync(clientResponse.Data!.Id, cancellationToken);
 			return Ok(response);
 		}
 
 		[HttpPost]
-		public async Task<IActionResult> CreateAsync([FromBody] CreateAddressRequest request)
+		public async Task<IActionResult> CreateAsync([FromBody] CreateAddressRequest request, CancellationToken cancellationToken)
 		{
 			// Validate user ID return null if valid, otherwise return an IActionResult with the error response
 			var validation = ValidateUserId();
 			if (validation != null) return validation;
 
-			var clientResponse = await _clientService.GetByUserIdAsync(GetUserId()!);
+			var clientResponse = await getClientByUserId.ExecuteAsync(GetUserId()!, cancellationToken);
 			if (!clientResponse.Success)
 				return Ok(clientResponse);
 
-			var response = await _addressService.CreateAsync(
-				clientResponse.Data!.Id, request.Street, request.City,
-				request.State, request.PostalCode, request.Country, request.IsPrimary);
+			var response = await createAddress.ExecuteAsync(clientResponse.Data!.Id, request, cancellationToken);
 			return Ok(response);
 		}
 
 		[HttpPut("{addressId}")]
-		public async Task<IActionResult> UpdateAsync(Guid addressId, [FromBody] UpdateAddressRequest request)
+		public async Task<IActionResult> UpdateAsync(Guid addressId, [FromBody] UpdateAddressRequest request, CancellationToken cancellationToken)
 		{
 			// Validate user ID return null if valid, otherwise return an IActionResult with the error response
 			var validation = ValidateUserId();
 			if (validation != null) return validation;
 
-			var clientResponse = await _clientService.GetByUserIdAsync(GetUserId()!);
+			var clientResponse = await getClientByUserId.ExecuteAsync(GetUserId()!, cancellationToken);
 			if (!clientResponse.Success)
 				return Ok(clientResponse);
 
-			var response = await _addressService.UpdateAsync(
-				clientResponse.Data!.Id, addressId, request.Street, request.City,
-				request.State, request.PostalCode, request.Country, request.IsPrimary);
+			var response = await updateAddress.ExecuteAsync(clientResponse.Data!.Id, addressId, request, cancellationToken);
+			return Ok(response);
+		}
+
+		[HttpPut("{addressId}/primary")]
+		public async Task<IActionResult> SetPrimaryAsync(Guid addressId, CancellationToken cancellationToken)
+		{
+			var validation = ValidateUserId();
+			if (validation != null) return validation;
+
+			var clientResponse = await getClientByUserId.ExecuteAsync(GetUserId()!, cancellationToken);
+			if (!clientResponse.Success)
+				return Ok(clientResponse);
+
+			var response = await setPrimaryAddress.ExecuteAsync(clientResponse.Data!.Id, addressId, cancellationToken);
 			return Ok(response);
 		}
 
 		[HttpDelete("{addressId}")]
-		public async Task<IActionResult> DeleteAsync(Guid addressId)
+		public async Task<IActionResult> DeleteAsync(Guid addressId, CancellationToken cancellationToken)
 		{
 			// Validate user ID return null if valid, otherwise return an IActionResult with the error response
 			var validation = ValidateUserId();
 			if (validation != null) return validation;
 
-			var clientResponse = await _clientService.GetByUserIdAsync(GetUserId()!);
+			var clientResponse = await getClientByUserId.ExecuteAsync(GetUserId()!, cancellationToken);
 			if (!clientResponse.Success)
 				return Ok(clientResponse);
 
-			var response = await _addressService.DeleteAsync(clientResponse.Data!.Id, addressId);
+			var response = await deleteAddress.ExecuteAsync(clientResponse.Data!.Id, addressId, cancellationToken);
 			return Ok(response);
 		}
 	}

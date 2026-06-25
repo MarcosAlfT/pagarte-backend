@@ -1,11 +1,8 @@
-
-using ClientProfiles.Api.Infrastructure.Repository;
-using ClientProfiles.Api.Interfaces;
-using ClientProfiles.Api.Services;
-using Microsoft.EntityFrameworkCore;
+using ClientProfiles.Application;
+using ClientProfiles.Application.DTOs.Responses;
+using ClientProfiles.Persistence;
 using OpenIddict.Validation.AspNetCore;
 using System.Text.Json.Serialization;
-using ClientProfiles.Api.DTOs.Responses;
 
 namespace ClientProfiles.Api;
 
@@ -27,21 +24,8 @@ public class Program
 		});
 		Console.WriteLine("ClientProfiles.Api startup: controllers configured.");
 
-		// Configure Entity Framework Core with SQL Server
-		builder.Services.AddDbContext<ClientProfilesDbContext>(options =>
-            options.UseSqlServer(builder.Configuration.GetConnectionString("ClientProfilesDb")));
-
-		// Register the Repositories
-        builder.Services.AddScoped<IClientRepository, ClientRepository>();
-        builder.Services.AddScoped<IPersonRepository, PersonRepository>();
-        builder.Services.AddScoped<IOrganizationRepository, OrganizationRepository>();
-		builder.Services.AddScoped<IAddressRepository, AddressRepository>();
-        builder.Services.AddScoped<IPhoneRepository, PhoneRepository>();
-
-		// Register the Services
-        builder.Services.AddScoped<IClientService, ClientService>();
-        builder.Services.AddScoped<IAddressService, AddressService>();
-        builder.Services.AddScoped<IPhoneService, PhoneService>();
+		builder.Services.AddClientProfilesPersistence(configuration);
+		builder.Services.AddClientProfilesApplication();
 
 		//Register the mappers
         MappingConfig.Configure();
