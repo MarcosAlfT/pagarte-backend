@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using PaymentSwitch.Messaging;
 using PaymentSwitch.Processor.Domain.Entities;
 using PaymentSwitch.Processor.Domain.Enums;
 using PaymentSwitch.Processor.Infrastructure;
@@ -8,16 +9,18 @@ namespace PaymentSwitch.Processor.Services
 {
 	public static class PaymentDbSeeder
 	{
-		public static async Task SeedAsync(PaymentDbContext context, IConfiguration configuration)
+		public static async Task SeedAsync(PaymentDbContext context, IConfiguration configuration, IClock clock)
 		{
-			await SeedPaymentOperatorsAsync(context, configuration);
+			var utcNow = clock.UtcNow;
+
+			await SeedPaymentOperatorsAsync(context, configuration, utcNow);
 			await SeedCompaniesAsync(context);
 			await SeedServicesAsync(context);
-			await SeedFeeConfigurationsAsync(context);
+			await SeedFeeConfigurationsAsync(context, utcNow);
 		}
 
 		private static async Task SeedPaymentOperatorsAsync(
-			PaymentDbContext context, IConfiguration configuration)
+			PaymentDbContext context, IConfiguration configuration, DateTime utcNow)
 		{
 			if (await context.PaymentOperators.AnyAsync()) return;
 
@@ -31,6 +34,7 @@ namespace PaymentSwitch.Processor.Services
 				provider,
 				configuration["PaymentOperator:Name"] ?? provider,
 				PaymentOperatorScope.International,
+				utcNow,
 				priority: 100));
 
 			await context.SaveChangesAsync();
@@ -63,14 +67,14 @@ namespace PaymentSwitch.Processor.Services
 			await context.SaveChangesAsync();
 		}
 
-		private static async Task SeedFeeConfigurationsAsync(PaymentDbContext context)
+		private static async Task SeedFeeConfigurationsAsync(PaymentDbContext context, DateTime utcNow)
 		{
 			if (await context.FeeConfigurations.IgnoreQueryFilters().AnyAsync()) return;
 
 			context.FeeConfigurations.AddRange(
-				new FeeConfiguration { Id = Guid.NewGuid(), Type = FeeType.PaymentOperator, CalculationType = CalculationType.Percentage, Value = 2.9m, Currency = "USD", IsActive = true, EffectiveDate = DateTime.UtcNow.AddYears(-1) },
-				new FeeConfiguration { Id = Guid.NewGuid(), Type = FeeType.Platform, CalculationType = CalculationType.Percentage, Value = 1.5m, Currency = "USD", IsActive = true, EffectiveDate = DateTime.UtcNow.AddYears(-1) },
-				new FeeConfiguration { Id = Guid.NewGuid(), Type = FeeType.Company, CalculationType = CalculationType.FixedAmount, Value = 0.30m, Currency = "USD", IsActive = true, EffectiveDate = DateTime.UtcNow.AddYears(-1) }
+				new FeeConfiguration { Id = Guid.NewGuid(), Type = FeeType.PaymentOperator, CalculationType = CalculationType.Percentage, Value = 2.9m, Currency = "USD", IsActive = true, EffectiveDate = utcNow.AddYears(-1) },
+				new FeeConfiguration { Id = Guid.NewGuid(), Type = FeeType.Platform, CalculationType = CalculationType.Percentage, Value = 1.5m, Currency = "USD", IsActive = true, EffectiveDate = utcNow.AddYears(-1) },
+				new FeeConfiguration { Id = Guid.NewGuid(), Type = FeeType.Company, CalculationType = CalculationType.FixedAmount, Value = 0.30m, Currency = "USD", IsActive = true, EffectiveDate = utcNow.AddYears(-1) }
 			);
 			await context.SaveChangesAsync();
 		}

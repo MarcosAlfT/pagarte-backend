@@ -1,6 +1,4 @@
-using Microsoft.EntityFrameworkCore;
-using PaymentSwitch.Processor.Infrastructure;
-using Infrastructure.RabbitMQ;
+using PaymentSwitch.Processor.Application.UseCases;
 
 namespace PaymentSwitch.Processor.Services
 {
@@ -9,7 +7,6 @@ namespace PaymentSwitch.Processor.Services
 		ILogger<OutboxPublisherService> logger) : BackgroundService
 	{
 		private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(10);
-		private const int BatchSize = 25;
 
 		protected override async Task ExecuteAsync(CancellationToken stoppingToken)
 		{
@@ -35,40 +32,9 @@ namespace PaymentSwitch.Processor.Services
 			try
 			{
 				using var scope = scopeFactory.CreateScope();
-				var db = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
-				var publisher = scope.ServiceProvider.GetRequiredService<IMessagePublisher>();
-				var utcNow = DateTime.UtcNow;
-
-				var messages = await db.OutboxMessages
-					.Where(m => m.PublishedAt == null && m.NextAttemptAt <= utcNow)
-					.OrderBy(m => m.CreatedAt)
-					.Take(BatchSize)
-					.ToListAsync(cancellationToken);
-
-				foreach (var message in messages)
-				{
-					try
-					{
-						await publisher.PublishJsonAsync(
-							message.Payload,
-							message.Exchange,
-							message.RoutingKey);
-
-						message.MarkPublished();
-					}
-					catch (Exception ex)
-					{
-						message.MarkFailed(ex.Message);
-						logger.LogWarning(ex,
-							"Failed to publish outbox message {OutboxMessageId}.",
-							message.Id);
-					}
-				}
-
-				if (messages.Count > 0)
-				{
-					await db.SaveChangesAsync(cancellationToken);
-				}
+				var useCase = scope.ServiceProvider
+					.GetRequiredService<PublishPendingOutboxMessagesUseCase>();
+				await useCase.ExecuteAsync(cancellationToken);
 			}
 			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 			{

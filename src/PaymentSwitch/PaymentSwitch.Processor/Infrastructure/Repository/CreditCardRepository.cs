@@ -1,12 +1,16 @@
 using PaymentSwitch.Processor.Domain.Entities;
 using PaymentSwitch.Processor.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using PaymentSwitch.Messaging;
 
 namespace PaymentSwitch.Processor.Infrastructure.Repository
 {
-	public class CreditCardRepository(PaymentDbContext context) : ICreditCardRepository
+	public class CreditCardRepository(
+		PaymentDbContext context,
+		IClock clock) : ICreditCardRepository
 	{
 		private readonly PaymentDbContext _context = context;
+		private readonly IClock _clock = clock;
 
 		public async Task<IEnumerable<CreditCard>> GetByClientIdAsync(string clientId)
 			=> await _context.CreditCards
@@ -18,17 +22,16 @@ namespace PaymentSwitch.Processor.Infrastructure.Repository
 		public async Task<CreditCard?> GetByIdAsync(Guid id)
 			=> await _context.CreditCards.FirstOrDefaultAsync(c => c.Id == id);
 
-		public async Task<CreditCard> CreateAsync(CreditCard card)
+		public Task<CreditCard> CreateAsync(CreditCard card)
 		{
 			_context.CreditCards.Add(card);
-			await _context.SaveChangesAsync();
-			return card;
+			return Task.FromResult(card);
 		}
 
-		public async Task UpdateAsync(CreditCard card)
+		public Task UpdateAsync(CreditCard card)
 		{
 			_context.CreditCards.Update(card);
-			await _context.SaveChangesAsync();
+			return Task.CompletedTask;
 		}
 
 		public async Task DeleteAsync(Guid id, string clientId)
@@ -37,8 +40,7 @@ namespace PaymentSwitch.Processor.Infrastructure.Repository
 				.FirstOrDefaultAsync(c => c.Id == id && c.ClientId == clientId);
 			if (card != null)
 			{
-				card.Delete();
-				await _context.SaveChangesAsync();
+				card.Delete(_clock.UtcNow);
 			}
 		}
 	}

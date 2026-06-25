@@ -15,7 +15,7 @@ namespace PaymentSwitch.Processor.Domain.Entities
 		public int ExpiryMonth { get; set; }
 		public int ExpiryYear { get; set; }
 		public bool IsDefault { get; set; } = false;
-		public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+		public DateTime CreatedAt { get; set; }
 		public DateTime? UpdatedAt { get; set; }
 		public bool IsDeleted { get; set; } = false;
 		public DateTime? DeletedAt { get; set; }
@@ -26,7 +26,7 @@ namespace PaymentSwitch.Processor.Domain.Entities
 			string operatorCardToken,
 			string cardNumber, string cardHolderName,
 			string last4Digits, CardType cardType, int expiryMonth,
-			int expiryYear, bool isDefault)
+			int expiryYear, bool isDefault, DateTime utcNow)
 		{
 			return new CreditCard
 			{
@@ -41,21 +41,21 @@ namespace PaymentSwitch.Processor.Domain.Entities
 				ExpiryMonth = expiryMonth,
 				ExpiryYear = expiryYear,
 				IsDefault = isDefault,
-				CreatedAt = DateTime.UtcNow
+				CreatedAt = utcNow
 			};
 		}
 
-		public void Update(string cardHolderName, bool isDefault)
+		public void Update(string cardHolderName, bool isDefault, DateTime utcNow)
 		{
 			CardHolderName = cardHolderName;
 			IsDefault = isDefault;
-			UpdatedAt = DateTime.UtcNow;
+			UpdatedAt = utcNow;
 		}
 
-		public void Delete()
+		public void Delete(DateTime utcNow)
 		{
 			IsDeleted = true;
-			DeletedAt = DateTime.UtcNow;
+			DeletedAt = utcNow;
 		}
 	}
 }

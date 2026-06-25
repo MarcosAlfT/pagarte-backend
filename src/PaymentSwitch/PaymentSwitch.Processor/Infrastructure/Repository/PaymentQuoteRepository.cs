@@ -14,17 +14,16 @@ namespace PaymentSwitch.Processor.Infrastructure.Repository
 				.Include(q => q.Service)
 				.FirstOrDefaultAsync(q => q.Id == id);
 
-		public async Task<PaymentQuote> CreateAsync(PaymentQuote quote)
+		public Task<PaymentQuote> CreateAsync(PaymentQuote quote)
 		{
 			_context.PaymentQuotes.Add(quote);
-			await _context.SaveChangesAsync();
-			return quote;
+			return Task.FromResult(quote);
 		}
 
-		public async Task UpdateAsync(PaymentQuote quote)
+		public Task UpdateAsync(PaymentQuote quote)
 		{
 			_context.PaymentQuotes.Update(quote);
-			await _context.SaveChangesAsync();
+			return Task.CompletedTask;
 		}
 	}
 }

@@ -1,10 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using PaymentSwitch.Processor.Domain.Entities;
+using PaymentSwitch.Processor.Interfaces;
 
 
 namespace PaymentSwitch.Processor.Infrastructure
 {
-	public class PaymentDbContext : DbContext
+	public class PaymentDbContext : DbContext, IUnitOfWork
 	{
 		public PaymentDbContext(DbContextOptions<PaymentDbContext> options) : base(options) { }
 

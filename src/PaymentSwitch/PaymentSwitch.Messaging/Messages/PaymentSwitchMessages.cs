@@ -14,7 +14,7 @@ namespace PaymentSwitch.Messaging.Messages
         public string Currency { get; set; } = string.Empty;
         public string Reference { get; set; } = string.Empty;
         public string ClientId { get; set; } = string.Empty;
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime CreatedAt { get; set; }
     }
 
     /// <summary>
@@ -30,7 +30,7 @@ namespace PaymentSwitch.Messaging.Messages
         public string Currency { get; set; } = string.Empty;
         public string Reason { get; set; } = string.Empty;
         public int RetryCount { get; set; } = 0;
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime CreatedAt { get; set; }
     }
 
     /// <summary>
@@ -44,7 +44,7 @@ namespace PaymentSwitch.Messaging.Messages
         public string Subject { get; set; } = string.Empty;
         public string Body { get; set; } = string.Empty;
         public bool IsHtml { get; set; } = true;
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime CreatedAt { get; set; }
     }
 
     /// <summary>
@@ -57,6 +57,6 @@ namespace PaymentSwitch.Messaging.Messages
         public Guid? PaymentId { get; set; }
         public string Message { get; set; } = string.Empty;
         public string Severity { get; set; } = "Critical";
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime CreatedAt { get; set; }
     }
 }

@@ -21,7 +21,8 @@ Payments.Api
 PaymentSwitch.Processor
   -> owns PaymentDb
   -> handles card registration and synchronous card charge
-  -> publishes payment messages to RabbitMQ
+  -> records post-charge messages in the SQL outbox
+  -> publishes pending outbox messages to RabbitMQ
   -> exposes internal gRPC contracts
 
 PaymentSwitch.Worker
@@ -68,5 +69,6 @@ Shared libraries
 
 - `Utilities.Responses` provides the standard response wrapper used by the public HTTP APIs.
 - `PaymentSwitch.Contracts` holds the gRPC contracts shared by `Payments.Api`, `PaymentSwitch.Processor`, and `PayableServices`.
-- `PaymentSwitch.Messaging` holds the shared payment message contracts and RabbitMQ topology.
+- `PaymentSwitch.Messaging` holds the shared payment message contracts, RabbitMQ topology,
+  `PaymentTransactionStatus`, and `IClock`/`SystemClock`.
 - `Infrastructure.RabbitMQ` provides the shared connection and publishing infrastructure.

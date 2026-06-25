@@ -19,11 +19,10 @@ namespace PaymentSwitch.Processor.Infrastructure.Repository
 			=> await _context.PaymentOperators
 				.FirstOrDefaultAsync(o => o.Code == code);
 
-		public async Task<PaymentOperator> CreateAsync(PaymentOperator paymentOperator)
+		public Task<PaymentOperator> CreateAsync(PaymentOperator paymentOperator)
 		{
 			_context.PaymentOperators.Add(paymentOperator);
-			await _context.SaveChangesAsync();
-			return paymentOperator;
+			return Task.FromResult(paymentOperator);
 		}
 	}
 }

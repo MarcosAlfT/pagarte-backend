@@ -10,7 +10,7 @@ namespace PaymentSwitch.Processor.Domain.Entities
 		public string Currency { get; set; } = string.Empty;
 		public decimal TotalAmount { get; set; }
 		public PaymentQuoteStatus Status { get; set; } = PaymentQuoteStatus.Unpaid;
-		public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+		public DateTime CreatedAt { get; set; }
 		public DateTime ExpiresAt { get; set; }
 		public DateTime? PaidAt { get; set; }
 
@@ -20,10 +20,10 @@ namespace PaymentSwitch.Processor.Domain.Entities
 
 		public bool IsExpired(DateTime utcNow) => utcNow > ExpiresAt;
 
-		public void MarkPaid()
+		public void MarkPaid(DateTime utcNow)
 		{
 			Status = PaymentQuoteStatus.Paid;
-			PaidAt = DateTime.UtcNow;
+			PaidAt = utcNow;
 		}
 
 		public static PaymentQuote Create(
@@ -31,7 +31,8 @@ namespace PaymentSwitch.Processor.Domain.Entities
 			Guid serviceId,
 			string currency,
 			decimal totalAmount,
-			DateTime expiresAt)
+			DateTime expiresAt,
+			DateTime utcNow)
 		{
 			return new PaymentQuote
 			{
@@ -40,6 +41,7 @@ namespace PaymentSwitch.Processor.Domain.Entities
 				ServiceId = serviceId,
 				Currency = currency,
 				TotalAmount = totalAmount,
+				CreatedAt = utcNow,
 				ExpiresAt = expiresAt
 			};
 		}

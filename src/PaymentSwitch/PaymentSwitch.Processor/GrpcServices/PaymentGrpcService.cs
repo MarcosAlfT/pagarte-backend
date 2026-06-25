@@ -1,18 +1,25 @@
 using PaymentSwitch.Contracts;
-using PaymentSwitch.Processor.Interfaces;
-using PaymentSwitch.Processor.Services;
+using PaymentSwitch.Processor.Application.Models;
+using PaymentSwitch.Processor.Application.UseCases;
 using Grpc.Core;
 
 namespace PaymentSwitch.Processor.GrpcServices
 {
 	public class PaymentGrpcService(
-			IPaymentRepository paymentRepository,
-			PaymentEngineService paymentEngine,
+			CreatePaymentQuoteUseCase createPaymentQuoteUseCase,
+			ConfirmPaymentQuoteUseCase confirmPaymentQuoteUseCase,
+			GetPaymentUseCase getPaymentUseCase,
+			GetPaymentHistoryUseCase getPaymentHistoryUseCase,
 			ILogger<PaymentGrpcService> logger)
 			: PaymentSwitch.Contracts.PaymentService.PaymentServiceBase
 	{
-		private readonly IPaymentRepository _paymentRepository = paymentRepository;
-		private readonly PaymentEngineService _paymentEngine = paymentEngine;
+		private readonly CreatePaymentQuoteUseCase _createPaymentQuoteUseCase =
+			createPaymentQuoteUseCase;
+		private readonly ConfirmPaymentQuoteUseCase _confirmPaymentQuoteUseCase =
+			confirmPaymentQuoteUseCase;
+		private readonly GetPaymentUseCase _getPaymentUseCase = getPaymentUseCase;
+		private readonly GetPaymentHistoryUseCase _getPaymentHistoryUseCase =
+			getPaymentHistoryUseCase;
 		private readonly ILogger<PaymentGrpcService> _logger = logger;
 
 		public override async Task<CreatePaymentQuoteResponse> CreatePaymentQuote(
@@ -20,10 +27,12 @@ namespace PaymentSwitch.Processor.GrpcServices
 		{
 			_logger.LogInformation("Creating payment quote for client {ClientId}", request.ClientId);
 
-			var result = await _paymentEngine.CreateQuoteAsync(
-				request.ClientId,
-				Guid.Parse(request.ServiceId),
-				request.Currency);
+			var result = await _createPaymentQuoteUseCase.ExecuteAsync(
+				new CreatePaymentQuoteCommand(
+					request.ClientId,
+					Guid.Parse(request.ServiceId),
+					request.Currency),
+				context.CancellationToken);
 
 			if (!result.Success || result.Quote == null)
 			{
@@ -47,10 +56,12 @@ namespace PaymentSwitch.Processor.GrpcServices
 			_logger.LogInformation("Confirming payment quote {QuoteId} for client {ClientId}",
 				request.QuoteId, request.ClientId);
 
-			var result = await _paymentEngine.ConfirmAsync(
-				request.ClientId,
-				Guid.Parse(request.QuoteId),
-				Guid.Parse(request.CreditCardId));
+			var result = await _confirmPaymentQuoteUseCase.ExecuteAsync(
+				new ConfirmPaymentCommand(
+					request.ClientId,
+					Guid.Parse(request.QuoteId),
+					Guid.Parse(request.CreditCardId)),
+				context.CancellationToken);
 
 			return new ProcessPaymentResponse
 			{
@@ -65,9 +76,14 @@ namespace PaymentSwitch.Processor.GrpcServices
 		public override async Task<GetPaymentResponse> GetPayment(
 			GetPaymentRequest request, ServerCallContext context)
 		{
-			var payment = await _paymentRepository.GetByIdAsync(Guid.Parse(request.PaymentId));
-			if (payment == null || payment.ClientId != request.ClientId)
+			var payment = await _getPaymentUseCase.ExecuteAsync(
+				request.ClientId,
+				Guid.Parse(request.PaymentId));
+
+			if (payment == null)
+			{
 				return new GetPaymentResponse { Found = false };
+			}
 
 			return new GetPaymentResponse { Found = true, Payment = MapPayment(payment) };
 		}
@@ -75,12 +91,13 @@ namespace PaymentSwitch.Processor.GrpcServices
 		public override async Task<GetPaymentHistoryResponse> GetPaymentHistory(
 			GetPaymentHistoryRequest request, ServerCallContext context)
 		{
-			var payments = await _paymentRepository.GetByClientIdAsync(
-				request.ClientId, request.Page, request.PageSize);
-			var total = await _paymentRepository.GetCountByClientIdAsync(request.ClientId);
+			var result = await _getPaymentHistoryUseCase.ExecuteAsync(
+				request.ClientId,
+				request.Page,
+				request.PageSize);
 
-			var response = new GetPaymentHistoryResponse { Total = total };
-			response.Payments.AddRange(payments.Select(MapPayment));
+			var response = new GetPaymentHistoryResponse { Total = result.Total };
+			response.Payments.AddRange(result.Payments.Select(MapPayment));
 			return response;
 		}
 

@@ -10,13 +10,14 @@ namespace PaymentSwitch.Processor.Domain.Entities
 		public PaymentOperatorScope Scope { get; set; } = PaymentOperatorScope.International;
 		public int Priority { get; set; } = 100;
 		public bool IsActive { get; set; } = true;
-		public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+		public DateTime CreatedAt { get; set; }
 		public DateTime? UpdatedAt { get; set; }
 
 		public static PaymentOperator Create(
 			string code,
 			string name,
 			PaymentOperatorScope scope,
+			DateTime utcNow,
 			int priority = 100)
 		{
 			return new PaymentOperator
@@ -27,7 +28,7 @@ namespace PaymentSwitch.Processor.Domain.Entities
 				Scope = scope,
 				Priority = priority,
 				IsActive = true,
-				CreatedAt = DateTime.UtcNow
+				CreatedAt = utcNow
 			};
 		}
 	}

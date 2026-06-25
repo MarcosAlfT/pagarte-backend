@@ -1,12 +1,15 @@
 using PaymentSwitch.Processor.Domain.Entities;
 using PaymentSwitch.Processor.Interfaces;
 using Microsoft.EntityFrameworkCore;
-using PaymentSwitch.Processor.Domain.Enums;
+using PaymentSwitch.Messaging;
 namespace PaymentSwitch.Processor.Infrastructure.Repository
 {
-	public class PaymentRepository(PaymentDbContext context) : IPaymentRepository
+	public class PaymentRepository(
+		PaymentDbContext context,
+		IClock clock) : IPaymentRepository
 	{
 		private readonly PaymentDbContext _context = context;
+		private readonly IClock _clock = clock;
 
 		public async Task<Payment?> GetByIdAsync(Guid id)
 			=> await _context.Payments
@@ -29,24 +32,23 @@ namespace PaymentSwitch.Processor.Infrastructure.Repository
 		public async Task<int> GetCountByClientIdAsync(string clientId)
 			=> await _context.Payments.CountAsync(p => p.ClientId == clientId);
 
-		public async Task<Payment> CreateAsync(Payment payment)
+		public Task<Payment> CreateAsync(Payment payment)
 		{
 			_context.Payments.Add(payment);
-			await _context.SaveChangesAsync();
-			return payment;
+			return Task.FromResult(payment);
 		}
 
-		public async Task UpdateAsync(Payment payment)
+		public Task UpdateAsync(Payment payment)
 		{
 			_context.Payments.Update(payment);
-			await _context.SaveChangesAsync();
+			return Task.CompletedTask;
 		}
 
 		public async Task<IEnumerable<Payment>> GetPendingRefundsAsync()
 			=> await _context.Payments
-				.Where(p => p.Status == TransactionStatus.Refunding
+				.Where(p => p.Status == PaymentTransactionStatus.Refunding
 					&& p.RetryCount < 3
-					&& p.NextRetryAt <= DateTime.UtcNow)
+					&& p.NextRetryAt <= _clock.UtcNow)
 				.ToListAsync();
 	}
 }
