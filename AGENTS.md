@@ -1,48 +1,56 @@
 # Repository Instructions
 
 - Use Windows line endings (`CRLF`) for edited and newly created files.
-- Keep documentation changes in markdown files unless the user explicitly asks for code changes.
-- Read `design.md` first, then the matching `design_<project>.md` file before editing a project.
-- When a change touches more than one project boundary, update the relevant design docs in the same pass.
+- Keep documentation changes in Markdown files unless the user explicitly asks
+  for code changes.
+- Read `docs/architecture.md` first, then the matching file under
+  `docs/contexts/` before editing a project.
+- For workflows that cross project boundaries, also read the matching document
+  under `docs/flows/`.
+- When a change touches more than one project boundary, update all affected
+  context and flow documents in the same pass.
 
-## Documentation Structure
+## Documentation
 
-- `design.md` is the system-level map.
-- `design_<project>.md` is the detailed contract for one bounded context or project.
-- Shared rules live only in `AGENTS.md` so we do not end up with several slightly different versions of the same policy.
-- `design.md` should link to every project-specific design document in the repo.
-- Each `design_<project>.md` should stay focused on that project and avoid re-explaining the whole repository.
+- `docs/README.md` is the documentation index.
+- `docs/architecture.md` describes the current system-level map, runtime
+  boundaries, and integration style.
+- `docs/contexts/` contains one focused contract for each bounded context or
+  adapter area.
+- `docs/flows/` describes workflows that cross runtime boundaries.
+- `docs/decisions/` records accepted architectural decisions and their
+  consequences.
+- `docs/current-problems.md` tracks observed architectural problems that have
+  not been resolved.
 
-## Design Doc Index
-
-- [design.md](design.md) - system-level map, project relationships, runtime boundaries, and integration style.
-- [design_identity_client.md](design_identity_client.md) - client-user identity bounded context.
-- [design_client_profiles.md](design_client_profiles.md) - client profile API and its internal layering.
-- [design_payments_api.md](design_payments_api.md) - public payments HTTP boundary focused on credit cards.
-- [design_payment_switch_processor.md](design_payment_switch_processor.md) - internal payment switch processor and gRPC surface.
-- [design_payment_switch_worker.md](design_payment_switch_worker.md) - async delivery and refund worker.
-- [design_payable_services.md](design_payable_services.md) - catalogue and quote bounded context.
-- [design_external_connections.md](design_external_connections.md) - adapter layer for external payment and company integrations.
+Keep current implementation facts separate from proposed architecture. Do not
+describe a proposed boundary as implemented until the code follows it.
 
 ## Collaboration
 
-- Prefer the repo's existing patterns over inventing new ones.
+- Prefer the repository's existing patterns over inventing new ones.
 - Keep edits scoped to the bounded context or project implied by the request.
 - Do not revert user changes unless explicitly asked.
 - If a task is documentation-only, do not change code.
 
 ## Application Use Case Pattern
 
-For backend/API projects, prefer the Application Use Case Pattern to organize business workflows. This is also known as the Interactor Pattern or Application Service Pattern in Clean Architecture.
+For backend and API projects, prefer the Application Use Case Pattern, also
+known as the Interactor or Application Service Pattern in Clean Architecture.
+Keep controllers, gRPC services, consumers, and hosted-service loops as thin
+transport or scheduling adapters.
 
-## GitHub Workflow Instructions
+## GitHub Workflow
 
-- Before starting coding work, fetch `origin` and verify the latest `origin/main` state.
+- Before starting coding work, fetch `origin` and verify the latest
+  `origin/main` state.
 - Check the current branch before committing.
 - Do not commit directly to `main` unless explicitly requested.
-- Use small, focused commits.
-- Use clear commit messages.
-- Do not commit secrets, tokens, passwords, connection strings, `.env` files, or local configuration files.
-- Before pushing, verify that `origin` points to the expected GitHub repository.
-- Before committing, verify the repository Git identity is configured with the expected user name and email.
+- Use small, focused commits with clear commit messages.
+- Do not commit secrets, tokens, passwords, connection strings, `.env` files,
+  or local configuration files.
+- Before pushing, verify that `origin` points to the expected GitHub
+  repository.
+- Before committing, verify the repository Git identity has the expected user
+  name and email.
 - Push only the branch related to the current work.
