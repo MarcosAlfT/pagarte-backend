@@ -12,11 +12,9 @@ namespace PaymentSwitch.Processor.Infrastructure
 		public DbSet<CreditCard> CreditCards { get; set; }
 		public DbSet<Payment> Payments { get; set; }
 		public DbSet<PaymentDetail> PaymentDetails { get; set; }
-		public DbSet<PaymentQuote> PaymentQuotes { get; set; }
-		public DbSet<PaymentQuoteDetail> PaymentQuoteDetails { get; set; }
+		public DbSet<PaymentReferenceValue> PaymentReferenceValues { get; set; }
 		public DbSet<Service> Services { get; set; }
 		public DbSet<Company> Companies { get; set; }
-		public DbSet<FeeConfiguration> FeeConfigurations { get; set; }
 		public DbSet<PaymentOperator> PaymentOperators { get; set; }
 		public DbSet<OutboxMessage> OutboxMessages { get; set; }
 
@@ -34,72 +32,72 @@ namespace PaymentSwitch.Processor.Infrastructure
 				entity.Property(e => e.CardHolderName).IsRequired().HasMaxLength(200);
 				entity.Property(e => e.Last4Digits).IsRequired().HasMaxLength(4);
 				entity.HasIndex(e => e.ClientId);
-				entity.HasQueryFilter(e => !e.IsDeleted);
 			});
 
 			modelBuilder.Entity<Payment>(entity =>
 			{
 				entity.HasKey(e => e.Id);
 				entity.Property(e => e.ClientId).IsRequired();
+				entity.Property(e => e.PackageFingerprint).IsRequired().HasMaxLength(64);
+				entity.Property(e => e.ServiceName).IsRequired().HasMaxLength(200);
+				entity.Property(e => e.CountryCode).IsRequired().HasMaxLength(2);
+				entity.Property(e => e.RouteType).IsRequired().HasMaxLength(100);
+				entity.Property(e => e.ExternalSourceCode).HasMaxLength(100);
+				entity.Property(e => e.ExternalServiceCode).IsRequired().HasMaxLength(100);
+				entity.Property(e => e.CompanyPaymentEndpoint).IsRequired().HasMaxLength(500);
+				entity.Property(e => e.CompanyRollbackEndpoint).IsRequired().HasMaxLength(500);
+				entity.Property(e => e.CompanyStatusEndpoint).HasMaxLength(500);
+				entity.Property(e => e.CompanyCredentialReference).IsRequired().HasMaxLength(200);
 				entity.Property(e => e.OperatorProvider).IsRequired().HasMaxLength(100);
 				entity.Property(e => e.Reference).IsRequired().HasMaxLength(50);
 				entity.Property(e => e.Currency).IsRequired().HasMaxLength(3);
+				entity.Property(e => e.RoundingMode).IsRequired().HasMaxLength(50);
+				entity.Property(e => e.ErrorCode).HasMaxLength(100);
+				entity.Property(e => e.ErrorMessage).HasMaxLength(1000);
+				entity.Property(e => e.CompanyPaymentIdempotencyKey).IsRequired().HasMaxLength(42);
+				entity.Property(e => e.CardChargeIdempotencyKey).IsRequired().HasMaxLength(42);
+				entity.Property(e => e.CompanyRollbackIdempotencyKey).IsRequired().HasMaxLength(42);
+				entity.Property(e => e.Version).IsRowVersion();
 				entity.HasIndex(e => e.Reference).IsUnique();
+				entity.HasIndex(e => e.SourceQuoteId).IsUnique();
 				entity.HasIndex(e => e.ClientId);
 				entity.HasIndex(e => e.Status);
+				entity.HasIndex(e => new { e.NextAttemptAt, e.Status });
 				entity.HasOne(e => e.CreditCard)
 					.WithMany(c => c.Payments)
 					.HasForeignKey(e => e.CreditCardId);
-				entity.HasOne(e => e.Quote)
-					.WithMany(q => q.Payments)
-					.HasForeignKey(e => e.QuoteId)
-					.OnDelete(DeleteBehavior.Restrict);
-				entity.HasOne(e => e.Service)
-					.WithMany(s => s.Payments)
-					.HasForeignKey(e => e.ServiceId);
 			});
 
 			modelBuilder.Entity<PaymentDetail>(entity =>
 			{
 				entity.HasKey(e => e.Id);
-				entity.Property(e => e.Amount).HasPrecision(18, 2);
+				entity.Property(e => e.ComponentType).IsRequired().HasMaxLength(100);
+				entity.Property(e => e.Description).IsRequired().HasMaxLength(500);
+				entity.Property(e => e.Source).HasMaxLength(100);
 				entity.Property(e => e.Currency).IsRequired().HasMaxLength(3);
 				entity.HasOne(e => e.Payment)
 					.WithMany(p => p.Details)
-					.HasForeignKey(e => e.PaymentId);
+					.HasForeignKey(e => e.PaymentId)
+					.OnDelete(DeleteBehavior.Cascade);
 			});
 
-			modelBuilder.Entity<PaymentQuote>(entity =>
+			modelBuilder.Entity<PaymentReferenceValue>(entity =>
 			{
 				entity.HasKey(e => e.Id);
-				entity.Property(e => e.ClientId).IsRequired();
-				entity.Property(e => e.Currency).IsRequired().HasMaxLength(3);
-				entity.Property(e => e.TotalAmount).HasPrecision(18, 2);
-				entity.HasIndex(e => e.ClientId);
-				entity.HasIndex(e => e.Status);
-				entity.HasIndex(e => e.ExpiresAt);
-				entity.HasOne(e => e.Service)
-					.WithMany()
-					.HasForeignKey(e => e.ServiceId)
-					.OnDelete(DeleteBehavior.Restrict);
-			});
-
-			modelBuilder.Entity<PaymentQuoteDetail>(entity =>
-			{
-				entity.HasKey(e => e.Id);
-				entity.Property(e => e.Description).IsRequired().HasMaxLength(500);
-				entity.Property(e => e.Amount).HasPrecision(18, 2);
-				entity.Property(e => e.Currency).IsRequired().HasMaxLength(3);
-				entity.HasOne(e => e.PaymentQuote)
-					.WithMany(q => q.Details)
-					.HasForeignKey(e => e.PaymentQuoteId);
+				entity.Property(e => e.Key).IsRequired().HasMaxLength(100);
+				entity.Property(e => e.Value).IsRequired().HasMaxLength(1000);
+				entity.HasIndex(e => new { e.PaymentId, e.Key }).IsUnique();
+				entity.HasOne(e => e.Payment)
+					.WithMany(p => p.ReferenceValues)
+					.HasForeignKey(e => e.PaymentId)
+					.OnDelete(DeleteBehavior.Cascade);
 			});
 
 			modelBuilder.Entity<Service>(entity =>
 			{
 				entity.HasKey(e => e.Id);
 				entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
-				entity.Property(e => e.BaseAmount).HasPrecision(18, 2);
+				entity.Property(e => e.BaseAmount).HasPrecision(38, 9);
 				entity.Property(e => e.Currency).IsRequired().HasMaxLength(3);
 				entity.HasQueryFilter(e => e.IsActive);
 				entity.HasOne(e => e.Company)
@@ -112,14 +110,6 @@ namespace PaymentSwitch.Processor.Infrastructure
 				entity.HasKey(e => e.Id);
 				entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
 				entity.Property(e => e.ApiEndpoint).IsRequired().HasMaxLength(500);
-				entity.HasQueryFilter(e => e.IsActive);
-			});
-
-			modelBuilder.Entity<FeeConfiguration>(entity =>
-			{
-				entity.HasKey(e => e.Id);
-				entity.Property(e => e.Value).HasPrecision(18, 4);
-				entity.Property(e => e.Currency).IsRequired().HasMaxLength(3);
 				entity.HasQueryFilter(e => e.IsActive);
 			});
 

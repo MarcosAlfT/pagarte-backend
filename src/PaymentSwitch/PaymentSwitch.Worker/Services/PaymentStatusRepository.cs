@@ -8,7 +8,7 @@ namespace PaymentSwitch.Worker.Services
 {
     /// <summary>
     /// Updates payment status in PaymentDb via raw SQL.
-    /// Engine does not reference PaymentSwitch.Processor Ã¢â‚¬â€ no circular dependency.
+    /// Worker does not reference PaymentSwitch.Processor, avoiding a circular dependency.
     /// Only updates, never reads complex object graphs.
     /// </summary>
     public class PaymentStatusRepository(
@@ -70,8 +70,8 @@ namespace PaymentSwitch.Worker.Services
 
             var sql = @"
                 UPDATE Payments
-                SET RetryCount = RetryCount + 1,
-                    NextRetryAt = @NextRetryAt,
+				SET RefundRetryCount = RefundRetryCount + 1,
+					NextRefundRetryAt = @NextRetryAt,
                     LastUpdatedAt = @UpdatedAt
                 WHERE Id = @PaymentId";
 
@@ -96,27 +96,18 @@ namespace PaymentSwitch.Worker.Services
                     p.Id,
                     p.OperatorProvider,
                     p.OperatorPaymentId,
-                    SUM(pd.Amount) AS Amount,
+					p.TotalMinorUnits,
                     p.Currency,
                     COALESCE(p.ErrorMessage, 'Refund retry requested') AS Reason,
-                    p.RetryCount
+					p.RefundRetryCount
                 FROM Payments p
-                INNER JOIN PaymentDetails pd ON pd.PaymentId = p.Id
                 WHERE p.Status = @RefundingStatus
-                    AND p.NextRetryAt IS NOT NULL
-                    AND p.NextRetryAt <= @UtcNow
-                    AND p.RetryCount < @MaxRetries
+					AND p.NextRefundRetryAt IS NOT NULL
+					AND p.NextRefundRetryAt <= @UtcNow
+					AND p.RefundRetryCount < @MaxRetries
                     AND p.OperatorPaymentId IS NOT NULL
                     AND p.OperatorPaymentId <> ''
-                GROUP BY
-                    p.Id,
-                    p.OperatorProvider,
-                    p.OperatorPaymentId,
-                    p.Currency,
-                    p.ErrorMessage,
-                    p.RetryCount,
-                    p.NextRetryAt
-                ORDER BY p.NextRetryAt";
+				ORDER BY p.NextRefundRetryAt";
 
             using var cmd = new SqlCommand(sql, connection);
             cmd.Parameters.AddWithValue("@BatchSize", batchSize);
@@ -134,7 +125,7 @@ namespace PaymentSwitch.Worker.Services
                     PaymentId = reader.GetGuid(0),
                     OperatorProvider = reader.GetString(1),
                     OperatorPaymentId = reader.GetString(2),
-                    Amount = reader.GetDecimal(3),
+					MinorUnits = reader.GetInt64(3),
                     Currency = reader.GetString(4),
                     Reason = reader.GetString(5),
                     RetryCount = reader.GetInt32(6),
@@ -152,7 +143,7 @@ namespace PaymentSwitch.Worker.Services
 
             var sql = @"
                 UPDATE Payments
-                SET NextRetryAt = NULL,
+				SET NextRefundRetryAt = NULL,
                     LastUpdatedAt = @UpdatedAt
                 WHERE Id = @PaymentId";
 
@@ -161,35 +152,6 @@ namespace PaymentSwitch.Worker.Services
             cmd.Parameters.AddWithValue("@PaymentId", paymentId);
 
             await cmd.ExecuteNonQueryAsync();
-        }
-
-        public async Task<(string? OperatorPaymentId, decimal Amount,
-            string Currency, string ClientId)?> GetPaymentInfoAsync(Guid paymentId)
-        {
-            using var connection = new SqlConnection(_connectionString);
-            await connection.OpenAsync();
-
-            var sql = @"
-                SELECT p.OperatorPaymentId, pd.Amount, p.Currency, p.ClientId
-                FROM Payments p
-                INNER JOIN PaymentDetails pd ON pd.PaymentId = p.Id
-                WHERE p.Id = @PaymentId AND pd.Type = 0"; // 0 = ServiceAmount
-
-            using var cmd = new SqlCommand(sql, connection);
-            cmd.Parameters.AddWithValue("@PaymentId", paymentId);
-
-            using var reader = await cmd.ExecuteReaderAsync();
-            if (await reader.ReadAsync())
-            {
-                return (
-                    reader.IsDBNull(0) ? null : reader.GetString(0),
-                    reader.GetDecimal(1),
-                    reader.GetString(2),
-                    reader.GetString(3)
-                );
-            }
-
-            return null;
         }
     }
 }

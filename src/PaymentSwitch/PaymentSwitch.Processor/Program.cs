@@ -3,15 +3,18 @@ using ExternalConnections.PaymentOperators.Config;
 using PaymentSwitch.Messaging;
 using PaymentSwitch.Processor.Application.Abstractions;
 using PaymentSwitch.Processor.Application.UseCases;
-using PaymentSwitch.Processor.Domain.Services;
 using PaymentSwitch.Processor.GrpcServices;
 using PaymentSwitch.Processor.Infrastructure;
 using PaymentSwitch.Processor.Infrastructure.Gateways;
-using PaymentSwitch.Processor.Infrastructure.Outbox;
 using PaymentSwitch.Processor.Infrastructure.Repository;
 using PaymentSwitch.Processor.Interfaces;
 using PaymentSwitch.Processor.Services;
 using Infrastructure.RabbitMQ;
+using Microsoft.AspNetCore.Authentication;
+using PaymentSwitch.Processor.Application.Models;
+using PaymentSwitch.Processor.Application.Services;
+using PaymentSwitch.Processor.Security;
+using Utilities.Money;
 
 namespace PaymentSwitch.Processor
 {
@@ -29,14 +32,13 @@ namespace PaymentSwitch.Processor
 			// Repositories
 			builder.Services.AddScoped<ICreditCardRepository, CreditCardRepository>();
 			builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
-			builder.Services.AddScoped<IPaymentQuoteRepository, PaymentQuoteRepository>();
 			builder.Services.AddScoped<IPaymentOperatorRepository, PaymentOperatorRepository>();
 			builder.Services.AddScoped<IServiceRepository, ServiceRepository>();
-			builder.Services.AddScoped<IFeeConfigurationRepository, FeeConfigurationRepository>();
 			builder.Services.AddScoped<IOutboxRepository, OutboxRepository>();
 			builder.Services.AddScoped<IUnitOfWork>(provider =>
 				provider.GetRequiredService<PaymentDbContext>());
-			builder.Services.AddSingleton<IClock, SystemClock>();
+			builder.Services.AddSingleton<IClock, PaymentSwitch.Messaging.SystemClock>();
+			builder.Services.AddSingleton<ICurrencyCatalog, CurrencyCatalog>();
 			builder.Services.AddScoped<IMessagePublisher, RabbitMqPublisher>();
 
 			// External connections (payment operator, companies) with Polly resilience
@@ -44,16 +46,17 @@ namespace PaymentSwitch.Processor
 
 			// Business services
 			builder.Services.AddScoped<IPaymentOperatorResolver, PaymentOperatorResolver>();
-			builder.Services.AddScoped<
-				ICardAuthorizationGateway,
-				PaymentOperatorCardAuthorizationGateway>();
+			builder.Services.AddScoped<ICardPaymentGateway, PaymentOperatorCardPaymentGateway>();
+			builder.Services.AddScoped<ICompanyPaymentGateway, CompanyPaymentGateway>();
 			builder.Services.AddScoped<
 				ICreditCardRegistrationGateway,
 				PaymentOperatorCreditCardRegistrationGateway>();
-			builder.Services.AddScoped<IPaymentQuotePricingService, PaymentQuotePricingService>();
-			builder.Services.AddScoped<IPaymentRequestOutbox, PaymentRequestOutbox>();
-			builder.Services.AddScoped<CreatePaymentQuoteUseCase>();
-			builder.Services.AddScoped<ConfirmPaymentQuoteUseCase>();
+			builder.Services.Configure<PaymentExecutionOptions>(
+				configuration.GetSection(PaymentExecutionOptions.SectionName));
+			builder.Services.AddScoped<ConfirmedQuoteValidator>();
+			builder.Services.AddScoped<AcceptConfirmedQuoteUseCase>();
+			builder.Services.AddScoped<ContinuePaymentExecutionUseCase>();
+			builder.Services.AddScoped<GetPaymentExecutionStatusUseCase>();
 			builder.Services.AddScoped<RegisterCreditCardUseCase>();
 			builder.Services.AddScoped<UpdateCreditCardUseCase>();
 			builder.Services.AddScoped<DeleteCreditCardUseCase>();
@@ -65,6 +68,13 @@ namespace PaymentSwitch.Processor
 			builder.Services.AddScoped<GetPaymentHistoryUseCase>();
 			builder.Services.AddScoped<PublishPendingOutboxMessagesUseCase>();
 			builder.Services.AddHostedService<OutboxPublisherService>();
+			builder.Services.AddHostedService<PaymentSagaDispatcherService>();
+
+			builder.Services.AddAuthentication(WorkloadApiKeyAuthenticationHandler.SchemeName)
+				.AddScheme<AuthenticationSchemeOptions, WorkloadApiKeyAuthenticationHandler>(
+					WorkloadApiKeyAuthenticationHandler.SchemeName,
+					_ => { });
+			builder.Services.AddAuthorization();
 
 			// gRPC server
 			builder.Services.AddGrpc();
@@ -88,7 +98,10 @@ namespace PaymentSwitch.Processor
 				logger.LogInformation("Payment database migrations and seed data completed.");
 			}
 
-			// gRPC endpoints - only accessible from private subnet
+			app.UseAuthentication();
+			app.UseAuthorization();
+
+			// The execution endpoint additionally requires workload authentication.
 			app.MapGrpcService<CreditCardGrpcService>();
 			app.MapGrpcService<PaymentGrpcService>();
 			app.MapGrpcService<PaymentExecutionGrpcService>();

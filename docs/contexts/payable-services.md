@@ -2,96 +2,113 @@
 
 ## Purpose
 
-`PayableServices` models the rich payable-service catalogue, payment routes,
-external catalogue mappings, and user-visible quotes.
-
-This document describes the current implementation, including its overlap with
-`PaymentSwitch.Processor`.
+`PayableServices` owns the customer-visible payable-service catalogue, payment
+routes, external catalogue mappings, and quotes.
 
 ## Owns
 
-Within `PayableServicesDb`, the context currently owns:
-
-- Countries, categories, and subcategories.
-- Providers and payment networks.
-- Payable services and reference-field definitions.
-- Payment routes.
+- Countries, categories, subcategories, providers, and payment networks.
+- Payable services, reference-field definitions, and amount compositions.
 - External catalogue sources, items, and mappings.
-- Amount compositions and components.
-- Quotes and quote items.
-- Public catalogue and quote-creation HTTP endpoints.
+- Payment routes, including company service codes and server-side credential
+  references.
+- Quotes, reference values, finalized amount components, and quote status.
+- Authenticated public catalogue and quote HTTP endpoints.
 
 ## Does Not Own
 
-- Credit-card persistence.
-- Payment-operator selection.
-- Card charging.
-- Payment records and SQL outbox publication.
-- Asynchronous company delivery and refunds.
-
-Processor currently duplicates catalogue and quote concepts. That overlap is an
-unresolved problem rather than an intended ownership rule.
+- Stored credit cards.
+- Payment-operator selection or card charging.
+- Durable payment execution, company rollback, or payment records.
+- External credentials; a quote stores only a credential reference.
 
 ## Runtime Boundary
 
 ```text
-PayableServices.Api
-  -> HTTP controllers
+authenticated client
+  -> PayableServices.Api
   -> PayableServices.Application
-  -> PayableServices.Domain
-  -> PayableServices.Persistence / PayableServicesDb
-  -> PayableServices.Infrastructure
-      -> PaymentSwitch.Processor gRPC
+  -> PayableServicesDb
+  -> authenticated PaymentSwitch.Processor gRPC execution boundary
 ```
 
-## Projects and Layers
+## Quote-to-Execution Flow
 
-- `PayableServices.Api` contains controllers, request DTOs, startup, and
-  OpenAPI.
-- `PayableServices.Application` contains use cases, models, and abstractions.
-- `PayableServices.Domain` contains catalogue, route, mapping, amount, and
-  quote entities.
-- `PayableServices.Infrastructure` implements the Processor gRPC clients.
-- `PayableServices.Persistence` contains EF Core, repositories, migrations,
-  and seed data.
+```text
+Create quote
+  -> derive ClientId from access-token subject
+  -> validate service, route, references, currency, and amount components
+  -> persist immutable one-service Quote snapshot
+  -> Quote = Unpaid
+
+Confirm quote with Quote ID + Card ID
+  -> load Quote for authenticated ClientId
+  -> reject missing, foreign, closed, or expired Quote locally
+  -> build execution package only from persisted snapshot + selected Card ID
+  -> call Processor with the PayableServices workload credential
+  -> persist returned Payment ID, status, and safe error information
+
+Refresh execution
+  -> query Processor by ClientId + SourceQuoteId
+  -> Completed ------------------------------> Quote = Paid
+  -> final decline / completed rollback -----> Quote = PaymentFailed
+  -> retry / reconciliation / rollback ------> Quote = Processing
+  -> manual intervention --------------------> Quote = Processing + details
+```
+
+A pre-execution rejection that creates no Processor payment leaves the quote
+available for a corrected confirmation. Once Processor has created an
+execution, a final decline consumes the quote; another payment attempt requires
+a newly persisted quote even when the application hides that recreation from
+the user.
 
 ## Main Use Cases
 
-- `GetCatalogueUseCase` reads the local PayableServices catalogue.
-- `CreateQuoteUseCase` creates and persists a local quote.
-- `SyncExternalCatalogueUseCase` stores a source snapshot and mapping state.
-- `ActivatePaymentRouteUseCase` activates a payment route.
-- `ConfirmQuoteUseCase` validates a local quote and calls Processor, but no
-  HTTP controller currently exposes it.
+- `GetCatalogueUseCase` reads the local catalogue.
+- `CreateQuoteUseCase` validates reference fields, route completeness, currency,
+  and amount composition before persisting an immutable execution snapshot.
+- `GetQuoteUseCase` returns a quote only to its owning client.
+- `ConfirmQuoteUseCase` submits that snapshot with the selected stored-card ID
+  and records the returned execution state.
+- `SyncExternalCatalogueUseCase` and `ActivatePaymentRouteUseCase` manage
+  catalogue integration state.
 
 ## Domain Rules
 
-- A service must be active and allow quoting before a quote is created.
-- The requested currency must match the service currency.
-- A quote starts unpaid and expires after the configured creation window,
-  currently 60 minutes.
-- Confirmation rejects missing, foreign, non-unpaid, or expired quotes.
+- Public quote operations derive `ClientId` from the authenticated `sub` claim.
+- A service must be active and allow quoting and payment.
+- One quote represents one payable service and one payment attempt.
+- A quote can contain multiple finalized amount components, but its full total
+  is the unit charged and refunded or rolled back.
+- The quote snapshots the service, route, company endpoints, external service
+  code, reference values, amount components, currency rules, total, and expiry.
+- The current handoff copies the snapshotted company endpoints and credential
+  reference into Processor. It does not copy the API key. Replacing those
+  connection fields with server-side resolution by stable route identifiers is
+  tracked in [Current Problems](../current-problems.md).
+- The client cannot override snapshot values during confirmation.
+- A declined execution closes the quote as `PaymentFailed`; another attempt
+  requires a newly created quote.
+- A rejected confirmation that did not create a payment, such as selecting a
+  card owned by another client, does not consume the quote.
 
 ## Data Ownership
 
-`PayableServices` owns `PayableServicesDb`. The current
-`QuoteRepository` commits directly, while an unused `IUnitOfWork` abstraction
-also exists. This inconsistency is tracked in
-[Current Problems](../current-problems.md).
+`PayableServices` owns `PayableServicesDb` and is the sole quote owner.
+Processor receives and stores a payment execution snapshot, not another quote.
 
 ## Integrations
 
-- `PaymentSwitchExecutionClient` calls Processor's
-  `PaymentExecutionService.ConfirmQuote`.
-- The class named `CompanyPaymentsClient` currently calls Processor's
-  `ServiceCatalogService`; it does not call an external company catalogue
-  adapter.
-- `Utilities.Responses` supplies the public response wrapper.
+- `PaymentSwitchExecutionClient` authenticates to Processor and calls
+  `ConfirmQuote` or `GetExecutionStatus`.
+- `CompanyPaymentsClient` currently reads Processor's legacy internal service
+  catalogue for catalogue sync; replacing that source remains backlog work.
+- `Utilities.Money` supplies the shared ISO currency and minor-unit rules.
 
 ## Change Guidance
 
 Read [Quote Lifecycle](../flows/quote-lifecycle.md),
-[Payment Lifecycle](../flows/payment-lifecycle.md), and
-[Current Problems](../current-problems.md) before changing catalogue, quote, or
-confirmation behavior. Do not assume the duplicate Processor records share
-identifiers with PayableServices records.
+[Payment Lifecycle](../flows/payment-lifecycle.md),
+[ADR 0003](../decisions/0003-quote-execution-saga.md), and
+[ADR 0004](../decisions/0004-money-handling.md) before changing quote or
+execution behavior.

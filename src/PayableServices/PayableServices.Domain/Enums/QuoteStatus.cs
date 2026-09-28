@@ -6,5 +6,6 @@ public enum QuoteStatus
 	Paid = 1,
 	Expired = 2,
 	Cancelled = 3,
-	PaymentFailed = 4
+	PaymentFailed = 4,
+	Processing = 5
 }

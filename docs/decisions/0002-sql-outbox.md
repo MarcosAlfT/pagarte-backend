@@ -2,29 +2,24 @@
 
 ## Status
 
-Accepted.
+Superseded by
+[ADR 0003: Quote Execution Saga and Legacy Quote Removal](0003-quote-execution-saga.md).
 
-## Context
+## Historical Decision
 
-After a card charge succeeds, the system must durably continue company delivery.
-Publishing directly to RabbitMQ after committing a payment can lose the message
-if the process stops between the database commit and broker publication.
+The former flow charged the card, committed a `PaymentRequestMessage` to the
+SQL outbox, and let Worker deliver the service payment to the company. This
+prevented losing company-delivery intent between a database commit and a broker
+publish.
 
-## Decision
+## Superseding Design
 
-Processor stores the post-charge `PaymentRequestMessage` in a SQL outbox in
-`PaymentDb`.
+Company payment now occurs before final card charge inside Processor's durable
+payment saga. The `payment.request` contract, queue, publisher use case, and
+Worker consumer are removed.
 
-- The successfully charged payment state and outbox record are saved together.
-- A hosted polling service invokes
-  `PublishPendingOutboxMessagesUseCase`.
-- The publisher retries failed broker publications and records attempt state.
-- Worker begins company delivery only after consuming the published message.
-
-## Consequences
-
-- A successful card charge has durable delivery intent.
-- Publishing is at least once, so consumers and downstream status changes must
-  tolerate duplicate delivery.
-- Outbox monitoring, retention, and retry behavior become operational
-  responsibilities.
+The general reliability rule remains: persist transition intent before relying
+on an external call or delayed dispatch. Processor now persists saga status,
+attempt counters, next-attempt time, stable idempotency keys, and row-version
+concurrency on the payment itself. The SQL outbox remains available for refund
+and notification messages.

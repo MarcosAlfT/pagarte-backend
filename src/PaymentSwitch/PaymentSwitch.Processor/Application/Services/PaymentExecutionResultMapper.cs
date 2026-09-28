@@ -1,0 +1,34 @@
+using PaymentSwitch.Messaging;
+using PaymentSwitch.Processor.Application.Models;
+using PaymentSwitch.Processor.Domain.Entities;
+
+namespace PaymentSwitch.Processor.Application.Services;
+
+public static class PaymentExecutionResultMapper
+{
+	public static PaymentExecutionResult Map(Payment payment, bool replayed = false)
+	{
+		var resultStatus = payment.Status switch
+		{
+			PaymentTransactionStatus.Completed => PaymentExecutionResultStatus.Completed,
+			PaymentTransactionStatus.Failed => PaymentExecutionResultStatus.Declined,
+			PaymentTransactionStatus.CompanyRolledBack => PaymentExecutionResultStatus.Failed,
+			PaymentTransactionStatus.ManualIntervention =>
+				PaymentExecutionResultStatus.ManualIntervention,
+			PaymentTransactionStatus.RollingBackCompany
+				or PaymentTransactionStatus.RollbackRetryScheduled =>
+				PaymentExecutionResultStatus.RollbackPending,
+			_ => PaymentExecutionResultStatus.Processing
+		};
+		var accepted = payment.Status != PaymentTransactionStatus.Failed;
+		return new PaymentExecutionResult(
+			accepted,
+			payment.Id,
+			payment.Reference,
+			resultStatus,
+			payment.ErrorCode,
+			payment.ErrorMessage,
+			replayed,
+			payment.IsFinal);
+	}
+}

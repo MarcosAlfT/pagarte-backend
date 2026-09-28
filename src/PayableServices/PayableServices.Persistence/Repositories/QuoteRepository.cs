@@ -11,6 +11,7 @@ public sealed class QuoteRepository(PayableServicesDbContext dbContext) : IQuote
 	public async Task<Quote?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
 		=> await _dbContext.Quotes
 			.Include(x => x.Items)
+			.Include(x => x.ReferenceValues)
 			.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
 	public async Task<Quote> CreateAsync(Quote quote, CancellationToken cancellationToken = default)

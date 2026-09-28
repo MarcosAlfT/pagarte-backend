@@ -39,7 +39,7 @@ namespace PaymentSwitch.Worker.Application.UseCases
 			var result = await _refundGateway.RefundAsync(
 				message.OperatorProvider,
 				message.OperatorPaymentId,
-				message.Amount,
+				message.MinorUnits,
 				message.Currency,
 				message.Reason);
 

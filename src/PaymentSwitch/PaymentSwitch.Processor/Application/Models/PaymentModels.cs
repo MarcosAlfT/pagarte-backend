@@ -1,26 +1,71 @@
-using PaymentSwitch.Processor.Domain.Entities;
+namespace PaymentSwitch.Processor.Application.Models;
 
-namespace PaymentSwitch.Processor.Application.Models
+public sealed record ConfirmedQuoteComponent(
+	string ComponentType,
+	string Description,
+	string Source,
+	bool VisibleToClient,
+	int DisplayOrder,
+	long MinorUnits,
+	string Currency);
+
+public sealed record ConfirmedQuoteReference(string Key, string Value);
+
+public sealed record ConfirmedQuoteExecution(
+	string ClientId,
+	Guid SourceQuoteId,
+	Guid CreditCardId,
+	Guid ServiceId,
+	string ServiceName,
+	Guid CountryId,
+	string CountryCode,
+	Guid RouteId,
+	string RouteType,
+	Guid? PaymentNetworkId,
+	Guid? ProviderId,
+	string? ExternalSourceCode,
+	string ExternalServiceCode,
+	string CompanyPaymentEndpoint,
+	string CompanyRollbackEndpoint,
+	string? CompanyStatusEndpoint,
+	string CompanyCredentialReference,
+	DateTime QuoteCreatedAt,
+	DateTime QuoteExpiresAt,
+	string RoundingMode,
+	long TotalMinorUnits,
+	string Currency,
+	IReadOnlyCollection<ConfirmedQuoteComponent> Components,
+	IReadOnlyCollection<ConfirmedQuoteReference> ReferenceValues);
+
+public enum PaymentExecutionResultStatus
 {
-	public sealed record CreatePaymentQuoteCommand(
-		string ClientId,
-		Guid ServiceId,
-		string Currency);
+	Processing,
+	Completed,
+	Declined,
+	RollbackPending,
+	Failed,
+	ManualIntervention
+}
 
-	public sealed record PaymentQuoteResult(
-		bool Success,
-		PaymentQuote? Quote,
-		string? ErrorMessage);
+public sealed record PaymentExecutionResult(
+	bool Accepted,
+	Guid? PaymentId,
+	string? Reference,
+	PaymentExecutionResultStatus Status,
+	string? ErrorCode,
+	string? ErrorMessage,
+	bool Replayed,
+	bool Final);
 
-	public sealed record ConfirmPaymentCommand(
-		string ClientId,
-		Guid QuoteId,
-		Guid CreditCardId);
+public sealed class PaymentExecutionOptions
+{
+	public const string SectionName = "PaymentExecution";
 
-	public sealed record PaymentResult(
-		bool Success,
-		Guid? PaymentId,
-		string? Reference,
-		string? Status,
-		string? ErrorMessage);
+	public int RetryIntervalSeconds { get; init; } = 300;
+	public int MaxCardCheckAttempts { get; init; } = 3;
+	public int MaxCompanyPaymentAttempts { get; init; } = 3;
+	public int MaxChargeAttempts { get; init; } = 3;
+	public int MaxRollbackAttempts { get; init; } = 10;
+	public int DispatcherIntervalSeconds { get; init; } = 10;
+	public int DispatcherBatchSize { get; init; } = 25;
 }

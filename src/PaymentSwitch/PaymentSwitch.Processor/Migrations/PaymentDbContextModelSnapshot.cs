@@ -116,41 +116,6 @@ namespace PaymentSwitch.Processor.Migrations
                     b.ToTable("CreditCards");
                 });
 
-            modelBuilder.Entity("PaymentSwitch.Processor.Domain.Entities.FeeConfiguration", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("CalculationType")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .HasMaxLength(3)
-                        .HasColumnType("nvarchar(3)");
-
-                    b.Property<DateTime>("EffectiveDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("EndDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("Type")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("Value")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("FeeConfigurations");
-                });
-
             modelBuilder.Entity("PaymentSwitch.Processor.Domain.Entities.OutboxMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -208,12 +173,63 @@ namespace PaymentSwitch.Processor.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("CardChargeIdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(42)
+                        .HasColumnType("nvarchar(42)");
+
+                    b.Property<int>("CardCheckAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ChargeAttempts")
+                        .HasColumnType("int");
+
                     b.Property<string>("ClientId")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<string>("CompanyCredentialReference")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("CompanyPaymentAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CompanyPaymentEndpoint")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("CompanyPaymentIdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(42)
+                        .HasColumnType("nvarchar(42)");
+
                     b.Property<string>("CompanyReference")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CompanyRollbackEndpoint")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("CompanyRollbackIdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(42)
+                        .HasColumnType("nvarchar(42)");
+
+                    b.Property<string>("CompanyStatusEndpoint")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("CountryCode")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
+
+                    b.Property<Guid>("CountryId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -226,13 +242,45 @@ namespace PaymentSwitch.Processor.Migrations
                         .HasMaxLength(3)
                         .HasColumnType("nvarchar(3)");
 
+                    b.Property<int>("CurrencyScale")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("ErrorMessage")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("ExternalServiceCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ExternalSourceCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<DateTime?>("LastUpdatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<DateTime?>("NextRetryAt")
+                    b.Property<int>("MaxCardCheckAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MaxChargeAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MaxCompanyPaymentAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MaxRollbackAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("NextRefundRetryAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("OperatorPaymentId")
@@ -243,25 +291,75 @@ namespace PaymentSwitch.Processor.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("PackageFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid?>("PaymentNetworkId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime?>("ProcessedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid?>("QuoteId")
+                    b.Property<Guid?>("ProviderId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("QuoteCreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("QuoteExpiresAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("Reference")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<int>("RetryCount")
+                    b.Property<int>("RefundRetryCount")
                         .HasColumnType("int");
 
-                    b.Property<Guid>("ServiceId")
+                    b.Property<int>("RetryIntervalSeconds")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RollbackAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RoundingMode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid>("RouteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RouteType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ServiceName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("SourceQuoteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("SourceServiceId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
+
+                    b.Property<long>("TotalMinorUnits")
+                        .HasColumnType("bigint");
+
+                    b.Property<byte[]>("Version")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
 
                     b.HasKey("Id");
 
@@ -269,14 +367,15 @@ namespace PaymentSwitch.Processor.Migrations
 
                     b.HasIndex("CreditCardId");
 
-                    b.HasIndex("QuoteId");
-
                     b.HasIndex("Reference")
                         .IsUnique();
 
-                    b.HasIndex("ServiceId");
+                    b.HasIndex("SourceQuoteId")
+                        .IsUnique();
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("NextAttemptAt", "Status");
 
                     b.ToTable("Payments");
                 });
@@ -287,9 +386,10 @@ namespace PaymentSwitch.Processor.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<string>("ComponentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("Currency")
                         .IsRequired()
@@ -298,13 +398,25 @@ namespace PaymentSwitch.Processor.Migrations
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsVisibleToClient")
+                        .HasColumnType("bit");
+
+                    b.Property<long>("MinorUnits")
+                        .HasColumnType("bigint");
 
                     b.Property<Guid>("PaymentId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<int>("Type")
-                        .HasColumnType("int");
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
 
@@ -354,84 +466,31 @@ namespace PaymentSwitch.Processor.Migrations
                     b.ToTable("PaymentOperators");
                 });
 
-            modelBuilder.Entity("PaymentSwitch.Processor.Domain.Entities.PaymentQuote", b =>
+            modelBuilder.Entity("PaymentSwitch.Processor.Domain.Entities.PaymentReferenceValue", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("ClientId")
+                    b.Property<string>("Key")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .HasMaxLength(3)
-                        .HasColumnType("nvarchar(3)");
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("PaidAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("ServiceId")
+                    b.Property<Guid>("PaymentId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("TotalAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ClientId");
+                    b.HasIndex("PaymentId", "Key")
+                        .IsUnique();
 
-                    b.HasIndex("ExpiresAt");
-
-                    b.HasIndex("ServiceId");
-
-                    b.HasIndex("Status");
-
-                    b.ToTable("PaymentQuotes");
-                });
-
-            modelBuilder.Entity("PaymentSwitch.Processor.Domain.Entities.PaymentQuoteDetail", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .HasMaxLength(3)
-                        .HasColumnType("nvarchar(3)");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<Guid>("PaymentQuoteId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("Type")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PaymentQuoteId");
-
-                    b.ToTable("PaymentQuoteDetails");
+                    b.ToTable("PaymentReferenceValues");
                 });
 
             modelBuilder.Entity("PaymentSwitch.Processor.Domain.Entities.Service", b =>
@@ -441,8 +500,8 @@ namespace PaymentSwitch.Processor.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("BaseAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(38, 9)
+                        .HasColumnType("decimal(38,9)");
 
                     b.Property<string>("Category")
                         .IsRequired()
@@ -483,22 +542,7 @@ namespace PaymentSwitch.Processor.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("PaymentSwitch.Processor.Domain.Entities.PaymentQuote", "Quote")
-                        .WithMany("Payments")
-                        .HasForeignKey("QuoteId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("PaymentSwitch.Processor.Domain.Entities.Service", "Service")
-                        .WithMany("Payments")
-                        .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.Navigation("CreditCard");
-
-                    b.Navigation("Quote");
-
-                    b.Navigation("Service");
                 });
 
             modelBuilder.Entity("PaymentSwitch.Processor.Domain.Entities.PaymentDetail", b =>
@@ -512,26 +556,15 @@ namespace PaymentSwitch.Processor.Migrations
                     b.Navigation("Payment");
                 });
 
-            modelBuilder.Entity("PaymentSwitch.Processor.Domain.Entities.PaymentQuote", b =>
+            modelBuilder.Entity("PaymentSwitch.Processor.Domain.Entities.PaymentReferenceValue", b =>
                 {
-                    b.HasOne("PaymentSwitch.Processor.Domain.Entities.Service", "Service")
-                        .WithMany()
-                        .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Service");
-                });
-
-            modelBuilder.Entity("PaymentSwitch.Processor.Domain.Entities.PaymentQuoteDetail", b =>
-                {
-                    b.HasOne("PaymentSwitch.Processor.Domain.Entities.PaymentQuote", "PaymentQuote")
-                        .WithMany("Details")
-                        .HasForeignKey("PaymentQuoteId")
+                    b.HasOne("PaymentSwitch.Processor.Domain.Entities.Payment", "Payment")
+                        .WithMany("ReferenceValues")
+                        .HasForeignKey("PaymentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("PaymentQuote");
+                    b.Navigation("Payment");
                 });
 
             modelBuilder.Entity("PaymentSwitch.Processor.Domain.Entities.Service", b =>
@@ -558,18 +591,8 @@ namespace PaymentSwitch.Processor.Migrations
             modelBuilder.Entity("PaymentSwitch.Processor.Domain.Entities.Payment", b =>
                 {
                     b.Navigation("Details");
-                });
 
-            modelBuilder.Entity("PaymentSwitch.Processor.Domain.Entities.PaymentQuote", b =>
-                {
-                    b.Navigation("Details");
-
-                    b.Navigation("Payments");
-                });
-
-            modelBuilder.Entity("PaymentSwitch.Processor.Domain.Entities.Service", b =>
-                {
-                    b.Navigation("Payments");
+                    b.Navigation("ReferenceValues");
                 });
 #pragma warning restore 612, 618
         }

@@ -14,13 +14,14 @@ namespace PaymentSwitch.Processor.Infrastructure.Repository
 
 		public async Task<IEnumerable<CreditCard>> GetByClientIdAsync(string clientId)
 			=> await _context.CreditCards
-				.Where(c => c.ClientId == clientId)
+				.Where(c => c.ClientId == clientId && !c.IsDeleted)
 				.OrderByDescending(c => c.IsDefault)
 				.ThenByDescending(c => c.CreatedAt)
 				.ToListAsync();
 
 		public async Task<CreditCard?> GetByIdAsync(Guid id)
-			=> await _context.CreditCards.FirstOrDefaultAsync(c => c.Id == id);
+			=> await _context.CreditCards
+				.FirstOrDefaultAsync(c => c.Id == id && !c.IsDeleted);
 
 		public Task<CreditCard> CreateAsync(CreditCard card)
 		{
@@ -37,7 +38,9 @@ namespace PaymentSwitch.Processor.Infrastructure.Repository
 		public async Task DeleteAsync(Guid id, string clientId)
 		{
 			var card = await _context.CreditCards
-				.FirstOrDefaultAsync(c => c.Id == id && c.ClientId == clientId);
+				.FirstOrDefaultAsync(c => c.Id == id
+					&& c.ClientId == clientId
+					&& !c.IsDeleted);
 			if (card != null)
 			{
 				card.Delete(_clock.UtcNow);

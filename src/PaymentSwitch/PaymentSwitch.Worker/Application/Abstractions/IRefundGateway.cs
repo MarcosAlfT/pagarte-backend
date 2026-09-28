@@ -5,7 +5,7 @@ namespace PaymentSwitch.Worker.Application.Abstractions
 		Task<RefundGatewayResult> RefundAsync(
 			string operatorProvider,
 			string operatorPaymentId,
-			decimal amount,
+			long minorUnits,
 			string currency,
 			string reason);
 	}

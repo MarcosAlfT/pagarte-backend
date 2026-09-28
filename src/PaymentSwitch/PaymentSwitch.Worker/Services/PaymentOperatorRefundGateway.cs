@@ -1,10 +1,12 @@
 using ExternalConnections.PaymentOperators.PaymentOperators;
 using PaymentSwitch.Worker.Application.Abstractions;
+using Utilities.Money;
 
 namespace PaymentSwitch.Worker.Services
 {
 	public sealed class PaymentOperatorRefundGateway(
-		IPaymentOperatorAdapterFactory paymentOperatorAdapterFactory)
+		IPaymentOperatorAdapterFactory paymentOperatorAdapterFactory,
+		ICurrencyCatalog currencyCatalog)
 		: IRefundGateway
 	{
 		private readonly IPaymentOperatorAdapterFactory _paymentOperatorAdapterFactory =
@@ -13,18 +15,20 @@ namespace PaymentSwitch.Worker.Services
 		public async Task<RefundGatewayResult> RefundAsync(
 			string operatorProvider,
 			string operatorPaymentId,
-			decimal amount,
+			long minorUnits,
 			string currency,
 			string reason)
 		{
 			var paymentOperatorAdapter =
 				_paymentOperatorAdapterFactory.GetRequiredAdapter(operatorProvider);
 
+			var money = MoneyValue.FromMinorUnits(minorUnits, currency, currencyCatalog);
 			var result = await paymentOperatorAdapter.RefundAsync(
 				operatorPaymentId,
-				amount,
-				currency,
-				reason);
+				money.Amount,
+				money.Currency,
+				reason,
+				$"refund-{operatorPaymentId}"[..Math.Min(42, 7 + operatorPaymentId.Length)]);
 
 			return new RefundGatewayResult(result.Success, result.ErrorMessage);
 		}

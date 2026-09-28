@@ -1,54 +1,97 @@
+using Microsoft.EntityFrameworkCore;
 using PaymentSwitch.Processor.Domain.Entities;
 using PaymentSwitch.Processor.Interfaces;
-using Microsoft.EntityFrameworkCore;
-using PaymentSwitch.Messaging;
-namespace PaymentSwitch.Processor.Infrastructure.Repository
+using Microsoft.Data.SqlClient;
+
+namespace PaymentSwitch.Processor.Infrastructure.Repository;
+
+public sealed class PaymentRepository(PaymentDbContext context) : IPaymentRepository
 {
-	public class PaymentRepository(
-		PaymentDbContext context,
-		IClock clock) : IPaymentRepository
+	public Task<Payment?> GetByIdAsync(
+		Guid id,
+		CancellationToken cancellationToken = default) =>
+		Query().FirstOrDefaultAsync(payment => payment.Id == id, cancellationToken);
+
+	public Task<Payment?> GetBySourceQuoteIdAsync(
+		Guid sourceQuoteId,
+		CancellationToken cancellationToken = default) =>
+		Query().FirstOrDefaultAsync(
+			payment => payment.SourceQuoteId == sourceQuoteId,
+			cancellationToken);
+
+	public async Task<IReadOnlyCollection<Payment>> GetByClientIdAsync(
+		string clientId,
+		int page,
+		int pageSize,
+		CancellationToken cancellationToken = default) =>
+		await Query()
+			.Where(payment => payment.ClientId == clientId)
+			.OrderByDescending(payment => payment.CreatedAt)
+			.Skip((Math.Max(page, 1) - 1) * Math.Clamp(pageSize, 1, 100))
+			.Take(Math.Clamp(pageSize, 1, 100))
+			.ToArrayAsync(cancellationToken);
+
+	public Task<int> GetCountByClientIdAsync(
+		string clientId,
+		CancellationToken cancellationToken = default) =>
+		context.Payments.CountAsync(
+			payment => payment.ClientId == clientId,
+			cancellationToken);
+
+	public async Task<IReadOnlyCollection<Payment>> GetDueAsync(
+		DateTime utcNow,
+		int batchSize,
+		CancellationToken cancellationToken = default) =>
+		await Query()
+			.Where(payment => payment.NextAttemptAt != null
+				&& payment.NextAttemptAt <= utcNow
+				&& payment.Status != PaymentSwitch.Messaging.PaymentTransactionStatus.Completed
+				&& payment.Status != PaymentSwitch.Messaging.PaymentTransactionStatus.Failed
+				&& payment.Status != PaymentSwitch.Messaging.PaymentTransactionStatus.CompanyRolledBack
+				&& payment.Status != PaymentSwitch.Messaging.PaymentTransactionStatus.ManualIntervention)
+			.OrderBy(payment => payment.NextAttemptAt)
+			.Take(Math.Clamp(batchSize, 1, 100))
+			.ToArrayAsync(cancellationToken);
+
+	public async Task<PaymentInsertResult> InsertIfSourceQuoteAbsentAsync(
+		Payment payment,
+		CancellationToken cancellationToken = default)
 	{
-		private readonly PaymentDbContext _context = context;
-		private readonly IClock _clock = clock;
-
-		public async Task<Payment?> GetByIdAsync(Guid id)
-			=> await _context.Payments
-				.Include(p => p.Details)
-				.Include(p => p.Service)
-				.Include(p => p.CreditCard)
-				.FirstOrDefaultAsync(p => p.Id == id);
-
-		public async Task<IEnumerable<Payment>> GetByClientIdAsync(
-			string clientId, int page, int pageSize)
-			=> await _context.Payments
-				.Include(p => p.Details)
-				.Include(p => p.Service)
-				.Where(p => p.ClientId == clientId)
-				.OrderByDescending(p => p.CreatedAt)
-				.Skip((page - 1) * pageSize)
-				.Take(pageSize)
-				.ToListAsync();
-
-		public async Task<int> GetCountByClientIdAsync(string clientId)
-			=> await _context.Payments.CountAsync(p => p.ClientId == clientId);
-
-		public Task<Payment> CreateAsync(Payment payment)
+		context.Payments.Add(payment);
+		try
 		{
-			_context.Payments.Add(payment);
-			return Task.FromResult(payment);
+			await context.SaveChangesAsync(cancellationToken);
+			return new PaymentInsertResult(true, payment);
 		}
-
-		public Task UpdateAsync(Payment payment)
+		catch (DbUpdateException exception) when (IsUniqueConstraintViolation(exception))
 		{
-			_context.Payments.Update(payment);
-			return Task.CompletedTask;
-		}
+			context.ChangeTracker.Clear();
+			var existing = await GetBySourceQuoteIdAsync(
+				payment.SourceQuoteId,
+				cancellationToken);
+			if (existing is null)
+			{
+				throw;
+			}
 
-		public async Task<IEnumerable<Payment>> GetPendingRefundsAsync()
-			=> await _context.Payments
-				.Where(p => p.Status == PaymentTransactionStatus.Refunding
-					&& p.RetryCount < 3
-					&& p.NextRetryAt <= _clock.UtcNow)
-				.ToListAsync();
+			return new PaymentInsertResult(false, existing);
+		}
 	}
+
+	public Task UpdateAsync(
+		Payment payment,
+		CancellationToken cancellationToken = default)
+	{
+		context.Payments.Update(payment);
+		return Task.CompletedTask;
+	}
+
+	private IQueryable<Payment> Query() =>
+		context.Payments
+			.Include(payment => payment.Details)
+			.Include(payment => payment.ReferenceValues)
+			.Include(payment => payment.CreditCard);
+
+	private static bool IsUniqueConstraintViolation(DbUpdateException exception) =>
+		exception.InnerException is SqlException { Number: 2601 or 2627 };
 }

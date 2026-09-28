@@ -1,131 +1,124 @@
 # Current Problems for Discussion
 
-This document records problems observed in the current source code. It is a
-discussion backlog, not an authorization to change application behavior.
+This document records unresolved problems observed after implementation of the
+confirmed-quote execution saga.
 
-Last reviewed: 2026-09-07.
+Last reviewed against the working tree: 2026-09-13.
+
+## Review Status
+
+| Problem | Status | Resolution condition |
+| --- | --- | --- |
+| Duplicate catalogue ownership | Open | Choose one canonical catalogue or define a deliberate replicated read model. |
+| External catalogue adapter | Open | Replace the Processor catalogue dependency with the selected external feed boundary. |
+| PayableServices unit of work | Open | Register an implementation and move commits to application-owned transaction boundaries. |
+| Remaining integration coverage | Partially resolved | Keep the current unit coverage and add the database-backed and transport-level scenarios listed below. |
+| Execution package carries connection data | Open | Resolve company endpoints and credentials server-side from stable route identifiers. |
+
+Seven quote-execution items have been verified as resolved and are listed at
+the end of this document.
 
 ## 1. Duplicate Catalogue Ownership
 
-### Current implementation
-
-`PayableServicesDb` contains the rich payable-service catalogue: countries,
-categories, subcategories, providers, payment networks, routes, reference
-fields, mappings, and payable services.
-
-`PaymentDb` separately contains `Service` and `Company` tables. Processor
-seeds its own services and exposes them through `ServiceCatalogService`.
-
-`PayableServices.Infrastructure.CompanyPaymentsClient` consumes that Processor
-gRPC catalogue even though its name and the earlier design suggested an
-external company feed.
-
-### Impact
-
-- There are two sources of service names, prices, currencies, and active state.
-- Processor seed data uses generated service IDs while PayableServices uses
-  fixed IDs, so catalogue mapping cannot assume identity equality.
-- A service may be available in one database and missing or different in the
-  other.
-- The class name `CompanyPaymentsClient` hides the real dependency on
-  Processor.
-
-### Questions for the team
-
-- Is `PayableServices` the canonical catalogue?
-- Does Processor need a local execution snapshot instead of a catalogue?
-- Which external system will provide the real catalogue feed?
-- How should external service IDs map to internal payable-service and route
-  IDs?
-
-## 2. Duplicate Quote Aggregates
+**Status: Open.**
 
 ### Current implementation
 
-`PayableServices` has `Quote`, `QuoteItem`, `CreateQuoteUseCase`, a public
-`POST /api/quotes` endpoint, and quote tables in `PayableServicesDb`.
+`PayableServicesDb` owns the rich payable-service catalogue. `PaymentDb`
+still contains a simpler `Service` and `Company` catalogue, and
+`PayableServices.Infrastructure.CompanyPaymentsClient` reads Processor's
+catalogue during sync.
 
-Processor separately has `PaymentQuote`, `PaymentQuoteDetail`,
-`CreatePaymentQuoteUseCase`, `ConfirmPaymentQuoteUseCase`, and quote tables
-in `PaymentDb`. Its `PaymentService.CreatePaymentQuote` gRPC operation has no
-caller inside this repository.
-
-### Impact
-
-- Quote status, totals, expiration, and line items can diverge.
-- It is unclear which quote is the customer-visible price commitment.
-- Two databases can independently mark different records as paid.
-
-### Questions for the team
-
-- Should PayableServices remain the sole owner of the user-visible quote?
-- Should Processor receive an immutable execution snapshot instead of owning a
-  second quote?
-- If Processor calculates operator fees, should it expose a stateless pricing
-  operation during quote creation?
-
-## 3. Quote Confirmation Handoff Does Not Join the Two Models
-
-### Current implementation
-
-`PayableServices.ConfirmQuoteUseCase` sends its local quote ID to
-`PaymentExecutionService.ConfirmQuote`. Processor then searches for that ID in
-its own `PaymentQuotes` table.
-
-There is no implemented step that copies or creates the PayableServices quote
-inside `PaymentDb`.
+The duplicate Processor quote aggregate has been removed; this problem now
+applies only to catalogue data.
 
 ### Impact
 
-A quote created through the public PayableServices API will normally produce
-`Quote not found` if it is passed to Processor.
+- There are still two sources of service names, prices, currencies, and active
+  state.
+- Processor seed data and PayableServices records do not share guaranteed
+  identifiers.
+- The class name `CompanyPaymentsClient` hides its current dependency on
+  Processor rather than a company feed.
 
-### Discussion direction
+### Open decisions
 
-Consider changing the execution contract to carry an external quote ID plus an
-immutable amount, currency, route/company, expiration, and line-item snapshot.
-Processor could use the external quote ID for idempotency while continuing to
-own payment execution.
+- Make PayableServices the canonical catalogue and remove Processor's retained
+  catalogue, or define a deliberate replicated read model.
+- Choose the real external catalogue/feed boundary.
+- Define stable mappings for external company service identifiers.
 
-## 4. Quote Confirmation Is Not Publicly Exposed
+## 2. External Catalogue Adapter Is Not Implemented
 
-`ConfirmQuoteUseCase` is registered in PayableServices dependency injection,
-but `QuoteController` only exposes quote creation. No controller calls the
-confirmation use case.
+**Status: Open.**
 
-The intended two-step quote flow is therefore incomplete at the HTTP boundary.
+`ExternalConnections.CompanyPayments` supports service payment, status, and
+rollback, but not the catalogue/feed bridge described by the earlier design.
+PayableServices sync still reads Processor's internal catalogue through
+[`CompanyPaymentsClient`](../src/PayableServices/PayableServices.Infrastructure/Clients/CompanyPaymentsClient.cs).
 
-## 5. PayableServices Is Missing from the AppHost Runtime Graph
+## 3. PayableServices Persistence Does Not Follow Its Unit-of-Work Shape
 
-The AppHost project references `PayableServices.Api`, but `AppHost.cs` does
-not call `AddProject` for it. Developers must currently start it separately
-and configure the Processor gRPC URL manually.
+**Status: Open.**
 
-## 6. PayableServices Persistence Does Not Follow Its Unit-of-Work Shape
+[`IUnitOfWork`](../src/PayableServices/PayableServices.Application/Abstractions/IUnitOfWork.cs)
+exists in PayableServices Application, but Persistence does not register an
+implementation. [`QuoteRepository`](../src/PayableServices/PayableServices.Persistence/Repositories/QuoteRepository.cs)
+commits directly for create and update. This predates the execution saga and
+differs from the explicit application-owned transaction boundary in other
+contexts.
 
-`IUnitOfWork` exists in PayableServices Application, but Persistence does not
-register an implementation. `QuoteRepository` calls `SaveChangesAsync`
-directly for create and update operations.
+## 4. Remaining Integration Coverage
 
-This differs from the explicit application-owned transaction boundary used in
-ClientProfiles and Processor.
+**Status: Partially resolved.**
 
-## 7. External Catalogue Adapter Is Not Implemented
+The current two test suites contain twelve tests. They cover ISO scale and
+rounding, checked money totals, the successful company-first sequence,
+full-total charging, retry without duplicate company payment,
+definitive-charge rollback, and safe handling of unknown charge outcomes.
 
-`ExternalConnections.CompanyPayments` currently supports company payment
-delivery only. It does not expose the catalogue/feed bridge described by the
-earlier design. PayableServices sync currently reads Processor's internal
-catalogue instead.
+The repository still needs database-backed and transport-level coverage for:
 
-## 8. gRPC Contract Comments Contain Encoding Artifacts
+- Authenticated HTTP quote creation, confirmation, and status refresh.
+- Workload authentication rejection and success.
+- Concurrent duplicate confirmations against SQL Server.
+- Restart recovery and row-version contention between dispatcher instances.
+- Real provider contract fixtures for company status/rollback and dLocal
+  readiness/charge reconciliation.
+- Migration execution against a production-like copy after legacy work has been
+  drained.
 
-Section-divider comments in `payment_switch.proto` contain mojibake characters.
-The contract remains readable by tooling, but the source should be normalized
-when the contract is next edited.
+Quote confirmation and execution-status authentication are implemented. The
+first item above remains open because the repository does not yet verify that
+behavior through the public HTTP transport.
 
-## 9. Missing End-to-End Coverage for the Payment Path
+## 5. Execution Package Carries Company Connection Data
 
-No test project was found for the public quote-to-charge-to-delivery path.
-Before changing ownership, add coverage for quote creation, confirmation,
-idempotent execution, card-charge failure, outbox creation, company rejection,
-and refund retry.
+**Status: Open.**
+
+The accepted requirement says the PayableServices-to-Processor package should
+carry stable route and destination identifiers, while external adapters should
+resolve endpoints and credentials from server-side configuration. The current
+[`QuoteExecutionPackage`](../src/PayableServices/PayableServices.Application/Models/ExecutionModels.cs)
+and protobuf snapshot still transport company payment, status, and rollback
+endpoint URLs plus a credential reference. The API key itself remains
+server-side and is not placed in the package.
+
+This does not match the selected contract boundary. Processor should resolve
+the current endpoint set and credential reference from the stable route data,
+or the requirement must be explicitly revised if immutable endpoint snapshots
+are intended.
+
+## Verified Resolved by the Quote Execution Change
+
+The following items were rechecked against the working tree on 2026-09-13:
+
+- PayableServices is the sole quote owner.
+- The PayableServices-to-Processor handoff carries an immutable execution
+  snapshot.
+- Quote confirmation and status are publicly exposed and authenticated.
+- PayableServices is included in the AppHost graph.
+- The legacy Processor quote flow and post-charge company-delivery consumer are
+  removed.
+- gRPC and messaging monetary values no longer use floating point.
+- The edited payment contract comments no longer contain encoding artifacts.

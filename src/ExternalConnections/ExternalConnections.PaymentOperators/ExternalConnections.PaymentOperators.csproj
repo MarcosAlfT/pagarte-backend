@@ -12,5 +12,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ExternalConnections.CompanyPayments\ExternalConnections.CompanyPayments.csproj" />
+    <ProjectReference Include="..\..\Utilities\Utilities.Money\Utilities.Money.csproj" />
   </ItemGroup>
 </Project>

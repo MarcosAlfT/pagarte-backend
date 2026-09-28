@@ -1,3 +1,5 @@
+using Grpc.Core;
+using Microsoft.Extensions.Configuration;
 using PayableServices.Application.Abstractions;
 using PayableServices.Application.Models;
 using PaymentSwitch.Contracts;
@@ -5,30 +7,121 @@ using PaymentSwitch.Contracts;
 namespace PayableServices.Infrastructure.Clients;
 
 public sealed class PaymentSwitchExecutionClient(
-	PaymentExecutionService.PaymentExecutionServiceClient paymentExecutionServiceClient)
-	: IPaymentExecutionClient
+	PaymentExecutionService.PaymentExecutionServiceClient client,
+	IConfiguration configuration) : IPaymentExecutionClient
 {
-	private readonly PaymentExecutionService.PaymentExecutionServiceClient _paymentServiceClient = paymentExecutionServiceClient;
+	private readonly string _workloadApiKey =
+		configuration["WorkloadAuth:ApiKey"]
+		?? throw new InvalidOperationException("WorkloadAuth:ApiKey is not configured.");
 
 	public async Task<ConfirmQuoteResult> ConfirmQuoteAsync(
-		string clientId,
-		Guid quoteId,
-		Guid creditCardId,
+		QuoteExecutionPackage package,
 		CancellationToken cancellationToken = default)
 	{
-		var response = await _paymentServiceClient.ConfirmQuoteAsync(
-			new ConfirmQuoteRequest
+		var request = new ConfirmQuoteRequest
+		{
+			ClientId = package.ClientId,
+			SourceQuoteId = package.SourceQuoteId.ToString(),
+			CreditCardId = package.CreditCardId.ToString(),
+			Snapshot = MapSnapshot(package)
+		};
+
+		var response = await client.ConfirmQuoteAsync(
+			request,
+			CreateHeaders(),
+			cancellationToken: cancellationToken);
+		return MapResponse(response);
+	}
+
+	public async Task<ConfirmQuoteResult> GetStatusAsync(
+		string clientId,
+		Guid sourceQuoteId,
+		CancellationToken cancellationToken = default)
+	{
+		var response = await client.GetExecutionStatusAsync(
+			new GetExecutionStatusRequest
 			{
 				ClientId = clientId,
-				QuoteId = quoteId.ToString(),
-				CreditCardId = creditCardId.ToString()
-			});
-
-		return new ConfirmQuoteResult(
-			response.Success,
-			Guid.TryParse(response.PaymentId, out var paymentId) ? paymentId : null,
-			string.IsNullOrWhiteSpace(response.Reference) ? null : response.Reference,
-			string.IsNullOrWhiteSpace(response.Status) ? null : response.Status,
-			string.IsNullOrWhiteSpace(response.ErrorMessage) ? null : response.ErrorMessage);
+				SourceQuoteId = sourceQuoteId.ToString()
+			},
+			CreateHeaders(),
+			cancellationToken: cancellationToken);
+		return MapResponse(response);
 	}
+
+	private Metadata CreateHeaders() =>
+		new() { { "x-workload-api-key", _workloadApiKey } };
+
+	private static QuoteExecutionSnapshot MapSnapshot(QuoteExecutionPackage package)
+	{
+		var snapshot = new QuoteExecutionSnapshot
+		{
+			ServiceId = package.ServiceId.ToString(),
+			ServiceName = package.ServiceName,
+			CountryId = package.CountryId.ToString(),
+			CountryCode = package.CountryCode,
+			RouteId = package.RouteId.ToString(),
+			RouteType = package.RouteType,
+			PaymentNetworkId = package.PaymentNetworkId?.ToString() ?? string.Empty,
+			ProviderId = package.ProviderId?.ToString() ?? string.Empty,
+			ExternalSourceCode = package.ExternalSourceCode ?? string.Empty,
+			ExternalServiceCode = package.ExternalServiceCode,
+			CompanyPaymentEndpoint = package.CompanyPaymentEndpoint,
+			CompanyRollbackEndpoint = package.CompanyRollbackEndpoint,
+			CompanyStatusEndpoint = package.CompanyStatusEndpoint ?? string.Empty,
+			CompanyCredentialReference = package.CompanyCredentialReference,
+			CreatedAt = package.CreatedAt.ToString("O"),
+			ExpiresAt = package.ExpiresAt.ToString("O"),
+			RoundingMode = package.RoundingMode,
+			Total = new Money
+			{
+				CurrencyCode = package.Currency,
+				MinorUnits = package.TotalMinorUnits
+			}
+		};
+
+		snapshot.Components.AddRange(package.Components.Select(component =>
+			new QuoteAmountComponent
+			{
+				ComponentType = component.ComponentType,
+				Description = component.Description,
+				Source = component.Source,
+				VisibleToClient = component.VisibleToClient,
+				DisplayOrder = component.DisplayOrder,
+				Amount = new Money
+				{
+					CurrencyCode = component.Currency,
+					MinorUnits = component.MinorUnits
+				}
+			}));
+		snapshot.ReferenceValues.AddRange(package.ReferenceValues.Select(reference =>
+			new PaymentSwitch.Contracts.QuoteReferenceValue
+			{
+				Key = reference.Key,
+				Value = reference.Value
+			}));
+		return snapshot;
+	}
+
+	private static ConfirmQuoteResult MapResponse(ConfirmQuoteResponse response) =>
+		new(
+			response.Accepted,
+			Guid.TryParse(response.PaymentId, out var paymentId) ? paymentId : null,
+			EmptyToNull(response.Reference),
+			response.Status switch
+			{
+				ExecutionStatus.Completed => QuoteExecutionStatus.Completed,
+				ExecutionStatus.Declined => QuoteExecutionStatus.Declined,
+				ExecutionStatus.RollbackPending => QuoteExecutionStatus.RollbackPending,
+				ExecutionStatus.Failed => QuoteExecutionStatus.Failed,
+				ExecutionStatus.ManualIntervention => QuoteExecutionStatus.ManualIntervention,
+				_ => QuoteExecutionStatus.Processing
+			},
+			EmptyToNull(response.ErrorCode),
+			EmptyToNull(response.ErrorMessage),
+			response.Replayed,
+			response.Final);
+
+	private static string? EmptyToNull(string value) =>
+		string.IsNullOrWhiteSpace(value) ? null : value;
 }

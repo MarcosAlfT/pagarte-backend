@@ -1,23 +1,6 @@
 namespace PaymentSwitch.Messaging.Messages
 {
     /// <summary>
-    /// Published by Worker after payment operator charge succeeds.
-    /// Engine calls company API when it receives this.
-    /// </summary>
-    public class PaymentRequestMessage
-    {
-        public Guid PaymentId { get; set; }
-        public Guid CompanyId { get; set; }
-        public string OperatorProvider { get; set; } = string.Empty;
-        public string OperatorPaymentId { get; set; } = string.Empty;
-        public decimal Amount { get; set; }
-        public string Currency { get; set; } = string.Empty;
-        public string Reference { get; set; } = string.Empty;
-        public string ClientId { get; set; } = string.Empty;
-        public DateTime CreatedAt { get; set; }
-    }
-
-    /// <summary>
     /// Published by Engine when company API fails.
     /// Engine processes refund with retry logic.
     /// </summary>
@@ -26,7 +9,7 @@ namespace PaymentSwitch.Messaging.Messages
         public Guid PaymentId { get; set; }
         public string OperatorProvider { get; set; } = string.Empty;
         public string OperatorPaymentId { get; set; } = string.Empty;
-        public decimal Amount { get; set; }
+        public long MinorUnits { get; set; }
         public string Currency { get; set; } = string.Empty;
         public string Reason { get; set; } = string.Empty;
         public int RetryCount { get; set; } = 0;
@@ -49,7 +32,7 @@ namespace PaymentSwitch.Messaging.Messages
 
     /// <summary>
     /// Published by Engine when refund fails after max retries.
-    /// For admin/support Ã¢â‚¬â€ manual intervention required.
+    /// For admin/support; manual intervention is required.
     /// </summary>
     public class AlertMessage
     {

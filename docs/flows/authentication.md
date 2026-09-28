@@ -2,10 +2,10 @@
 
 ## Purpose
 
-This flow describes how client access tokens are issued and validated by the
-public APIs.
+This flow describes client-token and internal-workload authentication for quote
+execution.
 
-## Current Flow
+## Client Access
 
 ```text
 Client
@@ -14,31 +14,44 @@ Client
       -> OpenIddict access token
 
 Client with access token
-  -> ClientProfiles.Api
-      -> validates issuer and client-profiles-api audience
-
-Client with access token
-  -> Payments.Api
-      -> validates issuer and payments-api audience
+  -> ClientProfiles.Api requires client-profiles-api audience
+  -> Payments.Api requires payments-api audience
+  -> PayableServices.Api quote endpoints require payable-services-api audience
 ```
+
+Quote controllers derive `ClientId` from the validated `sub` claim. Quote
+request bodies cannot select or override ownership.
+
+## Workload Access
+
+```text
+authenticated client
+  -> PayableServices loads the client's persisted quote
+  -> PayableServices sends x-workload-api-key over gRPC
+  -> PaymentSwitch.Processor validates the workload credential
+  -> Processor validates the selected stored card belongs to ClientId
+```
+
+Client authentication and workload authentication are independent. The
+workload credential authorizes PayableServices to call the internal boundary;
+it does not prove the card belongs to the client.
+
+An internationally issued card may be used when supported by the configured
+operator and currency. A stored card owned by another Pagarte client is always
+rejected.
 
 ## Ownership
 
-- `Identity.Client` owns users, credentials, refresh tokens, and token policy.
-- OpenIddict signs and validates access tokens.
-- Each consuming API owns validation of its required audience.
+- `Identity.Client` owns users, credentials, refresh tokens, audiences, and
+  token policy.
+- Each public API owns validation of its required audience.
+- Processor owns workload authentication at `PaymentExecutionService`.
 - Application and Domain projects do not depend on ASP.NET `HttpContext`.
-
-## Current Limits
-
-`PayableServices.Api` does not currently configure the Identity.Client
-authentication and authorization boundary described for the other public APIs.
-This should be discussed before treating its catalogue and quote endpoints as a
-secured production surface.
 
 ## Change Rules
 
 - Add a new audience in Identity and the consuming API together.
-- Do not place signing keys, passwords, refresh tokens, or connection strings in
-  source control.
-- Keep token issuance in Identity rather than duplicating it in another API.
+- Rotate workload and company credentials through deployment configuration.
+- Do not place signing keys, API keys, passwords, card tokens, refresh tokens,
+  or connection strings in source control or RabbitMQ messages.
+- Keep token issuance in Identity.

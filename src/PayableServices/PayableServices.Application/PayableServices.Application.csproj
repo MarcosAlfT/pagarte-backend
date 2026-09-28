@@ -6,5 +6,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\PayableServices.Domain\PayableServices.Domain.csproj" />
+    <ProjectReference Include="..\..\Utilities\Utilities.Money\Utilities.Money.csproj" />
   </ItemGroup>
 </Project>

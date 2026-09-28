@@ -5,6 +5,7 @@ using PayableServices.Application.UseCases;
 using PayableServices.Infrastructure.Clients;
 using PayableServices.Persistence;
 using PaymentSwitch.Contracts;
+using Utilities.Money;
 
 namespace PayableServices.Infrastructure;
 
@@ -36,11 +37,13 @@ public static class DependencyInjection
 		services.AddScoped<ICompanyPaymentsClient, CompanyPaymentsClient>();
 		services.AddScoped<IPaymentExecutionClient, PaymentSwitchExecutionClient>();
 		services.AddSingleton<IClock, SystemClock>();
+		services.AddSingleton<ICurrencyCatalog, CurrencyCatalog>();
 		services.AddPayableServicesPersistence(configuration);
 
 		services.AddScoped<GetCatalogueUseCase>();
 		services.AddScoped<CreateQuoteUseCase>();
 		services.AddScoped<ConfirmQuoteUseCase>();
+		services.AddScoped<GetQuoteUseCase>();
 		services.AddScoped<SyncExternalCatalogueUseCase>();
 		services.AddScoped<ActivatePaymentRouteUseCase>();
 

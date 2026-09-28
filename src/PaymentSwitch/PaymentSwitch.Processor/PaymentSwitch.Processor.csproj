@@ -16,6 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Infrastructure\Infrastructure.RabbitMQ\Infrastructure.RabbitMQ.csproj" />
     <ProjectReference Include="..\..\Utilities\Utilities.Responses\Utilities.Responses.csproj" />
+    <ProjectReference Include="..\..\Utilities\Utilities.Money\Utilities.Money.csproj" />
     <ProjectReference Include="..\..\ExternalConnections\ExternalConnections.PaymentOperators\ExternalConnections.PaymentOperators.csproj" />
     <ProjectReference Include="..\PaymentSwitch.Contracts\PaymentSwitch.Contracts.csproj" />
     <ProjectReference Include="..\PaymentSwitch.Messaging\PaymentSwitch.Messaging.csproj" />

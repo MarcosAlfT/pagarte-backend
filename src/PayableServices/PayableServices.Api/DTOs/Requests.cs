@@ -3,6 +3,8 @@ namespace PayableServices.Api.DTOs;
 public sealed record CatalogueQueryRequest(string? Category = null);
 
 public sealed record CreateQuoteRequest(
-	string ClientId,
 	Guid ServiceId,
-	string Currency);
+	string Currency,
+	IReadOnlyDictionary<string, string>? ReferenceValues = null);
+
+public sealed record ConfirmQuoteRequest(Guid CreditCardId);

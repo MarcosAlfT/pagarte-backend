@@ -1,12 +1,14 @@
 using Grpc.Core;
 using PaymentSwitch.Contracts;
 using PaymentSwitch.Processor.Application.UseCases;
+using Utilities.Money;
 
 namespace PaymentSwitch.Processor.GrpcServices
 {
 	public class ServiceCatalogGrpcService(
 		GetServiceCatalogUseCase getServiceCatalogUseCase,
-		GetServiceUseCase getServiceUseCase)
+		GetServiceUseCase getServiceUseCase,
+		ICurrencyCatalog currencyCatalog)
 		: PaymentSwitch.Contracts.ServiceCatalogService.ServiceCatalogServiceBase
 	{
 		private readonly GetServiceCatalogUseCase _getServiceCatalogUseCase =
@@ -34,15 +36,21 @@ namespace PaymentSwitch.Processor.GrpcServices
 			return new GetServiceResponse { Found = true, Service = MapService(service) };
 		}
 
-		private static ServiceDto MapService(Domain.Entities.Service service) =>
-			new()
+		private ServiceDto MapService(Domain.Entities.Service service)
+		{
+			var money = MoneyValue.Create(service.BaseAmount, service.Currency, currencyCatalog);
+			return new ServiceDto
 			{
 				Id = service.Id.ToString(),
 				Name = service.Name,
 				Description = service.Description,
 				Category = service.Category,
-				BaseAmount = (double)service.BaseAmount,
-				Currency = service.Currency
+				BaseAmountMoney = new Money
+				{
+					CurrencyCode = money.Currency,
+					MinorUnits = money.MinorUnits
+				}
 			};
+		}
 	}
 }

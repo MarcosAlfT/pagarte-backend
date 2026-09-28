@@ -14,8 +14,6 @@ namespace PaymentSwitch.Messaging
 
         public static class Queues
         {
-            // Published by Worker, consumed by Engine
-            public const string PaymentRequest = "payment.request";
             public const string EmailSend = "email.send";
 
             // Published by Engine internally
@@ -25,7 +23,6 @@ namespace PaymentSwitch.Messaging
 
         public static class DeadLetterQueues
         {
-            public const string PaymentRequest = "payment.request.dlq";
             public const string RefundRequest = "refund.request.dlq";
             public const string EmailSend = "email.send.dlq";
         }

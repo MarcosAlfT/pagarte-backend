@@ -1,11 +1,13 @@
 using PayableServices.Application.Abstractions;
 using PayableServices.Application.Models;
 using PaymentSwitch.Contracts;
+using Utilities.Money;
 
 namespace PayableServices.Infrastructure.Clients;
 
 public sealed class CompanyPaymentsClient(
-	ServiceCatalogService.ServiceCatalogServiceClient serviceCatalogClient)
+	ServiceCatalogService.ServiceCatalogServiceClient serviceCatalogClient,
+	ICurrencyCatalog currencyCatalog)
 	: ICompanyPaymentsClient
 {
 	private readonly ServiceCatalogService.ServiceCatalogServiceClient _serviceCatalogClient = serviceCatalogClient;
@@ -22,8 +24,11 @@ public sealed class CompanyPaymentsClient(
 			service.Name,
 			service.Description,
 			service.Category,
-			(decimal)service.BaseAmount,
-			service.Currency)).ToArray();
+			MoneyValue.FromMinorUnits(
+				service.BaseAmountMoney.MinorUnits,
+				service.BaseAmountMoney.CurrencyCode,
+				currencyCatalog).Amount,
+			service.BaseAmountMoney.CurrencyCode)).ToArray();
 
 		return new CatalogueResponse(services);
 	}
@@ -46,7 +51,10 @@ public sealed class CompanyPaymentsClient(
 			service.Name,
 			service.Description,
 			service.Category,
-			(decimal)service.BaseAmount,
-			service.Currency);
+			MoneyValue.FromMinorUnits(
+				service.BaseAmountMoney.MinorUnits,
+				service.BaseAmountMoney.CurrencyCode,
+				currencyCatalog).Amount,
+			service.BaseAmountMoney.CurrencyCode);
 	}
 }

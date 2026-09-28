@@ -13,8 +13,6 @@ namespace PaymentSwitch.Worker.Interfaces
             int maxRetries,
             int batchSize);
         Task MarkRefundRetryDispatchedAsync(Guid paymentId);
-        Task<(string? OperatorPaymentId, decimal Amount, string Currency, string ClientId)?>
-            GetPaymentInfoAsync(Guid paymentId);
     }
 
     public interface IEmailSenderService

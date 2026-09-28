@@ -31,6 +31,8 @@ is explicitly marked as proposed.
 
 - [Application Use Case Pattern](decisions/0001-application-use-case-pattern.md)
 - [SQL Outbox for Post-Charge Delivery](decisions/0002-sql-outbox.md)
+- [Quote Execution Saga and Legacy Quote Removal](decisions/0003-quote-execution-saga.md)
+- [Global Money Handling](decisions/0004-money-handling.md)
 
 ## Maintenance Rules
 

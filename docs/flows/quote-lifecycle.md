@@ -2,148 +2,100 @@
 
 ## Purpose
 
-This document describes how quotes are created and confirmed across
-`PayableServices` and `PaymentSwitch.Processor`.
+PayableServices is the sole customer-visible quote owner. One quote represents
+one payable service and one payment attempt.
 
-The current flow is disconnected. The proposed flow is explicitly marked as
-not implemented and follows the approved quote-to-payment execution handoff
-requirement.
-
-## Current Ownership
-
-- `PayableServices` owns the public catalogue and the customer-visible quote
-  stored in `PayableServicesDb`.
-- `PaymentSwitch.Processor` owns card charging, payments, and the SQL outbox in
-  `PaymentDb`.
-- Processor currently also has a separate `PaymentQuote` aggregate. This
-  duplicates quote ownership and causes the confirmation failure described
-  below.
-
-## Current Quote Creation
-
-```text
-Client
-  -> POST /api/quotes
-  -> PayableServices.Api
-  -> CreateQuoteUseCase
-      -> load PayableService from PayableServicesDb
-      -> validate service availability and currency
-      -> create Quote and QuoteItem
-      -> persist in PayableServicesDb
-  -> return customer-visible quote
-```
-
-The persisted quote currently snapshots the service identifier and name,
-currency, amount, expiration, and one quote item. It does not yet snapshot all
-route, external reference, and downstream execution data required by the
-target payment handoff.
-
-## Current Confirmation Failure
-
-```text
-PayableServicesDb Quote ID
-  -> PayableServices.ConfirmQuoteUseCase
-  -> PaymentExecutionService.ConfirmQuote gRPC
-  -> Processor ConfirmPaymentQuoteUseCase
-  -> search PaymentDb.PaymentQuotes using the Payable Services Quote ID
-  -> quote normally not found
-```
-
-No code copies the Payable Services quote into Processor's quote table. The
-identifiers belong to independent databases and cannot be assumed to match.
-
-The confirmation use case is registered in Payable Services, but no HTTP
-controller currently exposes it. Adding only that endpoint would expose the
-failure without fixing the handoff.
-
-## Proposed Flow - Not Implemented
-
-The selected solution keeps one customer-visible quote owner and sends an
-immutable execution package to Processor.
+## Creation
 
 ```text
 Authenticated client
-  -> confirm Quote ID and selected CreditCard ID
-  -> PayableServices.Api
-      -> obtain Client ID from the access token
-      -> load the persisted Quote and its execution snapshot
-      -> validate owner, status, expiration, route, and totals
-      -> build immutable ConfirmedQuoteExecution package
-  -> PaymentSwitch.Processor gRPC
-      -> find an existing Payment by SourceQuoteId
-          -> found: return the existing result without charging again
-          -> not found: create Payment and persist execution snapshot
-      -> validate the selected card belongs to the client
-      -> charge the card synchronously
-          -> declined: persist failed Payment and return definitive failure
-          -> accepted: persist charged Payment and SQL outbox atomically
-  -> PayableServices
-      -> accepted: mark Quote Paid
-      -> declined: mark Quote PaymentFailed
-      -> unknown/transient result: do not record a definitive decline
-  -> return the immediate payment result to the client
+  -> POST /api/quotes
+  -> derive ClientId from access-token sub claim
+  -> load active payable service, country, route, amount composition,
+     and reference-field definitions
+  -> validate supplied reference values
+  -> finalize each amount component with ISO scale and ToEven rounding
+  -> checked-sum the full positive total
+  -> persist immutable quote execution snapshot in PayableServicesDb
 ```
 
-## Execution Package Boundary
+The snapshot includes the service and route IDs, external service code, company
+operation endpoints, server-side credential reference, reference values,
+amount components, total minor units, currency scale, rounding rule, and
+expiry. It contains no API key or payment-operator card token.
 
-The package sent to Processor must be created exclusively from the persisted
-Payable Services quote snapshot. The confirmation request from the client must
-not be allowed to override monetary or routing information.
+## Confirmation
 
-The package contains the source quote and client identifiers, selected card,
-expiration, currency, exact total, service and item snapshots, payment-route
-snapshot, and external reference values required for downstream execution.
+```text
+Authenticated client
+  -> POST /api/quotes/{quoteId}/confirm with CreditCardId only
+  -> load quote by authenticated client
+  -> reject closed or expired quote
+  -> build execution package only from the persisted snapshot
+  -> call authenticated Processor PaymentExecutionService
+  -> record returned PaymentId and current execution state
+```
 
-API endpoints and credentials are not part of the package. External adapters
-resolve secrets from server-side configuration.
+The client cannot override amount, currency, route, service code, references,
+or endpoints at confirmation.
 
-## Idempotency
+A confirmation rejected before Processor creates a payment, such as a foreign
+client's stored card, leaves the quote available for a corrected confirmation.
+Once an execution exists, a definitive decline closes the quote and another
+attempt requires a new quote even when all values are unchanged.
 
-`SourceQuoteId` is the idempotency key at the Processor boundary.
+## Status Refresh
 
-- Processor creates at most one payment for a source quote.
-- Repeating confirmation after a timeout returns the existing payment result.
-- A repeated request must not charge the card or create the outbox message
-  twice.
-- Processor enforces the rule with persistence-level uniqueness in addition to
-  application validation.
-
-## Quote State Outcomes
+`GET /api/quotes/{quoteId}/execution` retrieves the current Processor state and
+updates the local quote:
 
 ```text
 Unpaid
-  -> Paid            when Processor confirms a successful card charge
-  -> PaymentFailed   after a definitive card decline
-  -> Expired         when confirmation occurs after expiration
+  -> Processing       durable payment execution accepted
+  -> Expired          confirmation after expiry
+
+Processing
+  -> Paid             company accepted and full card charge succeeded
+  -> PaymentFailed    definitive decline or completed company rollback
+  -> Processing       retry, reconciliation, rollback pending, or manual review
 ```
 
-A transport timeout or unknown Processor outcome is not equivalent to a card
-decline. The caller retries with the same source quote identifier so Processor
-can return the idempotent result.
+Manual-intervention details remain visible in the execution response; the quote
+does not incorrectly advertise a safe retry while an external outcome is
+unresolved.
+
+## Idempotency
+
+- Processor creates at most one payment per `SourceQuoteId`.
+- A deterministic fingerprint covers the immutable package and selected card.
+- Identical repeats return the current payment with `replayed = true`.
+- Any different package or card for the same source quote is a conflict.
+- Database uniqueness handles concurrent duplicate confirmations.
 
 ## Flow Invariants
 
-- Payable Services remains the only owner of quote status and quote history.
-- Processor does not require a local `PaymentQuote` to execute the package.
-- Processor does not recalculate the amount from its mutable catalogue.
-- Processor stores the values used for the charge in the payment snapshot.
-- The payment snapshot supplies the data used to create post-charge outbox
-  work.
-- A successful charge and its outbox message are committed together.
-- Documentation must continue to describe this as proposed until the code and
-  automated tests implement the flow.
+- Processor never loads a second quote or recalculates the total from mutable
+  catalogue data.
+- Amount components may include value, taxes, fees, penalties, and discounts.
+- The full quote total is paid, charged, refunded, or rolled back; components
+  are never independent charges.
+- The external service code identifies the company's selected service.
+- External API keys remain in server configuration and are resolved from the
+  persisted credential reference.
+- Retry policy is snapshotted into the payment.
+- The legacy Processor quote operations, aggregate, repositories, and tables
+  are removed.
 
 ## Relevant Source
 
-- [`ConfirmQuoteUseCase`](../../src/PayableServices/PayableServices.Application/UseCases/ConfirmQuoteUseCase.cs)
-- [`PaymentSwitchExecutionClient`](../../src/PayableServices/PayableServices.Infrastructure/Clients/PaymentSwitchExecutionClient.cs)
-- [`PaymentExecutionGrpcService`](../../src/PaymentSwitch/PaymentSwitch.Processor/GrpcServices/PaymentExecutionGrpcService.cs)
-- [`ConfirmPaymentQuoteUseCase`](../../src/PaymentSwitch/PaymentSwitch.Processor/Application/UseCases/ConfirmPaymentQuoteUseCase.cs)
-- [`PaymentRequestOutbox`](../../src/PaymentSwitch/PaymentSwitch.Processor/Infrastructure/Outbox/PaymentRequestOutbox.cs)
+- [CreateQuoteUseCase](../../src/PayableServices/PayableServices.Application/UseCases/CreateQuoteUseCase.cs)
+- [ConfirmQuoteUseCase](../../src/PayableServices/PayableServices.Application/UseCases/ConfirmQuoteUseCase.cs)
+- [PaymentSwitchExecutionClient](../../src/PayableServices/PayableServices.Infrastructure/Clients/PaymentSwitchExecutionClient.cs)
+- [AcceptConfirmedQuoteUseCase](../../src/PaymentSwitch/PaymentSwitch.Processor/Application/UseCases/AcceptConfirmedQuoteUseCase.cs)
+- [ContinuePaymentExecutionUseCase](../../src/PaymentSwitch/PaymentSwitch.Processor/Application/UseCases/ContinuePaymentExecutionUseCase.cs)
 
 ## Related Documentation
 
 - [Payment Lifecycle](payment-lifecycle.md)
-- [PayableServices Context](../contexts/payable-services.md)
-- [PaymentSwitch.Processor Context](../contexts/payment-switch-processor.md)
-- [Current Problems](../current-problems.md)
+- [Quote Execution Saga](../decisions/0003-quote-execution-saga.md)
+- [Global Money Handling](../decisions/0004-money-handling.md)

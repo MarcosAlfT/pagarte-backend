@@ -2,7 +2,7 @@ syntax = "proto3";
 option csharp_namespace = "PaymentSwitch.Contracts";
 package payment_switch;
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Credit Card Service Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// Credit cards
 
 service CreditCardService {
   rpc GetCards (GetCardsRequest) returns (GetCardsResponse);
@@ -19,6 +19,7 @@ message GetCardRequest {
   string card_id = 1;
   string client_id = 2;
 }
+
 message GetCardResponse {
   bool found = 1;
   CreditCardDto card = 2;
@@ -33,6 +34,7 @@ message RegisterCardRequest {
   int32 expiry_month = 6;
   int32 expiry_year = 7;
 }
+
 message RegisterCardResponse {
   bool success = 1;
   string card_id = 2;
@@ -67,61 +69,93 @@ message CreditCardDto {
   string operator_provider = 9;
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Payment Service Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// Payments and execution
 
 service PaymentService {
-  rpc CreatePaymentQuote (CreatePaymentQuoteRequest) returns (CreatePaymentQuoteResponse);
-  rpc ConfirmPayment (ConfirmPaymentRequest) returns (ProcessPaymentResponse);
   rpc GetPayment (GetPaymentRequest) returns (GetPaymentResponse);
   rpc GetPaymentHistory (GetPaymentHistoryRequest) returns (GetPaymentHistoryResponse);
 }
 
 service PaymentExecutionService {
   rpc ConfirmQuote (ConfirmQuoteRequest) returns (ConfirmQuoteResponse);
-}
-
-message CreatePaymentQuoteRequest {
-  string client_id = 1;
-  string service_id = 2;
-  string currency = 3;
-}
-message CreatePaymentQuoteResponse {
-  bool success = 1;
-  PaymentQuoteDto quote = 2;
-  string error_message = 3;
-}
-
-message ConfirmPaymentRequest {
-  string client_id = 1;
-  string quote_id = 2;
-  string credit_card_id = 3;
-}
-message ProcessPaymentResponse {
-  bool success = 1;
-  string payment_id = 2;
-  string reference = 3;
-  string status = 4;
-  string error_message = 5;
+  rpc GetExecutionStatus (GetExecutionStatusRequest) returns (ConfirmQuoteResponse);
 }
 
 message ConfirmQuoteRequest {
   string client_id = 1;
-  string quote_id = 2;
+  string source_quote_id = 2;
   string credit_card_id = 3;
+  QuoteExecutionSnapshot snapshot = 4;
+}
+
+message QuoteExecutionSnapshot {
+  string service_id = 1;
+  string service_name = 2;
+  string country_id = 3;
+  string route_id = 4;
+  string route_type = 5;
+  string external_source_code = 6;
+  string external_service_code = 7;
+  string payment_network_id = 8;
+  string provider_id = 9;
+  string company_payment_endpoint = 10;
+  string company_rollback_endpoint = 11;
+  string company_status_endpoint = 12;
+  string company_credential_reference = 13;
+  string created_at = 14;
+  string expires_at = 15;
+  string rounding_mode = 16;
+  Money total = 17;
+  repeated QuoteAmountComponent components = 18;
+  repeated QuoteReferenceValue reference_values = 19;
+  string country_code = 20;
+}
+
+message QuoteAmountComponent {
+  string component_type = 1;
+  string description = 2;
+  string source = 3;
+  bool visible_to_client = 4;
+  int32 display_order = 5;
+  Money amount = 6;
+}
+
+message QuoteReferenceValue {
+  string key = 1;
+  string value = 2;
+}
+
+enum ExecutionStatus {
+  EXECUTION_STATUS_UNSPECIFIED = 0;
+  EXECUTION_STATUS_PROCESSING = 1;
+  EXECUTION_STATUS_COMPLETED = 2;
+  EXECUTION_STATUS_DECLINED = 3;
+  EXECUTION_STATUS_ROLLBACK_PENDING = 4;
+  EXECUTION_STATUS_FAILED = 5;
+  EXECUTION_STATUS_MANUAL_INTERVENTION = 6;
 }
 
 message ConfirmQuoteResponse {
-  bool success = 1;
+  bool accepted = 1;
   string payment_id = 2;
   string reference = 3;
-  string status = 4;
-  string error_message = 5;
+  ExecutionStatus status = 4;
+  string error_code = 5;
+  string error_message = 6;
+  bool replayed = 7;
+  bool final = 8;
+}
+
+message GetExecutionStatusRequest {
+  string client_id = 1;
+  string source_quote_id = 2;
 }
 
 message GetPaymentRequest {
   string payment_id = 1;
   string client_id = 2;
 }
+
 message GetPaymentResponse {
   bool found = 1;
   PaymentDto payment = 2;
@@ -132,6 +166,7 @@ message GetPaymentHistoryRequest {
   int32 page = 2;
   int32 page_size = 3;
 }
+
 message GetPaymentHistoryResponse {
   repeated PaymentDto payments = 1;
   int32 total = 2;
@@ -141,36 +176,30 @@ message PaymentDto {
   string id = 1;
   string reference = 2;
   string status = 3;
-  string currency = 4;
-  double total_amount = 5;
+  reserved 4, 5;
+  reserved "currency", "total_amount";
   string created_at = 6;
   string processed_at = 7;
   string error_message = 8;
   string service_name = 9;
   repeated PaymentDetailDto details = 10;
   string operator_provider = 11;
+  Money total = 12;
+  string source_quote_id = 13;
+  string error_code = 14;
 }
 
 message PaymentDetailDto {
   string type = 1;
   string description = 2;
-  double amount = 3;
-  string currency = 4;
+  reserved 3, 4;
+  reserved "amount", "currency";
+  Money money = 5;
+  string source = 6;
 }
 
-message PaymentQuoteDto {
-  string id = 1;
-  string status = 2;
-  string currency = 3;
-  double total_amount = 4;
-  string created_at = 5;
-  string expires_at = 6;
-  string service_id = 7;
-  string service_name = 8;
-  repeated PaymentDetailDto details = 9;
-}
-
-// Ã¢â€â‚¬Ã¢â€â‚¬ Service Catalog Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// Catalogue compatibility. PayableServices still consumes this service until
+// the separate catalogue-ownership migration is completed.
 
 service ServiceCatalogService {
   rpc GetServices (GetServicesRequest) returns (GetServicesResponse);
@@ -191,11 +220,17 @@ message ServiceDto {
   string name = 2;
   string description = 3;
   string category = 4;
-  double base_amount = 5;
-  string currency = 6;
+  reserved 5, 6;
+  reserved "base_amount", "currency";
+  Money base_amount_money = 7;
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Shared Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// Shared
+
+message Money {
+  string currency_code = 1;
+  int64 minor_units = 2;
+}
 
 message MutationResponse {
   bool success = 1;

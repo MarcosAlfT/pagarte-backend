@@ -2,70 +2,77 @@
 
 ## Purpose
 
-`ExternalConnections` isolates third-party payment-operator and company
-integration details from application and domain workflows.
+`ExternalConnections` isolates third-party company and payment-operator
+contracts from application and domain workflows.
 
 ## Owns
 
-- Payment-operator adapter contracts and implementations.
-- Payment-operator selection support.
-- Card registration, charge, and refund provider calls.
-- Company payment-delivery HTTP adaptation.
+- Provider-specific request authentication and HTTP mapping.
+- Stored-card registration, readiness, charge status, charge, and refund calls.
+- Company service payment, status reconciliation, and rollback calls.
+- Translation of provider responses into succeeded, definitive, retryable, or
+  unknown outcomes.
 
 ## Does Not Own
 
-- Public APIs.
 - Payment, quote, catalogue, or client business state.
-- Workflow orchestration.
-- Retry policy decisions owned by application use cases.
+- Retry caps, retry scheduling, or workflow status decisions.
+- External credentials in transport messages or payment snapshots.
 
 ## Runtime Boundary
 
 ```text
 PaymentSwitch.Processor
-  -> ExternalConnections.PaymentOperators
-  -> external payment operator
+  -> company adapter -> external company
+  -> payment-operator adapter -> external operator
 
 PaymentSwitch.Worker
-  -> ExternalConnections.PaymentOperators
-  -> external payment operator
-
-PaymentSwitch.Worker
-  -> ExternalConnections.CompanyPayments
-  -> external company payment endpoint
+  -> payment-operator adapter -> external operator refund
 ```
 
-## Projects and Layers
+## External Operation Flow
 
-- `ExternalConnections.PaymentOperators` contains payment-operator
-  configuration, adapters, and factories.
-- `ExternalConnections.CompanyPayments` contains `ICompanyAdapter` and the
-  HTTP implementation used for company payment delivery.
+```text
+Processor operation request
+  -> gateway resolves server-side API key from credential reference
+  -> provider adapter maps the HTTP request and authentication
+  -> external provider
+  -> adapter normalizes the response
+      -> Succeeded ---------> Processor records durable success
+      -> DefinitiveFailure -> Processor ends or compensates the workflow
+      -> RetryableFailure --> Processor schedules persisted retry
+      -> Unknown -----------> Processor reconciles before another side effect
+```
 
-## Main Use Cases
-
-This area implements technical calls requested by other contexts. It does not
-define application use cases of its own.
+Adapters do not update payment state or choose retry limits. Processor owns
+those decisions and supplies stable, operation-specific idempotency keys.
 
 ## Domain Rules
 
-Adapters translate external contracts into internal results. They should not
-decide whether a payment, refund, or retry is allowed.
+- Company calls receive the snapshotted external service code, reference
+  values, full finalized amount, and stable idempotency key.
+- Company and payment-operator results never decide application retries.
+- Timeouts and transport failures are represented as unknown when the external
+  side effect may have occurred.
+- Credentials are resolved server-side.
+- Provider monetary requests are created from the shared exact `MoneyValue`.
 
-## Data Ownership
+## Current Implementations
 
-`ExternalConnections` owns no business database.
+- The dLocal adapter checks stored-card status, uses a stable
+  `X-Idempotency-Key` for charges, and retrieves charge state for
+  reconciliation.
+- The mock adapter provides deterministic idempotent behavior and explicit
+  retry/decline scenarios for development.
+- The company HTTP adapter supports payment, status, and rollback endpoints and
+  stable `Idempotency-Key` headers.
 
-## Integrations
-
-- Used by Processor for card registration and authorization.
-- Used by Worker for payment delivery and refunds.
-- The external catalogue/feed adapter described by the earlier design is not
-  implemented. PayableServices currently reads Processor's internal service
-  catalogue instead.
+The external catalogue/feed bridge remains unimplemented; PayableServices
+currently syncs from Processor's retained internal catalogue.
 
 ## Change Guidance
 
-Keep provider-specific request, authentication, and response handling here.
-Expose stable internal abstractions and keep provider contracts out of
-Application and Domain projects.
+Keep provider contracts here and expose stable internal outcomes. Read
+[ADR 0003](../decisions/0003-quote-execution-saga.md) and
+[ADR 0004](../decisions/0004-money-handling.md) before changing monetary or
+execution semantics.

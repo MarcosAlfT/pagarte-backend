@@ -6,6 +6,7 @@ using PaymentSwitch.Worker.Interfaces;
 using PaymentSwitch.Worker.Services;
 using PaymentSwitch.Messaging;
 using Infrastructure.RabbitMQ;
+using Utilities.Money;
 
 namespace PaymentSwitch.Worker
 {
@@ -24,13 +25,13 @@ namespace PaymentSwitch.Worker
                     // Repository uses raw SQL to PaymentDb to avoid referencing Processor.
                     services.AddScoped<IPaymentStatusRepository, PaymentStatusRepository>();
                     services.AddSingleton<IClock, SystemClock>();
+                    services.AddSingleton<ICurrencyCatalog, CurrencyCatalog>();
 
                     // Email service
                     services.AddScoped<IEmailSenderService, EmailSenderService>();
                     services.AddScoped<IRefundGateway, PaymentOperatorRefundGateway>();
 
                     // Application use cases
-                    services.AddScoped<ProcessPaymentRequestUseCase>();
                     services.AddScoped<ProcessRefundRequestUseCase>();
                     services.AddScoped<SendPaymentEmailUseCase>();
 
@@ -39,7 +40,6 @@ namespace PaymentSwitch.Worker
                     services.AddScoped<IMessagePublisher, RabbitMqPublisher>();
 
                     // Each consumer listens to one queue.
-                    services.AddHostedService<PaymentRequestConsumer>();
                     services.AddHostedService<RefundConsumer>();
                     services.AddHostedService<EmailConsumer>();
                     services.AddHostedService<RefundRetryDispatcherService>();

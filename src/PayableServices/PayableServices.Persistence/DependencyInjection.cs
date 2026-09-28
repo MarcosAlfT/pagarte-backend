@@ -21,6 +21,7 @@ public static class DependencyInjection
 		services.AddScoped<IExternalCatalogueItemRepository, ExternalCatalogueItemRepository>();
 		services.AddScoped<IExternalCatalogueMappingRepository, ExternalCatalogueMappingRepository>();
 		services.AddScoped<IPaymentRouteRepository, PaymentRouteRepository>();
+		services.AddScoped<IQuoteConfigurationRepository, QuoteConfigurationRepository>();
 
 		return services;
 	}

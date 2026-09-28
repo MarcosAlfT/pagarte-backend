@@ -81,6 +81,10 @@ public static class PayableServicesDbSeeder
 			ProviderId = provider.Id,
 			ExternalSourceCode = "QEC-API",
 			ExternalServiceCode = "EEQ001",
+			CompanyPaymentEndpoint = "https://localhost:9443/payments",
+			CompanyRollbackEndpoint = "https://localhost:9443/payments/rollback",
+			CompanyStatusEndpoint = "https://localhost:9443/payments/{reference}",
+			CompanyCredentialReference = "QEC",
 			Status = "Active",
 			IsActive = true,
 			LastTestedAt = DateTime.UtcNow

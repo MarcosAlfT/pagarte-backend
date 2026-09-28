@@ -29,8 +29,8 @@ namespace PayableServices.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("Amount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(38, 9)
+                        .HasColumnType("decimal(38,9)");
 
                     b.Property<Guid>("AmountCompositionId")
                         .HasColumnType("uniqueidentifier");
@@ -279,7 +279,8 @@ namespace PayableServices.Persistence.Migrations
                         .HasColumnType("bit");
 
                     b.Property<decimal>("BaseAmount")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(38, 9)
+                        .HasColumnType("decimal(38,9)");
 
                     b.Property<Guid>("CategoryId")
                         .HasColumnType("uniqueidentifier");
@@ -362,6 +363,25 @@ namespace PayableServices.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("CompanyCredentialReference")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("CompanyPaymentEndpoint")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("CompanyRollbackEndpoint")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("CompanyStatusEndpoint")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<string>("ExternalServiceCode")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -434,6 +454,30 @@ namespace PayableServices.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<string>("CompanyCredentialReference")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("CompanyPaymentEndpoint")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("CompanyRollbackEndpoint")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("CompanyStatusEndpoint")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("CountryCode")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
+
                     b.Property<Guid>("CountryId")
                         .HasColumnType("uniqueidentifier");
 
@@ -445,8 +489,50 @@ namespace PayableServices.Persistence.Migrations
                         .HasMaxLength(3)
                         .HasColumnType("nvarchar(3)");
 
+                    b.Property<int>("CurrencyScale")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ExecutionErrorCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ExecutionErrorMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("ExternalServiceCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ExternalSourceCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid?>("PaymentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("PaymentNetworkId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ProviderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RoundingMode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid>("RouteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RouteType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<Guid>("ServiceId")
                         .HasColumnType("uniqueidentifier");
@@ -460,8 +546,11 @@ namespace PayableServices.Persistence.Migrations
                         .HasColumnType("int");
 
                     b.Property<decimal>("TotalAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(38, 9)
+                        .HasColumnType("decimal(38,9)");
+
+                    b.Property<long>("TotalMinorUnits")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -481,8 +570,13 @@ namespace PayableServices.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("Amount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(38, 9)
+                        .HasColumnType("decimal(38,9)");
+
+                    b.Property<string>("ComponentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("Currency")
                         .IsRequired()
@@ -494,17 +588,55 @@ namespace PayableServices.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<Guid>("PayableServiceId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsVisibleToClient")
+                        .HasColumnType("bit");
+
+                    b.Property<long>("MinorUnits")
+                        .HasColumnType("bigint");
 
                     b.Property<Guid>("QuoteId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
 
                     b.HasIndex("QuoteId");
 
                     b.ToTable("QuoteItems");
+                });
+
+            modelBuilder.Entity("PayableServices.Domain.Entities.QuoteReferenceValue", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("QuoteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuoteId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("QuoteReferenceValues");
                 });
 
             modelBuilder.Entity("PayableServices.Domain.Entities.ReferenceFieldDefinition", b =>
@@ -605,6 +737,15 @@ namespace PayableServices.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("PayableServices.Domain.Entities.QuoteReferenceValue", b =>
+                {
+                    b.HasOne("PayableServices.Domain.Entities.Quote", null)
+                        .WithMany("ReferenceValues")
+                        .HasForeignKey("QuoteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("PayableServices.Domain.Entities.AmountComposition", b =>
                 {
                     b.Navigation("Components");
@@ -613,6 +754,8 @@ namespace PayableServices.Persistence.Migrations
             modelBuilder.Entity("PayableServices.Domain.Entities.Quote", b =>
                 {
                     b.Navigation("Items");
+
+                    b.Navigation("ReferenceValues");
                 });
 #pragma warning restore 612, 618
         }

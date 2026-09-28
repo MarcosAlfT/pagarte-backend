@@ -11,6 +11,5 @@ namespace PaymentSwitch.Processor.Domain.Entities
 		public string Currency { get; set; } = string.Empty;
 		public bool IsActive { get; set; } = true;
 		public Company Company { get; set; } = null!;
-		public ICollection<Payment> Payments { get; set; } = [];
 	}
 }

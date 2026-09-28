@@ -1,41 +1,15 @@
-namespace PaymentSwitch.Processor.Domain.Enums
+namespace PaymentSwitch.Processor.Domain.Enums;
+
+public enum PaymentOperatorScope
 {
-	public enum PaymentQuoteStatus
-	{
-		Unpaid,
-		Paid
-	}
+	International,
+	Local
+}
 
-	public enum PaymentOperatorScope
-	{
-		International,
-		Local
-	}
-
-	public enum CardType {
-		Visa, 
-		Mastercard, 
-		Amex, 
-		Other 
-	}
-
-	public enum FeeType {
-		PaymentOperator,
-		Company, 
-		Platform
-	}
-
-	public enum CalculationType { 
-		Percentage,
-		FixedAmount 
-	}
-
-	public enum PaymentDetailType
-	{
-		ServiceAmount,
-		PaymentOperatorFee,
-		CompanyFee,
-		PlatformFee,
-		Tax
-	}
+public enum CardType
+{
+	Visa,
+	Mastercard,
+	Amex,
+	Other
 }

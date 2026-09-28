@@ -21,6 +21,7 @@ public sealed class PayableServicesDbContext(DbContextOptions<PayableServicesDbC
 	public DbSet<AmountComponent> AmountComponents => Set<AmountComponent>();
 	public DbSet<Quote> Quotes => Set<Quote>();
 	public DbSet<QuoteItem> QuoteItems => Set<QuoteItem>();
+	public DbSet<QuoteReferenceValue> QuoteReferenceValues => Set<QuoteReferenceValue>();
 
 	protected override void OnModelCreating(ModelBuilder modelBuilder)
 	{
@@ -31,12 +32,27 @@ public sealed class PayableServicesDbContext(DbContextOptions<PayableServicesDbC
 			entity.HasKey(e => e.Id);
 			entity.Property(e => e.ClientId).IsRequired();
 			entity.Property(e => e.Currency).IsRequired().HasMaxLength(3);
-			entity.Property(e => e.TotalAmount).HasPrecision(18, 2);
+			entity.Property(e => e.CountryCode).IsRequired().HasMaxLength(2);
+			entity.Property(e => e.TotalAmount).HasPrecision(38, 9);
 			entity.Property(e => e.ServiceName).HasMaxLength(200);
+			entity.Property(e => e.RouteType).IsRequired().HasMaxLength(100);
+			entity.Property(e => e.ExternalSourceCode).HasMaxLength(100);
+			entity.Property(e => e.ExternalServiceCode).IsRequired().HasMaxLength(100);
+			entity.Property(e => e.CompanyPaymentEndpoint).IsRequired().HasMaxLength(500);
+			entity.Property(e => e.CompanyRollbackEndpoint).IsRequired().HasMaxLength(500);
+			entity.Property(e => e.CompanyStatusEndpoint).HasMaxLength(500);
+			entity.Property(e => e.CompanyCredentialReference).IsRequired().HasMaxLength(200);
+			entity.Property(e => e.RoundingMode).IsRequired().HasMaxLength(50);
+			entity.Property(e => e.ExecutionErrorCode).HasMaxLength(100);
+			entity.Property(e => e.ExecutionErrorMessage).HasMaxLength(1000);
 			entity.HasIndex(e => e.ClientId);
 			entity.HasIndex(e => e.Status);
 			entity.HasIndex(e => e.ExpiresAt);
 			entity.HasMany(e => e.Items)
+				.WithOne()
+				.HasForeignKey(e => e.QuoteId)
+				.OnDelete(DeleteBehavior.Cascade);
+			entity.HasMany(e => e.ReferenceValues)
 				.WithOne()
 				.HasForeignKey(e => e.QuoteId)
 				.OnDelete(DeleteBehavior.Cascade);
@@ -46,9 +62,19 @@ public sealed class PayableServicesDbContext(DbContextOptions<PayableServicesDbC
 		{
 			entity.HasKey(e => e.Id);
 			entity.Property(e => e.Description).IsRequired().HasMaxLength(500);
-			entity.Property(e => e.Amount).HasPrecision(18, 2);
+			entity.Property(e => e.ComponentType).IsRequired().HasMaxLength(100);
+			entity.Property(e => e.Source).HasMaxLength(100);
+			entity.Property(e => e.Amount).HasPrecision(38, 9);
 			entity.Property(e => e.Currency).IsRequired().HasMaxLength(3);
 			entity.HasIndex(e => e.QuoteId);
+		});
+
+		modelBuilder.Entity<QuoteReferenceValue>(entity =>
+		{
+			entity.HasKey(e => e.Id);
+			entity.Property(e => e.Key).IsRequired().HasMaxLength(100);
+			entity.Property(e => e.Value).IsRequired().HasMaxLength(1000);
+			entity.HasIndex(e => new { e.QuoteId, e.Key }).IsUnique();
 		});
 
 		modelBuilder.Entity<PayableService>(entity =>
@@ -58,6 +84,7 @@ public sealed class PayableServicesDbContext(DbContextOptions<PayableServicesDbC
 			entity.Property(e => e.Description).HasMaxLength(1000);
 			entity.Property(e => e.Status).IsRequired().HasMaxLength(50);
 			entity.Property(e => e.SearchKeywords).HasMaxLength(1000);
+			entity.Property(e => e.BaseAmount).HasPrecision(38, 9);
 			entity.Property(e => e.Currency).IsRequired().HasMaxLength(3);
 			entity.HasIndex(e => new { e.CountryId, e.CategoryId, e.SubcategoryId, e.AllowsQuote });
 		});
@@ -97,6 +124,10 @@ public sealed class PayableServicesDbContext(DbContextOptions<PayableServicesDbC
 			entity.Property(e => e.Status).IsRequired().HasMaxLength(50);
 			entity.Property(e => e.ExternalSourceCode).HasMaxLength(100);
 			entity.Property(e => e.ExternalServiceCode).HasMaxLength(100);
+			entity.Property(e => e.CompanyPaymentEndpoint).IsRequired().HasMaxLength(500);
+			entity.Property(e => e.CompanyRollbackEndpoint).IsRequired().HasMaxLength(500);
+			entity.Property(e => e.CompanyStatusEndpoint).HasMaxLength(500);
+			entity.Property(e => e.CompanyCredentialReference).IsRequired().HasMaxLength(200);
 			entity.HasIndex(e => new { e.PayableServiceId, e.IsActive });
 		});
 
@@ -149,7 +180,7 @@ public sealed class PayableServicesDbContext(DbContextOptions<PayableServicesDbC
 			entity.HasKey(e => e.Id);
 			entity.Property(e => e.ComponentType).IsRequired().HasMaxLength(100);
 			entity.Property(e => e.Description).HasMaxLength(500);
-			entity.Property(e => e.Amount).HasPrecision(18, 2);
+			entity.Property(e => e.Amount).HasPrecision(38, 9);
 			entity.Property(e => e.Currency).IsRequired().HasMaxLength(3);
 			entity.Property(e => e.Source).HasMaxLength(100);
 			entity.Property(e => e.AppliesTo).HasMaxLength(100);
