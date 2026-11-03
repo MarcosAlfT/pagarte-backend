@@ -5,12 +5,12 @@ payment, and operational transactions. It separates current implementation
 facts from planned work so the team can deliver and close one transaction at a
 time.
 
-Baseline reviewed against `main` commit `e5b50d0` on 2026-10-08. The
+Historical baseline reviewed against `main` commit `e5b50d0` on 2026-10-08. The
 `codex/keycloak-security-migration` branch now contains Keycloak JWT validation,
 profile identity mapping, and administrator policies. The status table below
-remains the baseline transaction inventory until the client applications and
-real Keycloak runtime tests complete; it must not be treated as a verified
-post-migration transaction count.
+retains unrelated baseline statuses. The catalogue/inquiry rows and affected
+prerequisites below have separate SQL/HTTP implementation evidence; this is not
+a complete re-audit of all post-migration transactions.
 
 ## Status Definitions
 
@@ -29,20 +29,25 @@ are complete.
 
 ## Current Snapshot
 
-The inventory currently tracks 55 client and operational transactions:
+The inventory tracks 55 client and operational transactions. The seven previously
+incomplete catalogue/inquiry and linked quote transactions were closed by the
+2026-11-02 implementation; unrelated baseline rows retain their prior status:
 
 | Status | Count |
 | --- | ---: |
-| Complete | 24 |
-| Partial | 9 |
-| Missing | 19 |
-| Security gap | 1 |
+| Complete | 31 |
+| Partial | 7 |
+| Missing | 15 |
+| Security gap | 0 |
 | Decision required | 2 |
 
 Eight security, architecture, and testing prerequisites are tracked separately
 near the end of this document.
 
-## Recommended Work Order
+## Baseline Work Order
+
+The order below records the original sequencing; completed rows are identified
+in the current inventory and do not require reimplementation.
 
 | Order | Transaction IDs | Outcome |
 | --- | --- | --- |
@@ -76,29 +81,26 @@ near the end of this document.
 ## Service Catalogue and Amount Inquiry
 
 The accepted [catalogue and amount-inquiry requirement](requirements/mock-amount-inquiry.md)
-covers every transaction in this section and links to `QUOTE-08`. The planned
-mock company supplies both catalogue feeds and balances until real companies
-are available. Requirement coverage does not change implementation status;
-close each row only after its transaction-specific acceptance checks pass.
+covers every transaction in this section and linked `QUOTE-08`. The implemented
+mock company supplies catalogue feeds and balances. On 2026-11-02 the
+[SQL/HTTP acceptance suite](../tests/PayableServices.Tests/README.md) verified
+these transactions. AppHost build/manifest wiring is verified; a fresh full
+Aspire/Keycloak startup requires Docker and remains a local smoke check.
 
 | ID | Transaction | Status | Current implementation or missing work | Owner |
 | --- | --- | --- | --- | --- |
-| `CAT-01` | Browse payable services | Complete | `GetCatalogueUseCase` returns active services that allow quoting and payment. | `PayableServices` |
-| `CAT-02` | Search and filter payable services | Partial | Exact category filtering exists. Text, provider, country, and service-code search do not. | `PayableServices` |
-| `CAT-03` | View service details and required reference fields | Missing | There is no public service-detail transaction that supplies the data needed to build a payment form. | `PayableServices` |
-| `CAT-04` | Synchronize the external service catalogue | Partial | `SyncExternalCatalogueUseCase` exists but currently reads Processor's retained catalogue instead of a real external feed. | `PayableServices` and `ExternalConnections` |
-| `CAT-05` | Maintain catalogue and activate payment routes | Security gap | Historical baseline status; the current code has `VerifiedAdmin` protection. Administrator runtime acceptance and route-validation checks remain to be verified under the requirement. | `PayableServices` |
-| `INQ-01` | Validate the customer reference and check the amount due | Missing | The accepted [mock amount-inquiry requirement](requirements/mock-amount-inquiry.md) defines deterministic external HTTP scenarios; the adapter and public transaction are not implemented. | `PayableServices` and `ExternalConnections` |
-| `INQ-02` | Persist a stable amount-inquiry result | Missing | The accepted requirement defines ownership, idempotency, amount, currency, provider ID, references, and 15-minute expiry; persistence is not implemented. | `PayableServices` |
+| `CAT-01` | Browse payable services | Complete | Local eligible catalogue reads remain public and work during provider outage; catalogue base amount is not customer balance. | `PayableServices` |
+| `CAT-02` | Search and filter payable services | Complete | Case-insensitive text plus exact category/provider/country/service-code AND filters, stable bounded pages, empty matches, and invalid input are verified over HTTP/SQL. | `PayableServices` |
+| `CAT-03` | View service details and required reference fields | Complete | Public eligible-service details expose ordered reference definitions and inquiry availability while hiding connection data; missing/inactive cases are verified. | `PayableServices` |
+| `CAT-04` | Synchronize the external service catalogue | Complete | Versioned mock HTTP snapshots import atomically by source/code, preserve IDs/approval/components, deactivate removals, and reject invalid/partial/older/unavailable feeds; overlapping sync is SQL-tested. | `PayableServices` and `ExternalConnections` |
+| `CAT-05` | Maintain catalogue and activate payment routes | Complete | Signed administrator success and anonymous/client/support denial are verified; validated mapping/configuration precedes atomic route activation, and failed validation preserves inactive state. | `PayableServices` |
+| `INQ-01` | Validate the customer reference and check the amount due | Complete | All mock account HTTP scenarios and local reference validation are verified; provider timeout and invalid amount/currency/timestamps cannot produce payable evidence. | `PayableServices` and `ExternalConnections` |
+| `INQ-02` | Persist a stable amount-inquiry result | Complete | Owned results and nullable failure evidence persist in SQL; client-scoped uniqueness, conflict/replay, pending duplicates, lease recovery with original provider key, expiry, and persistence failure are verified. | `PayableServices` |
 
-Both `CAT-05` endpoints now require the `VerifiedAdmin` policy in the merged
-Keycloak implementation. The historical baseline status above is retained
-until transaction acceptance verifies an administrator token and rejects
-anonymous, client, and support tokens; it does not mean the current controllers
-lack authorization attributes.
-
-The catalogue currently returns a configured base amount. It does not represent
-a real-time amount owed by the customer to the external company.
+Maintenance requires `VerifiedAdmin`; inquiries and quotes require `VerifiedClient`
+and internal client-ID resolution. Catalogue base amounts remain configured metadata.
+An inquiry-backed service obtains customer balance only through its persisted
+provider inquiry. Imported services remain inactive until approved.
 
 ## Payment Methods
 
@@ -119,11 +121,11 @@ a real-time amount owed by the customer to the external company.
 | `QUOTE-01` | Create an itemized quote | Complete | `CreateQuoteUseCase` validates the service, route, references, currency, and amount composition. | `PayableServices` |
 | `QUOTE-02` | Display base value, taxes, fees, discounts, and total | Complete | The immutable quote stores and returns ordered amount components and the complete total. | `PayableServices` |
 | `QUOTE-03` | Retrieve a quote by ID | Complete | `GetQuoteUseCase` returns a quote only to its owning client. | `PayableServices` |
-| `QUOTE-04` | Reject an expired quote | Complete | Unpaid quotes expire after the configured 60-minute lifetime. | `PayableServices` |
+| `QUOTE-04` | Reject an expired quote | Complete | Legacy configured-amount quotes have a 60-minute lifetime; inquiry-backed quotes expire no later than the inquiry. | `PayableServices` |
 | `QUOTE-05` | List a client's quotes | Missing | Only retrieval by a known quote ID exists. | `PayableServices` |
 | `QUOTE-06` | Cancel an unpaid quote | Missing | No explicit cancellation status or use case exists. | `PayableServices` |
 | `QUOTE-07` | Requote an expired or declined attempt | Partial | A new quote can be created manually, but no dedicated client transaction carries forward safe inputs. | `PayableServices` |
-| `QUOTE-08` | Create a quote from a verified amount inquiry | Missing | The accepted [mock amount-inquiry requirement](requirements/mock-amount-inquiry.md) makes a valid persisted inquiry the source of amount and currency; quote binding is not implemented. | `PayableServices` |
+| `QUOTE-08` | Create a quote from a verified amount inquiry | Complete | Owned positive inquiry evidence supplies the base exactly once; quote/consumption commit atomically with unique inquiry binding, concurrent replay, expiry/route/currency rejection, and existing execution-validator acceptance. | `PayableServices` |
 
 One quote currently represents one payable service and one payment attempt.
 
@@ -172,10 +174,10 @@ several transactions above.
 | `SEC-01` | Authenticate client profile, card, and quote operations | Complete | Public profile, stored-card, and quote endpoints validate access tokens and derive client ownership from the token. |
 | `SEC-02` | Authenticate every internal Processor gRPC service | Partial | `PaymentExecutionService` validates the workload API key; card, payment-query, and catalogue gRPC services still require an explicit workload boundary. |
 | `SEC-03` | Add administrator/support identities and permissions | Missing | Maintenance, route activation, refunds, manual review, and support search need roles or scoped permissions. |
-| `SEC-04` | Decide whether catalogue browsing is public or authenticated | Decision required | The controller is currently public while the context documentation describes authenticated catalogue access. |
+| `SEC-04` | Decide whether catalogue browsing is public or authenticated | Complete | The accepted amount-inquiry requirement preserves public catalogue browsing/details; HTTP tests verify that boundary while customer inquiries remain protected. |
 | `ARCH-01` | Resolve duplicate catalogue ownership and the external feed | Open | Choose the canonical catalogue and implement the real external catalogue adapter. |
 | `ARCH-02` | Resolve company endpoints and credentials server-side | Open | The execution package should carry stable route or destination identifiers rather than connection details. |
-| `ARCH-03` | Implement PayableServices application-owned transaction boundaries | Open | Register `IUnitOfWork`, remove repository-owned commits, and define the catalogue-sync commit strategy. |
+| `ARCH-03` | Implement PayableServices application-owned transaction boundaries | Complete | Registered IUnitOfWork owns commits; repositories stage writes. SQL transaction-owned application locks protect catalogue sync/activation, durable inquiry reservations/completion, and atomic quote consumption; HTTP runs outside transactions. |
 | `TEST-01` | Add database-backed and transport-level integration coverage | Partial | Cover authentication, duplicate confirmations, SQL concurrency, restart recovery, provider contracts, and production-like migrations. |
 
 See [Current Problems](current-problems.md) for the detailed architectural

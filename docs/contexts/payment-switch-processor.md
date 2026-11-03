@@ -123,6 +123,11 @@ drain the old RabbitMQ queue with the old Worker before replacing it.
 - Resolves company API keys from server-side configuration by credential
   reference.
 
+Inquiry-backed quotes use the existing immutable execution contract and payment
+transitions. The local AppHost resolves the mock company's credential reference
+through Processor's existing company-credential configuration. Processor's
+retained catalogue is no longer the source of PayableServices synchronization.
+
 ## Change Guidance
 
 Keep gRPC services and the scheduler thin. Put workflow decisions in focused

@@ -8,21 +8,24 @@ namespace PayableServices.Persistence;
 
 public static class DependencyInjection
 {
-	public static IServiceCollection AddPayableServicesPersistence(
-		this IServiceCollection services,
-		IConfiguration configuration)
-	{
-		services.AddDbContext<PayableServicesDbContext>(options =>
-			options.UseSqlServer(configuration.GetConnectionString("PayableServicesDb")));
+    public static IServiceCollection AddPayableServicesPersistence(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddDbContext<PayableServicesDbContext>(options =>
+            options.UseSqlServer(configuration.GetConnectionString("PayableServicesDb")));
 
-		services.AddScoped<IQuoteRepository, QuoteRepository>();
-		services.AddScoped<IPayableServiceRepository, PayableServiceRepository>();
-		services.AddScoped<IExternalCatalogueSourceRepository, ExternalCatalogueSourceRepository>();
-		services.AddScoped<IExternalCatalogueItemRepository, ExternalCatalogueItemRepository>();
-		services.AddScoped<IExternalCatalogueMappingRepository, ExternalCatalogueMappingRepository>();
-		services.AddScoped<IPaymentRouteRepository, PaymentRouteRepository>();
-		services.AddScoped<IQuoteConfigurationRepository, QuoteConfigurationRepository>();
+        services.AddScoped<IQuoteRepository, QuoteRepository>();
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<IInquiryRepository, InquiryRepository>();
+        services.AddScoped<ICatalogueImportRepository, CatalogueImportRepository>();
+        services.AddScoped<IPayableServiceRepository, PayableServiceRepository>();
+        services.AddScoped<IExternalCatalogueSourceRepository, ExternalCatalogueSourceRepository>();
+        services.AddScoped<IExternalCatalogueItemRepository, ExternalCatalogueItemRepository>();
+        services.AddScoped<IExternalCatalogueMappingRepository, ExternalCatalogueMappingRepository>();
+        services.AddScoped<IPaymentRouteRepository, PaymentRouteRepository>();
+        services.AddScoped<IQuoteConfigurationRepository, QuoteConfigurationRepository>();
 
-		return services;
-	}
+        return services;
+    }
 }

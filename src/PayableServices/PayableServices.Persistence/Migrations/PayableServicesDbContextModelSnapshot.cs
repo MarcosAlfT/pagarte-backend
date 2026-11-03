@@ -90,6 +90,106 @@ namespace PayableServices.Persistence.Migrations
                     b.ToTable("AmountCompositions");
                 });
 
+            modelBuilder.Entity("PayableServices.Domain.Entities.AmountInquiry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long?>("AmountMinorUnits")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Currency")
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<DateTime?>("DueDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ExternalServiceCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<Guid>("LeaseToken")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("LeaseUntil")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Outcome")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ProviderInquiryId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ProviderKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("ProviderResultAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("QuoteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ReferenceSnapshot")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("RouteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ServiceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProviderKey")
+                        .IsUnique();
+
+                    b.HasIndex("ClientId", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("Outcome", "LeaseUntil");
+
+                    b.ToTable("AmountInquiries");
+                });
+
             modelBuilder.Entity("PayableServices.Domain.Entities.Category", b =>
                 {
                     b.Property<Guid>("Id")
@@ -256,12 +356,23 @@ namespace PayableServices.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("SnapshotFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<long>("SnapshotVersion")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("SourceType")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
 
                     b.ToTable("ExternalCatalogueSources");
                 });
@@ -311,6 +422,9 @@ namespace PayableServices.Persistence.Migrations
 
                     b.Property<Guid>("ProviderId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("RequiresInquiry")
+                        .HasColumnType("bit");
 
                     b.Property<string>("SearchKeywords")
                         .IsRequired()
@@ -387,6 +501,10 @@ namespace PayableServices.Persistence.Migrations
                         .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("ExternalSourceCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("InquiryProvider")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
@@ -512,6 +630,9 @@ namespace PayableServices.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<Guid?>("InquiryId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid?>("PaymentId")
                         .HasColumnType("uniqueidentifier");
 
@@ -557,6 +678,10 @@ namespace PayableServices.Persistence.Migrations
                     b.HasIndex("ClientId");
 
                     b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("InquiryId")
+                        .IsUnique()
+                        .HasFilter("[InquiryId] IS NOT NULL");
 
                     b.HasIndex("Status");
 

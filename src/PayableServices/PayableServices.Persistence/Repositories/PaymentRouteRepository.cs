@@ -5,48 +5,48 @@ using PayableServices.Domain.Entities;
 namespace PayableServices.Persistence.Repositories;
 
 public sealed class PaymentRouteRepository(PayableServicesDbContext dbContext)
-	: IPaymentRouteRepository
+    : IPaymentRouteRepository
 {
-	private readonly PayableServicesDbContext _dbContext = dbContext;
+    private readonly PayableServicesDbContext _dbContext = dbContext;
 
-	public Task<PaymentRoute?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
-		=> _dbContext.PaymentRoutes.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+    public Task<PaymentRoute?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        => _dbContext.PaymentRoutes.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
-	public Task<PaymentRoute?> GetActiveByPayableServiceIdAsync(
-		Guid payableServiceId,
-		CancellationToken cancellationToken = default)
-		=> _dbContext.PaymentRoutes.FirstOrDefaultAsync(
-			x => x.PayableServiceId == payableServiceId && x.IsActive,
-			cancellationToken);
+    public Task<PaymentRoute?> GetActiveByPayableServiceIdAsync(
+        Guid payableServiceId,
+        CancellationToken cancellationToken = default)
+        => _dbContext.PaymentRoutes.FirstOrDefaultAsync(
+            x => x.PayableServiceId == payableServiceId && x.IsActive,
+            cancellationToken);
 
-	public async Task<IReadOnlyCollection<PaymentRoute>> GetByPayableServiceIdAsync(
-		Guid payableServiceId,
-		CancellationToken cancellationToken = default)
-		=> await _dbContext.PaymentRoutes
-			.Where(x => x.PayableServiceId == payableServiceId)
-			.ToListAsync(cancellationToken);
+    public async Task<IReadOnlyCollection<PaymentRoute>> GetByPayableServiceIdAsync(
+        Guid payableServiceId,
+        CancellationToken cancellationToken = default)
+        => _dbContext.PaymentRoutes.Local.Where(x => x.PayableServiceId == payableServiceId)
+            .Concat(await _dbContext.PaymentRoutes.Where(x => x.PayableServiceId == payableServiceId).ToListAsync(cancellationToken))
+            .DistinctBy(x => x.Id).ToArray();
 
-	public async Task SetActiveAsync(Guid paymentRouteId, CancellationToken cancellationToken = default)
-	{
-		var route = await _dbContext.PaymentRoutes.FirstOrDefaultAsync(
-			x => x.Id == paymentRouteId,
-			cancellationToken);
+    public async Task SetActiveAsync(Guid paymentRouteId, CancellationToken cancellationToken = default)
+    {
+        var route = await _dbContext.PaymentRoutes.FirstOrDefaultAsync(
+            x => x.Id == paymentRouteId,
+            cancellationToken);
 
-		if (route is null)
-		{
-			return;
-		}
+        if (route is null)
+        {
+            return;
+        }
 
-		var routes = await _dbContext.PaymentRoutes
-			.Where(x => x.PayableServiceId == route.PayableServiceId)
-			.ToListAsync(cancellationToken);
+        var routes = await _dbContext.PaymentRoutes
+            .Where(x => x.PayableServiceId == route.PayableServiceId)
+            .ToListAsync(cancellationToken);
 
-		foreach (var candidate in routes)
-		{
-			candidate.IsActive = candidate.Id == route.Id;
-			candidate.Status = candidate.Id == route.Id ? "Active" : "Inactive";
-		}
+        foreach (var candidate in routes)
+        {
+            candidate.IsActive = candidate.Id == route.Id;
+            candidate.Status = candidate.Id == route.Id ? "Active" : "Inactive";
+        }
 
-		await _dbContext.SaveChangesAsync(cancellationToken);
-	}
+
+    }
 }

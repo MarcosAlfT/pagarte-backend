@@ -22,6 +22,7 @@ is explicitly marked as proposed.
 - [PaymentSwitch.Processor](contexts/payment-switch-processor.md)
 - [PaymentSwitch.Worker](contexts/payment-switch-worker.md)
 - [ExternalConnections](contexts/external-connections.md)
+- [Mock Company](contexts/mock-company.md)
 
 ## Cross-Service Flows
 
@@ -29,14 +30,16 @@ is explicitly marked as proposed.
 - [Quote Lifecycle](flows/quote-lifecycle.md)
 - [Payment Lifecycle](flows/payment-lifecycle.md)
 
-## Proposed Requirements
+## Requirements and Acceptance
 
 - [Keycloak Security Migration](requirements/keycloak-security-migration.md) -
   implementation status and acceptance criteria for the identity cutover
   onboarding while preserving Pagarte domain ownership.
 - [Service Catalogue and Amount Inquiry with a Mock Company](requirements/mock-amount-inquiry.md) -
-  proposed catalogue search, details, mock feed synchronization, route checks,
+  implemented catalogue search, details, mock feed synchronization, route checks,
   persisted USD inquiries, and linked inquiry-backed quote creation.
+- [Catalogue and Inquiry Acceptance Tests](../tests/PayableServices.Tests/README.md) -
+  SQL/HTTP coverage, test prerequisites, and the local manual flow.
 
 ## Decisions
 

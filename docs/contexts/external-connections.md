@@ -8,6 +8,7 @@ contracts from application and domain workflows.
 ## Owns
 
 - Provider-specific request authentication and HTTP mapping.
+- Company catalogue snapshots, balance inquiry HTTP calls, and safe normalized outcomes.
 - Stored-card registration, readiness, charge status, charge, and refund calls.
 - Company service payment, status reconciliation, and rollback calls.
 - Translation of provider responses into succeeded, definitive, retryable, or
@@ -22,6 +23,9 @@ contracts from application and domain workflows.
 ## Runtime Boundary
 
 ```text
+PayableServices
+  -> CompanyInquiries adapter -> mock company catalogue/inquiry HTTP
+
 PaymentSwitch.Processor
   -> company adapter -> external company
   -> payment-operator adapter -> external operator
@@ -67,15 +71,21 @@ those decisions and supplies stable, operation-specific idempotency keys.
 - The company HTTP adapter supports payment, status, and rollback endpoints and
   stable `Idempotency-Key` headers.
 
-The external catalogue/feed bridge remains unimplemented; PayableServices
-currently syncs from Processor's retained internal catalogue.
+`ExternalConnections.CompanyInquiries` implements Application-owned catalogue,
+amount-inquiry, and trusted connection-configuration interfaces. The adapter
+uses configured endpoints/API keys, disables redirects, applies a five-second
+HTTP timeout, parses signed 64-bit USD minor units, and rejects malformed evidence.
+PayableServices further validates identity, references, timestamps, and expiry.
+Read-only inquiry timeouts normalize to `TemporarilyUnavailable`; balance evidence
+is absent for failures. Latency and timeout counters use .NET metrics.
+Catalogue parsing/transport failure yields no snapshot, preserving local state.
+The mock adapter is disabled by default and rejected outside Development.
 
 ## Change Guidance
 
-The proposed [catalogue and amount-inquiry requirement](../requirements/mock-amount-inquiry.md)
-adds mock company catalogue and balance HTTP adapters. The mock substitutes
-for external companies; application workflows and persistence remain in
-PayableServices. These adapters are not implemented yet.
+The implemented [catalogue and amount-inquiry requirement](../requirements/mock-amount-inquiry.md)
+uses [Mock Company](mock-company.md) as the external substitute. Application
+workflows, persistence, idempotency, and quote consumption remain in PayableServices.
 
 Keep provider contracts here and expose stable internal outcomes. Read
 [ADR 0003](../decisions/0003-quote-execution-saga.md) and

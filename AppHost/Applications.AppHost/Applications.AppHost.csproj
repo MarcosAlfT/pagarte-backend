@@ -17,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../src/MockCompany/MockCompany.Api/MockCompany.Api.csproj" />
     <ProjectReference Include="..\..\src\Payments\Payments.Api\Payments.Api.csproj" />
     <ProjectReference Include="..\..\src\PaymentSwitch\PaymentSwitch.Worker\PaymentSwitch.Worker.csproj" />
     <ProjectReference Include="..\..\src\PaymentSwitch\PaymentSwitch.Processor\PaymentSwitch.Processor.csproj" />
