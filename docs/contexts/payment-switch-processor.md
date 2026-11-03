@@ -130,6 +130,17 @@ retained catalogue is no longer the source of PayableServices synchronization.
 
 ## Change Guidance
 
+The draft [Payment Methods requirement](../requirements/payment-methods.md)
+proposes durable registration sessions, removal of full card-number storage,
+atomic default selection, and coordination of removal with accepted payments.
+The selected flow tokenizes directly with dLocal from the mobile app. Processor
+will accept temporary tokens and persist verified reusable card_id references;
+raw-card inputs are to be removed, not forwarded transiently.
+The requirement also proposes central operator selection for new sessions and
+immutable provider/account routing for existing cards and accepted operations.
+Changing the default must preserve old-provider recovery and refund paths.
+Provider-dependent payment-time challenges require a separate execution decision.
+
 Keep gRPC services and the scheduler thin. Put workflow decisions in focused
 application use cases and persist a concurrency-protected transition before
 each external call. Read [ADR 0003](../decisions/0003-quote-execution-saga.md)

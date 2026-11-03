@@ -7,6 +7,15 @@ later refund path.
 
 ## Card Management
 
+The draft [Payment Methods requirement](../requirements/payment-methods.md)
+describes proposed mobile-to-dLocal tokenization followed by token-to-Pagarte
+registration, backend saved-card operations, challenges, durable sessions,
+and removal semantics. The diagram below remains the current registration flow;
+the draft does not change the implemented company-first payment transitions.
+Its operator-replacement rule changes only selection for new registrations:
+existing cards, sessions, payments, and refunds retain their original operator.
+Tokens are not assumed portable between operators.
+
 ```text
 Client
   -> Payments.Api HTTP
