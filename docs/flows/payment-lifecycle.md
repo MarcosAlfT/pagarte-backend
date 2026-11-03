@@ -10,6 +10,7 @@ later refund path.
 ```text
 Client
   -> Payments.Api HTTP
+  -> ClientProfiles resolves the validated identity to internal Client.Id
   -> PaymentSwitch.Processor CreditCardService gRPC
   -> payment-operator registration adapter
   -> PaymentDb

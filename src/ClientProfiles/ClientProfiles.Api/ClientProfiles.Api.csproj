@@ -14,8 +14,6 @@
     </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.5.0" />
     <PackageReference Include="Microsoft.Extensions.ServiceDiscovery" Version="10.5.0" />
-    <PackageReference Include="OpenIddict.Validation.AspNetCore" Version="7.5.0" />
-    <PackageReference Include="OpenIddict.Validation.SystemNetHttp" Version="7.5.0" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.3" />
   </ItemGroup>
 
@@ -24,6 +22,7 @@
     <ProjectReference Include="..\ClientProfiles.Persistence\ClientProfiles.Persistence.csproj" />
     <ProjectReference Include="..\..\..\AppHost\Applications.ServiceDefaults\Applications.ServiceDefaults.csproj" />
     <ProjectReference Include="..\..\Utilities\Utilities.Responses\Utilities.Responses.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\Pagarte.Security\Pagarte.Security.csproj" />
   </ItemGroup>
 
 </Project>

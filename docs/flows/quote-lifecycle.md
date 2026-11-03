@@ -10,7 +10,7 @@ one payable service and one payment attempt.
 ```text
 Authenticated client
   -> POST /api/quotes
-  -> derive ClientId from access-token sub claim
+  -> resolve `(iss, sub)` through ClientProfiles to internal Client.Id
   -> load active payable service, country, route, amount composition,
      and reference-field definitions
   -> validate supplied reference values

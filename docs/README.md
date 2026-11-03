@@ -13,7 +13,7 @@ is explicitly marked as proposed.
 
 ## Bounded Contexts and Adapter Areas
 
-- [Identity.Client](contexts/identity-client.md)
+- [Retired Identity.Client source](contexts/identity-client.md)
 - [ClientProfiles](contexts/client-profiles.md)
 - [Payments.Api](contexts/payments-api.md)
 - [PayableServices](contexts/payable-services.md)
@@ -26,6 +26,12 @@ is explicitly marked as proposed.
 - [Authentication](flows/authentication.md)
 - [Quote Lifecycle](flows/quote-lifecycle.md)
 - [Payment Lifecycle](flows/payment-lifecycle.md)
+
+## Proposed Requirements
+
+- [Keycloak Security Migration](requirements/keycloak-security-migration.md) -
+  implementation status and acceptance criteria for the identity cutover
+  onboarding while preserving Pagarte domain ownership.
 
 ## Decisions
 

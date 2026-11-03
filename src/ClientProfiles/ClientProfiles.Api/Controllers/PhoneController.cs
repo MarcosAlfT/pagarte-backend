@@ -7,10 +7,10 @@ using Microsoft.AspNetCore.Mvc;
 namespace ClientProfiles.Api.Controllers
 {
 	[ApiController]
-	[Authorize]
+	[Authorize(Policy = "VerifiedClient")]
 	[Route("api/client/phone")]
 	public class PhoneController(
-		GetClientByUserIdUseCase getClientByUserId,
+		GetClientByExternalIdentityUseCase getClientByExternalIdentity,
 		GetPhonesByClientUseCase getPhonesByClient,
 		CreatePhoneUseCase createPhone,
 		UpdatePhoneUseCase updatePhone,
@@ -21,10 +21,10 @@ namespace ClientProfiles.Api.Controllers
 		public async Task<IActionResult> GetByClientAsync(CancellationToken cancellationToken)
 		{
 			// Validate user ID return null if valid, otherwise return an IActionResult with the error response
-			var validation = ValidateUserId();
+			var validation = ValidateExternalIdentity();
 			if (validation != null)	return validation;
 
-			var clientResponse = await getClientByUserId.ExecuteAsync(GetUserId()!, cancellationToken);
+			var clientResponse = await getClientByExternalIdentity.ExecuteAsync(GetIssuer()!, GetSubject()!, cancellationToken);
 			if (!clientResponse.Success)
 				return Ok(clientResponse);
 
@@ -36,10 +36,10 @@ namespace ClientProfiles.Api.Controllers
 		public async Task<IActionResult> CreateAsync([FromBody] CreatePhoneRequest request, CancellationToken cancellationToken)
 		{
 			// Validate user ID return null if valid, otherwise return an IActionResult with the error response
-			var validation = ValidateUserId();
+			var validation = ValidateExternalIdentity();
 			if (validation != null) return validation;
 
-			var clientResponse = await getClientByUserId.ExecuteAsync(GetUserId()!, cancellationToken);
+			var clientResponse = await getClientByExternalIdentity.ExecuteAsync(GetIssuer()!, GetSubject()!, cancellationToken);
 			if (!clientResponse.Success)
 				return Ok(clientResponse);
 
@@ -51,10 +51,10 @@ namespace ClientProfiles.Api.Controllers
 		public async Task<IActionResult> UpdateAsync(Guid phoneId, [FromBody] UpdatePhoneRequest request, CancellationToken cancellationToken)
 		{
 			// Validate user ID return null if valid, otherwise return an IActionResult with the error response
-			var validation = ValidateUserId();
+			var validation = ValidateExternalIdentity();
 			if (validation != null) return validation;
 
-			var clientResponse = await getClientByUserId.ExecuteAsync(GetUserId()!, cancellationToken);
+			var clientResponse = await getClientByExternalIdentity.ExecuteAsync(GetIssuer()!, GetSubject()!, cancellationToken);
 			if (!clientResponse.Success)
 				return Ok(clientResponse);
 
@@ -65,10 +65,10 @@ namespace ClientProfiles.Api.Controllers
 		[HttpPut("{phoneId}/primary")]
 		public async Task<IActionResult> SetPrimaryAsync(Guid phoneId, CancellationToken cancellationToken)
 		{
-			var validation = ValidateUserId();
+			var validation = ValidateExternalIdentity();
 			if (validation != null) return validation;
 
-			var clientResponse = await getClientByUserId.ExecuteAsync(GetUserId()!, cancellationToken);
+			var clientResponse = await getClientByExternalIdentity.ExecuteAsync(GetIssuer()!, GetSubject()!, cancellationToken);
 			if (!clientResponse.Success)
 				return Ok(clientResponse);
 
@@ -80,10 +80,10 @@ namespace ClientProfiles.Api.Controllers
 		public async Task<IActionResult> DeleteAsync(Guid phoneId, CancellationToken cancellationToken)
 		{
 			// Validate user ID return null if valid, otherwise return an IActionResult with the error response
-			var validation = ValidateUserId();
+			var validation = ValidateExternalIdentity();
 			if (validation != null)	return validation;
 
-			var clientResponse = await getClientByUserId.ExecuteAsync(GetUserId()!, cancellationToken);
+			var clientResponse = await getClientByExternalIdentity.ExecuteAsync(GetIssuer()!, GetSubject()!, cancellationToken);
 			if (!clientResponse.Success)
 				return Ok(clientResponse);
 

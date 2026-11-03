@@ -87,6 +87,9 @@ or unknown; the use case, not the adapter, decides the next state.
 ## Domain Rules
 
 - A stored card owned by another client is rejected.
+- The `ClientId` carried by Payments and PayableServices is the canonical
+  string form of the internal `ClientProfiles.Client.Id` GUID; Processor does
+  not consume a Keycloak subject.
 - `SourceQuoteId` is unique; a repeated identical package is replayed and a
   conflicting fingerprint is rejected.
 - Every external operation is preceded by a durable in-progress state and uses

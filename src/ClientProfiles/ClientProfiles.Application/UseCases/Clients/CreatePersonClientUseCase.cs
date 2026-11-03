@@ -14,15 +14,15 @@ namespace ClientProfiles.Application.UseCases.Clients
 		IPersonRepository personRepository,
 		IUnitOfWork unitOfWork)
 	{
-		public async Task<ApiResponse<PersonResponse>> ExecuteAsync(string userId, CreatePersonRequest request, CancellationToken cancellationToken)
+		public async Task<ApiResponse<PersonResponse>> ExecuteAsync(string issuer, string subject, CreatePersonRequest request, CancellationToken cancellationToken)
 		{
 			try
 			{
-				var existing = await clientRepository.GetByUserIdAsync(userId, cancellationToken);
+				var existing = await clientRepository.GetByExternalIdentityAsync(issuer, subject, cancellationToken);
 				if (existing != null)
 					return ApiResponse<PersonResponse>.CreateFailure(Messages.Client.AlreadyExists);
 
-				var client = Client.CreateClient(userId, ClientType.Person);
+				var client = Client.CreateClient(issuer, subject, ClientType.Person);
 				await clientRepository.AddAsync(client, cancellationToken);
 
 				var person = Person.CreatePerson(
@@ -38,9 +38,9 @@ namespace ClientProfiles.Application.UseCases.Clients
 
 				return ApiResponse<PersonResponse>.CreateSuccess(person.Adapt<PersonResponse>(), Messages.Client.Created);
 			}
-			catch (Exception ex)
+			catch (Exception)
 			{
-				return ApiResponse<PersonResponse>.CreateFailure($"An error occurred: {ex.Message}");
+				return ApiResponse<PersonResponse>.CreateFailure("Client profile could not be created.");
 			}
 		}
 	}

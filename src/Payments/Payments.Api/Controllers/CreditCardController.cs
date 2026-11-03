@@ -7,7 +7,7 @@ using Utilities.Responses;
 namespace Payments.Api.Controllers
 {
 	[ApiController]
-	[Authorize]
+	[Authorize(Policy = "VerifiedClient")]
 	[Route("api/creditcard")]
 	public class CreditCardController(CreditCardGrpcClient grpcClient) : BaseController
 	{

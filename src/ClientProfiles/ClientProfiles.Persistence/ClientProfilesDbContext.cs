@@ -30,6 +30,10 @@ namespace ClientProfiles.Persistence
 				entity.Property(e => e.CreatedAt).IsRequired();
 				entity.Property(e => e.IsDeleted).IsRequired();
 				entity.Property(e => e.DeletedAt).IsRequired(false);
+				entity.Property(e => e.Issuer).HasMaxLength(512);
+				entity.Property(e => e.Subject).HasMaxLength(255);
+				entity.HasIndex(e => new { e.Issuer, e.Subject }).IsUnique()
+					.HasFilter("[Issuer] IS NOT NULL AND [Subject] IS NOT NULL");
 				entity.HasQueryFilter(e => !e.IsDeleted);
 			});
 			modelBuilder.Entity<Person>(entity =>

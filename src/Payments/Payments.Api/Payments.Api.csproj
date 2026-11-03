@@ -7,13 +7,12 @@
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" Version="2.76.0" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.7" />
-    <PackageReference Include="OpenIddict.Validation.AspNetCore" Version="7.5.0" />
-    <PackageReference Include="OpenIddict.Validation.SystemNetHttp" Version="7.5.0" />
   </ItemGroup>
   <ItemGroup>
 
     <ProjectReference Include="..\..\Utilities\Utilities.Responses\Utilities.Responses.csproj" />
     <ProjectReference Include="..\..\PaymentSwitch\PaymentSwitch.Contracts\PaymentSwitch.Contracts.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\Pagarte.Security\Pagarte.Security.csproj" />
   </ItemGroup>
 </Project>
 

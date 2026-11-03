@@ -1,21 +1,21 @@
 using ClientProfiles.Application.Constants;
 using Microsoft.AspNetCore.Mvc;
-using OpenIddict.Abstractions;
 using Utilities.Responses;
 
 namespace ClientProfiles.Api.Controllers
 {
 	public class BaseController : ControllerBase
 	{
-		protected string? GetUserId()
+		protected string? GetSubject()
 		{
-			return User.FindFirst(OpenIddictConstants.Claims.Subject)?.Value;
+			return User.FindFirst("sub")?.Value;
 		}
 
-		protected IActionResult? ValidateUserId()
+		protected string? GetIssuer() => User.FindFirst("iss")?.Value;
+
+		protected IActionResult? ValidateExternalIdentity()
 		{
-			var userId = GetUserId();
-			if (string.IsNullOrEmpty(userId))
+			if (string.IsNullOrWhiteSpace(GetIssuer()) || string.IsNullOrWhiteSpace(GetSubject()))
 				return Unauthorized(ApiResponse.CreateFailure(Messages.Auth.InvalidToken));
 			return null;
 		}

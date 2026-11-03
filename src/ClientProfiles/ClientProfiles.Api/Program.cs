@@ -1,7 +1,9 @@
 using ClientProfiles.Application;
 using ClientProfiles.Application.DTOs.Responses;
 using ClientProfiles.Persistence;
-using OpenIddict.Validation.AspNetCore;
+using ClientProfiles.Api.Security;
+using Microsoft.EntityFrameworkCore;
+using Pagarte.Security;
 using System.Text.Json.Serialization;
 
 namespace ClientProfiles.Api;
@@ -31,26 +33,14 @@ public class Program
         MappingConfig.Configure();
 		Console.WriteLine("ClientProfiles.Api startup: mapping configured.");
 
-		// Configure OpenIddict validation
+		// Validate Keycloak access tokens and enforce realm policies.
 		var authAuthority = configuration.GetValue<string>("AuthSettings:Authority")
 			?? throw new InvalidOperationException("AuthSettings:Authority is not configured.");
 		var authAudience = configuration.GetValue<string>("AuthSettings:Audience")
 			?? throw new InvalidOperationException("AuthSettings:Audience is not configured.");
-		Console.WriteLine($"ClientProfiles.Api startup: configuring OpenIddict authority '{authAuthority}' audience '{authAudience}'.");
+		Console.WriteLine($"ClientProfiles.Api startup: configuring Keycloak authority '{authAuthority}' audience '{authAudience}'.");
 
-		builder.Services.AddOpenIddict()
-            .AddValidation(options =>
-            {
-				options.SetIssuer(authAuthority);
-                options.AddAudiences(authAudience);
-                options.UseSystemNetHttp();
-                options.UseAspNetCore();
-			});
-        builder.Services.AddAuthentication(options =>
-        {
-            options.DefaultAuthenticateScheme = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
-            options.DefaultChallengeScheme = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
-        });
+		builder.Services.AddPagarteJwtSecurity(configuration, builder.Environment);
 
 
 		// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -58,6 +48,11 @@ public class Program
 
         Console.WriteLine("ClientProfiles.Api startup: building app.");
         var app = builder.Build();
+		using (var scope = app.Services.CreateScope())
+		{
+			var db = scope.ServiceProvider.GetRequiredService<ClientProfilesDbContext>();
+			db.Database.Migrate();
+		}
 		var logger = app.Services.GetRequiredService<ILogger<Program>>();
 		logger.LogInformation(
 			"Clients API configured with authority {Authority} and audience {Audience}.",
@@ -92,6 +87,7 @@ public class Program
 		});
 		app.UseAuthentication();
 		app.UseAuthorization();
+		app.UseMiddleware<LocalClientIdentityResolutionMiddleware>();
         app.MapControllers();
 		Console.WriteLine("ClientProfiles.Api startup: running app.");
         app.Run();

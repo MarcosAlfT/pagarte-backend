@@ -12,6 +12,7 @@ client data and is separate from the identity service.
 - Addresses.
 - Phone numbers.
 - Primary-contact selection.
+- The unique `(issuer, subject)` to internal `Client.Id` mapping.
 
 ## Does Not Own
 
@@ -23,7 +24,7 @@ client data and is separate from the identity service.
 
 ```text
 ClientProfiles.Api
-  -> HTTP, OpenAPI, and OpenIddict validation
+  -> HTTP, OpenAPI, Keycloak JWT validation, and internal identity resolution
 
 ClientProfiles.Application
   -> use cases, DTOs, repository abstractions, and IUnitOfWork
@@ -38,6 +39,7 @@ ClientProfiles.Persistence
 ## Main Use Cases
 
 - Create and maintain person and organization clients.
+- Resolve a verified external identity to an active internal client GUID.
 - Create, update, delete, and select primary addresses.
 - Create, update, delete, and select primary phone numbers.
 
@@ -58,6 +60,10 @@ ClientProfiles.Persistence
   and one active primary phone per client.
 - Address and phone state changes go through domain methods rather than direct
   property mutation.
+- A database unique index prevents two clients from sharing an external
+  `(issuer, subject)` key. The client primary key enforces the other side of
+  the one-to-one relationship. Soft deletion makes the mapping inactive and
+  does not reassign it.
 
 ## Data Ownership
 
@@ -67,7 +73,13 @@ staging all related changes.
 
 ## Integrations
 
-- Validates access tokens issued by `Identity.Client`.
+- Validates Keycloak access tokens with the `client-profiles-api` audience and
+  requires `VerifiedClient` for profile and contact operations.
+- Exposes a read-only internal resolver that requires a dedicated workload key
+  and returns only the active `Client.Id`.
+- Locally resolves the same mapping before profile reads, updates, deletion,
+  and contact operations. Only person or organization profile creation can
+  proceed before the mapping exists.
 - Uses `Utilities.Responses` for public responses.
 - Uses Aspire service defaults during local development.
 

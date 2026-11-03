@@ -1,4 +1,5 @@
 using Utilities.Responses;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PayableServices.Api.DTOs;
 using PayableServices.Application.Models;
@@ -7,6 +8,7 @@ using PayableServices.Application.UseCases;
 namespace PayableServices.Api.Controllers;
 
 [ApiController]
+[Authorize(Policy = "VerifiedAdmin")]
 [Route("api/payment-routes")]
 public sealed class PaymentRouteController(
 	ActivatePaymentRouteUseCase activatePaymentRouteUseCase) : ControllerBase

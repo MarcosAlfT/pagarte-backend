@@ -72,7 +72,8 @@ contexts.
 
 **Status: Partially resolved.**
 
-The current two test suites contain twelve tests. They cover ISO scale and
+The current three test suites contain 21 tests. They cover security policy and
+resolver failure behavior as well as ISO scale and
 rounding, checked money totals, the successful company-first sequence,
 full-total charging, retry without duplicate company payment,
 definitive-charge rollback, and safe handling of unknown charge outcomes.
@@ -88,9 +89,10 @@ The repository still needs database-backed and transport-level coverage for:
 - Migration execution against a production-like copy after legacy work has been
   drained.
 
-Quote confirmation and execution-status authentication are implemented. The
-first item above remains open because the repository does not yet verify that
-behavior through the public HTTP transport.
+Quote confirmation and execution-status authentication are implemented. A
+local AppHost run verified authenticated HTTP quote creation with a real
+Keycloak token and SQL Server persistence on 2026-10-19. Repeatable automated
+transport coverage for confirmation and status refresh remains open.
 
 ## 5. Execution Package Carries Company Connection Data
 

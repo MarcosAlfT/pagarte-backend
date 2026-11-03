@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using PayableServices.Infrastructure;
 using PayableServices.Persistence;
-using OpenIddict.Validation.AspNetCore;
+using Pagarte.Security;
 using PayableServices.Api.Security;
 using PayableServices.Application.Abstractions;
 
@@ -19,26 +19,8 @@ public static class Program
 		builder.Services.AddHttpContextAccessor();
 		builder.Services.AddScoped<ICurrentActorProvider, HttpCurrentActorProvider>();
 
-		builder.Services.AddOpenIddict()
-			.AddValidation(options =>
-			{
-				var authority = builder.Configuration["AuthSettings:Authority"]
-					?? throw new InvalidOperationException("AuthSettings:Authority is not configured.");
-				var audience = builder.Configuration["AuthSettings:Audience"]
-					?? throw new InvalidOperationException("AuthSettings:Audience is not configured.");
-				options.SetIssuer(authority);
-				options.AddAudiences(audience);
-				options.UseSystemNetHttp();
-				options.UseAspNetCore();
-			});
-		builder.Services.AddAuthentication(options =>
-		{
-			options.DefaultAuthenticateScheme =
-				OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
-			options.DefaultChallengeScheme =
-				OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
-		});
-		builder.Services.AddAuthorization();
+		builder.Services.AddPagarteJwtSecurity(builder.Configuration, builder.Environment);
+		builder.Services.AddClientIdentityResolution(builder.Configuration, builder.Environment);
 
 		var app = builder.Build();
 
@@ -55,8 +37,10 @@ public static class Program
 		}
 
 		app.UseHttpsRedirection();
+		app.UseRouting();
 		app.UseAuthentication();
 		app.UseAuthorization();
+		app.UseClientIdentityResolution();
 		app.MapControllers();
 		app.Run();
 	}

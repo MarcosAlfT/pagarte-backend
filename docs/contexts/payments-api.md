@@ -26,7 +26,8 @@
 ```text
 Client
   -> Payments.Api HTTP
-  -> OpenIddict token validation
+  -> Keycloak JWT validation and VerifiedClient policy
+  -> protected ClientProfiles identity resolution
   -> PaymentSwitch.Processor gRPC
 ```
 
@@ -48,7 +49,10 @@ gRPC client operation, and map the result to `Utilities.Responses`.
 
 ## Integrations
 
-- Validates `payments-api` access tokens issued by `Identity.Client`.
+- Validates Keycloak `payments-api` access tokens. Before each card operation,
+  resolves `(iss, sub)` to the internal client GUID and passes that GUID to
+  Processor. Missing mappings return `403 PROFILE_REQUIRED`; resolver failure
+  returns 503 without a Processor call.
 - Uses `PaymentSwitch.Contracts` for gRPC calls.
 - Uses `Utilities.Responses` for public responses.
 
