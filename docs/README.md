@@ -32,6 +32,9 @@ is explicitly marked as proposed.
 
 ## Requirements and Acceptance
 
+- [Payment Methods](requirements/payment-methods.md) - draft stored-card lifecycle,
+  dLocal mobile tokenization, replaceable operator adapters, defaults, and removal;
+  real-provider and client integration decisions remain open.
 - [Keycloak Security Migration](requirements/keycloak-security-migration.md) -
   implementation status and acceptance criteria for the identity cutover
   onboarding while preserving Pagarte domain ownership.
