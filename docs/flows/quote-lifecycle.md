@@ -9,17 +9,30 @@ one payable service and one payment attempt.
 
 ```text
 Authenticated client
-  -> POST /api/quotes
+  -> read public catalogue details and required references
+  -> POST /api/inquiries with references + client-scoped Idempotency-Key
+  -> resolve internal Client.Id and validate references locally
+  -> durably reserve inquiry/provider key; return pending for concurrent duplicates
+  -> ExternalConnections calls the mock company over HTTP outside a transaction
+  -> persist normalized outcome and verified evidence; lease recovery reuses provider key
+  -> POST /api/quotes with InquiryId
   -> resolve `(iss, sub)` through ClientProfiles to internal Client.Id
   -> load active payable service, country, route, amount composition,
      and reference-field definitions
-  -> validate supplied reference values
+  -> require owned, unexpired AmountDue evidence compatible with the service/route/currency
+  -> derive references and ServiceAmount from persisted inquiry
+  -> replace configured base components exactly once
   -> finalize each amount component with ISO scale and ToEven rounding
   -> checked-sum the full positive total
-  -> persist immutable quote execution snapshot in PayableServicesDb
+  -> atomically consume inquiry and persist one immutable quote in PayableServicesDb
+  -> cap quote expiry at the effective inquiry expiry
 ```
 
-The snapshot includes the service and route IDs, external service code, company
+Legacy services without `RequiresInquiry` retain configured-amount quoting.
+Inquiry-backed services reject direct quoting or supplied currency/reference
+overrides. Zero balances and failure outcomes cannot create quotes.
+
+The snapshot includes the source inquiry, service and route IDs, external service code, company
 operation endpoints, server-side credential reference, reference values,
 amount components, total minor units, currency scale, rounding rule, and
 expiry. It contains no API key or payment-operator card token.
@@ -66,6 +79,14 @@ unresolved.
 
 ## Idempotency
 
+- Inquiry keys are unique per internal client ID for the record's lifetime.
+- An identical key/input replays stored success, failure, expiry, or pending state
+  without another provider call. Changed input conflicts; a new attempt requires
+  a new key. Recovery reuses the separately stored provider key after lease expiry.
+- One inquiry creates at most one quote. SQL locks, a unique `InquiryId` index,
+  and one application-owned transaction protect concurrent consumption.
+- Identical quote retries return the existing quote. Closed/expired attempts
+  require a new inquiry to create a replacement.
 - Processor creates at most one payment per `SourceQuoteId`.
 - A deterministic fingerprint covers the immutable package and selected card.
 - Identical repeats return the current payment with `replayed = true`.
@@ -96,10 +117,9 @@ unresolved.
 
 ## Related Documentation
 
-- [Proposed catalogue and amount inquiry](../requirements/mock-amount-inquiry.md)
-  defines the future persisted-inquiry source for quote amount and currency,
-  single-quote consumption, and inquiry-limited expiry. The creation flow above
-  remains the current implementation until linked `QUOTE-08` is delivered.
+- [Catalogue and amount inquiry](../requirements/mock-amount-inquiry.md)
+  defines the implemented persisted-inquiry source and linked `QUOTE-08`.
+- [Acceptance tests](../../tests/PayableServices.Tests/README.md)
 - [Payment Lifecycle](payment-lifecycle.md)
 - [Quote Execution Saga](../decisions/0003-quote-execution-saga.md)
 - [Global Money Handling](../decisions/0004-money-handling.md)

@@ -4,7 +4,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Accepted requirement; not implemented |
+| Status | Implemented; HTTP/SQL automated acceptance verified |
 | Accepted | 2026-11-02 |
 | Priority | Critical non-security feature |
 | Transactions | `CAT-01` through `CAT-05`, `INQ-01`, and `INQ-02` |
@@ -12,10 +12,17 @@
 | Owners | `PayableServices` and `ExternalConnections` |
 | Initial environment | Local development and automated tests |
 
-This document defines proposed behavior. The current catalogue and quote flow
-remain documented in [PayableServices](../contexts/payable-services.md) and
-[Quote Lifecycle](../flows/quote-lifecycle.md) until the code implements this
-requirement.
+This document records the accepted behavior now implemented in
+[PayableServices](../contexts/payable-services.md), [Mock Company](../contexts/mock-company.md),
+and [Quote Lifecycle](../flows/quote-lifecycle.md). The
+[acceptance suite](../../tests/PayableServices.Tests/README.md) verifies the public
+HTTP flow and SQL persistence. AppHost build and manifest wiring were verified;
+a fresh full Aspire/Keycloak smoke run remains an environment check requiring Docker.
+
+The implementation preserves legacy configured-amount quoting for services that
+do not require inquiry. New mock imports require inquiry and explicit route approval.
+Imported services have no automatic Pagarte fees; existing configured components
+are preserved and tested during quote creation.
 
 ## Objective
 

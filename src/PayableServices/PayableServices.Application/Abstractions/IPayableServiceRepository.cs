@@ -5,8 +5,10 @@ namespace PayableServices.Application.Abstractions;
 
 public interface IPayableServiceRepository
 {
-	Task<PayableService?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
-	Task<IReadOnlyCollection<CatalogueItemDto>> GetCatalogueAsync(
-		string? category = null,
-		CancellationToken cancellationToken = default);
+    Task<PayableService?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<CatalogueItemDto>> GetCatalogueAsync(
+        string? category = null,
+        CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<CatalogueItemDto>> SearchAsync(CatalogueQuery query, CancellationToken cancellationToken);
+    Task<ServiceDetailsDto?> GetDetailsAsync(Guid id, CancellationToken cancellationToken);
 }
