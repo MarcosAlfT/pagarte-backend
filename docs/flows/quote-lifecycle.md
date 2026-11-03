@@ -96,6 +96,10 @@ unresolved.
 
 ## Related Documentation
 
+- [Proposed catalogue and amount inquiry](../requirements/mock-amount-inquiry.md)
+  defines the future persisted-inquiry source for quote amount and currency,
+  single-quote consumption, and inquiry-limited expiry. The creation flow above
+  remains the current implementation until linked `QUOTE-08` is delivered.
 - [Payment Lifecycle](payment-lifecycle.md)
 - [Quote Execution Saga](../decisions/0003-quote-execution-saga.md)
 - [Global Money Handling](../decisions/0004-money-handling.md)

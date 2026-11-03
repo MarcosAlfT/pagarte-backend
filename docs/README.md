@@ -8,6 +8,8 @@ is explicitly marked as proposed.
 
 - [Architecture](architecture.md) - system map, runtime boundaries, data
   ownership, and integration styles.
+- [Payment Application Transactions](transactions.md) - ordered inventory of
+  complete, partial, missing, and blocked client and operational transactions.
 - [Current Problems](current-problems.md) - unresolved duplication and
   integration problems found in the current code.
 
@@ -32,6 +34,9 @@ is explicitly marked as proposed.
 - [Keycloak Security Migration](requirements/keycloak-security-migration.md) -
   implementation status and acceptance criteria for the identity cutover
   onboarding while preserving Pagarte domain ownership.
+- [Service Catalogue and Amount Inquiry with a Mock Company](requirements/mock-amount-inquiry.md) -
+  proposed catalogue search, details, mock feed synchronization, route checks,
+  persisted USD inquiries, and linked inquiry-backed quote creation.
 
 ## Decisions
 

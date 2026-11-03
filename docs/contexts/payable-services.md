@@ -111,6 +111,11 @@ Processor receives and stores a payment execution snapshot, not another quote.
 
 ## Change Guidance
 
+The proposed [catalogue and amount-inquiry requirement](../requirements/mock-amount-inquiry.md)
+covers search, service details, mock catalogue synchronization, route checks,
+and persisted customer balances. It preserves PayableServices ownership and
+links inquiry results to quotes. These additions are not implemented yet.
+
 Read [Quote Lifecycle](../flows/quote-lifecycle.md),
 [Payment Lifecycle](../flows/payment-lifecycle.md),
 [ADR 0003](../decisions/0003-quote-execution-saga.md), and
