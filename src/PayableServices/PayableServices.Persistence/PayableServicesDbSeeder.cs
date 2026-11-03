@@ -125,7 +125,8 @@ public static class PayableServicesDbSeeder
 			DisplayOrder = 1
 		});
 
-		await dbContext.AddRangeAsync(
+		await dbContext.AddRangeAsync(new object[]
+		{
 			country,
 			category,
 			subcategory,
@@ -133,8 +134,8 @@ public static class PayableServicesDbSeeder
 			service,
 			route,
 			referenceField,
-			composition,
-			cancellationToken);
+			composition
+		}, cancellationToken);
 
 		await dbContext.SaveChangesAsync(cancellationToken);
 	}

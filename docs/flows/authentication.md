@@ -2,30 +2,38 @@
 
 ## Purpose
 
-This flow describes client-token and internal-workload authentication for quote
-execution.
+This flow describes Keycloak user access and internal-workload authentication
+for quote execution.
 
 ## Client Access
 
+No browser or native client application exists yet. The flow below is the
+contract for future clients; the versioned public registrations were checked
+with a synthetic Authorization Code + PKCE login.
+
 ```text
-Client
-  -> Identity.Client.Api
-      -> registration, email confirmation, or login
-      -> OpenIddict access token
+Client application
+  -> Keycloak Authorization Code + PKCE
+      -> registration, email verification, recovery, and session management
+      -> signed access token with requested API audience
 
 Client with access token
   -> ClientProfiles.Api requires client-profiles-api audience
   -> Payments.Api requires payments-api audience
   -> PayableServices.Api quote endpoints require payable-services-api audience
+  -> protected endpoints require verified email and the named realm role
 ```
 
-Quote controllers derive `ClientId` from the validated `sub` claim. Quote
-request bodies cannot select or override ownership.
+ClientProfiles creates its profile and `(iss, sub)` mapping atomically. Payments
+and PayableServices send the validated issuer and subject to the protected
+ClientProfiles resolver and receive the internal `Client.Id`. Their card and
+quote operations use that GUID. Request bodies cannot select ownership.
 
 ## Workload Access
 
 ```text
 authenticated client
+  -> Payments or PayableServices resolves Client.Id with a scoped workload key
   -> PayableServices loads the client's persisted quote
   -> PayableServices sends x-workload-api-key over gRPC
   -> PaymentSwitch.Processor validates the workload credential
@@ -42,16 +50,16 @@ rejected.
 
 ## Ownership
 
-- `Identity.Client` owns users, credentials, refresh tokens, audiences, and
-  token policy.
+- Keycloak owns users, credentials, refresh tokens, audiences, and token policy.
+- ClientProfiles owns the external-identity to Pagarte-client mapping.
 - Each public API owns validation of its required audience.
 - Processor owns workload authentication at `PaymentExecutionService`.
 - Application and Domain projects do not depend on ASP.NET `HttpContext`.
 
 ## Change Rules
 
-- Add a new audience in Identity and the consuming API together.
+- Add a new audience in the Keycloak realm configuration and consuming API together.
 - Rotate workload and company credentials through deployment configuration.
 - Do not place signing keys, API keys, passwords, card tokens, refresh tokens,
   or connection strings in source control or RabbitMQ messages.
-- Keep token issuance in Identity.
+- Keep token issuance in Keycloak.

@@ -10,13 +10,12 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="OpenIddict.Validation.AspNetCore" Version="7.5.0" />
-    <PackageReference Include="OpenIddict.Validation.SystemNetHttp" Version="7.5.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\PayableServices.Application\PayableServices.Application.csproj" />
     <ProjectReference Include="..\PayableServices.Infrastructure\PayableServices.Infrastructure.csproj" />
     <ProjectReference Include="..\PayableServices.Persistence\PayableServices.Persistence.csproj" />
     <ProjectReference Include="..\..\Utilities\Utilities.Responses\Utilities.Responses.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\Pagarte.Security\Pagarte.Security.csproj" />
   </ItemGroup>
 </Project>

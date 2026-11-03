@@ -9,7 +9,8 @@ namespace ClientProfiles.Application
 	{
 		public static IServiceCollection AddClientProfilesApplication(this IServiceCollection services)
 		{
-			services.AddScoped<GetClientByUserIdUseCase>();
+			services.AddScoped<GetClientByExternalIdentityUseCase>();
+			services.AddScoped<ResolveClientIdUseCase>();
 			services.AddScoped<GetClientsUseCase>();
 			services.AddScoped<CreatePersonClientUseCase>();
 			services.AddScoped<CreateOrganizationClientUseCase>();

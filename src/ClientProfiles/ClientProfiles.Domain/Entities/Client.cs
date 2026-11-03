@@ -3,7 +3,10 @@ namespace ClientProfiles.Domain.Entities
 	public class Client
 	{
 		public Guid Id { get; private set; }
-		public string UserId { get; private set; } = string.Empty; // from Identity.Client
+		// UserId is retained only for pre-migration records. It is never used for authorization.
+		public string UserId { get; private set; } = string.Empty;
+		public string? Issuer { get; private set; }
+		public string? Subject { get; private set; }
 		public ClientType Type { get; private set; }
 		public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
 		public bool IsDeleted { get; private set; } = false;
@@ -19,12 +22,15 @@ namespace ClientProfiles.Domain.Entities
 		{
 		}
 
-		public static Client CreateClient(string userId, ClientType type)
+		public static Client CreateClient(string issuer, string subject, ClientType type)
 		{
+			if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(subject))
+				throw new ArgumentException("Issuer and subject are required.");
 			return new Client
 			{
 				Id = Guid.NewGuid(),
-				UserId = userId,
+				Issuer = issuer,
+				Subject = subject,
 				Type = type,
 				CreatedAt = DateTime.UtcNow
 			};

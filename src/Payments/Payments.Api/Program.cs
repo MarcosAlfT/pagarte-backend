@@ -1,4 +1,4 @@
-using OpenIddict.Validation.AspNetCore;
+using Pagarte.Security;
 using PaymentSwitch.Contracts;
 using Payments.Api.GrpcClients;
 
@@ -30,30 +30,8 @@ namespace Payments.Api
 				.ConfigurePrimaryHttpMessageHandler(() => CreateGrpcHttpHandler(allowUntrustedWorkerCertificate));
 			builder.Services.AddScoped<CreditCardGrpcClient>();
 
-			// OpenIddict validation
-			builder.Services.AddOpenIddict()
-                .AddValidation(options =>
-                {
-                    var strAuthority = configuration.GetValue<string>("AuthSettings:Authority")
-                        ?? throw new InvalidOperationException("AuthSettings:Authority is not configured.");
-                    var strAudience = configuration.GetValue<string>("AuthSettings:Audience")
-                        ?? throw new InvalidOperationException("AuthSettings:Audience is not configured.");
-
-                    options.SetIssuer(strAuthority);
-                    options.AddAudiences(strAudience);
-                    options.UseSystemNetHttp();
-                    options.UseAspNetCore();
-                });
-
-
-			builder.Services.AddAuthentication(options =>
-            {
-                options.DefaultAuthenticateScheme = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
-                options.DefaultChallengeScheme = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
-            });
-
-
-			builder.Services.AddAuthorization();
+			builder.Services.AddPagarteJwtSecurity(configuration, builder.Environment);
+			builder.Services.AddClientIdentityResolution(configuration, builder.Environment);
             builder.Services.AddOpenApi();
 
             var app = builder.Build();
@@ -64,8 +42,10 @@ namespace Payments.Api
             }
 
             app.UseHttpsRedirection();
+			app.UseRouting();
             app.UseAuthentication();
             app.UseAuthorization();
+			app.UseClientIdentityResolution();
             app.MapControllers();
 
 			app.Run();

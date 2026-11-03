@@ -30,14 +30,20 @@ namespace ClientProfiles.Persistence.Repositories
 		{
 			await _context.Clients.AddAsync(client, cancellationToken);
 		}
-		public async Task<Client?> GetByUserIdAsync(string userId, CancellationToken cancellationToken)
+		public async Task<Client?> GetByExternalIdentityAsync(string issuer, string subject, CancellationToken cancellationToken)
 		{
 			return await _context.Clients
 			.Include(c => c.Person)
 			.Include(c => c.Organization)
 			.Include(c => c.Addresses)
 			.Include(c => c.Phones)
-			.FirstOrDefaultAsync(c => c.UserId == userId, cancellationToken);
+			.FirstOrDefaultAsync(c => c.Issuer == issuer && c.Subject == subject, cancellationToken);
 		}
+
+		public Task<Guid?> GetClientIdByExternalIdentityAsync(string issuer, string subject, CancellationToken cancellationToken) =>
+			_context.Clients.AsNoTracking()
+				.Where(c => c.Issuer == issuer && c.Subject == subject)
+				.Select(c => (Guid?)c.Id)
+				.FirstOrDefaultAsync(cancellationToken);
 	}
 }

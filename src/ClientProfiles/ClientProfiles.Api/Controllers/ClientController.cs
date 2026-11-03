@@ -1,5 +1,6 @@
 using ClientProfiles.Application.DTOs;
 using ClientProfiles.Application.UseCases.Clients;
+using ClientProfiles.Api.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Utilities.Responses;
@@ -7,10 +8,10 @@ using Utilities.Responses;
 namespace ClientProfiles.Api.Controllers
 {
 	[ApiController]
-	[Authorize]
+	[Authorize(Policy = "VerifiedClient")]
 	[Route("api/client")]
 	public class ClientController(
-		GetClientByUserIdUseCase getClientByUserId,
+		GetClientByExternalIdentityUseCase getClientByExternalIdentity,
 		CreatePersonClientUseCase createPersonClient,
 		CreateOrganizationClientUseCase createOrganizationClient,
 		UpdatePersonClientUseCase updatePersonClient,
@@ -21,21 +22,22 @@ namespace ClientProfiles.Api.Controllers
 		public async Task<IActionResult> GetAsync(CancellationToken cancellationToken)
 		{
 			// Validate user ID return null if valid, otherwise return an IActionResult with the error response
-			var validation = ValidateUserId();
+			var validation = ValidateExternalIdentity();
 			if (validation != null) return validation;
 
-			var response = await getClientByUserId.ExecuteAsync(GetUserId()!, cancellationToken);
+			var response = await getClientByExternalIdentity.ExecuteAsync(GetIssuer()!, GetSubject()!, cancellationToken);
 			return Ok(response);
 		}
 
 		[HttpPost("person")]
+		[AllowProfileCreation]
 		public async Task<IActionResult> CreatePersonAsync([FromBody] CreatePersonRequest request, CancellationToken cancellationToken)
 		{
 			// Validate user ID return null if valid, otherwise return an IActionResult with the error response
-			var validation = ValidateUserId();
+			var validation = ValidateExternalIdentity();
 			if (validation != null) return validation;
 
-			var response = await createPersonClient.ExecuteAsync(GetUserId()!, request, cancellationToken);
+			var response = await createPersonClient.ExecuteAsync(GetIssuer()!, GetSubject()!, request, cancellationToken);
 			return Ok(response);
 		}
 
@@ -44,10 +46,10 @@ namespace ClientProfiles.Api.Controllers
 		public async Task<IActionResult> UpdatePersonAsync([FromBody] UpdatePersonRequest request, CancellationToken cancellationToken)
 		{
 			// Validate user ID return null if valid, otherwise return an IActionResult with the error response
-			var validation = ValidateUserId();
+			var validation = ValidateExternalIdentity();
 			if (validation != null) return validation;
 
-			var clientResponse = await getClientByUserId.ExecuteAsync(GetUserId()!, cancellationToken);
+			var clientResponse = await getClientByExternalIdentity.ExecuteAsync(GetIssuer()!, GetSubject()!, cancellationToken);
 			if (!clientResponse.Success)
 				return Ok(clientResponse);
 
@@ -56,13 +58,14 @@ namespace ClientProfiles.Api.Controllers
 		}
 
 		[HttpPost("organization")]
+		[AllowProfileCreation]
 		public async Task<IActionResult> CreateOrganizationAsync([FromBody] CreateOrganizationRequest request, CancellationToken cancellationToken)
 		{
 			// Validate user ID return null if valid, otherwise return an IActionResult with the error response
-			var validation = ValidateUserId();
+			var validation = ValidateExternalIdentity();
 			if (validation != null) return validation;
 
-			var response = await createOrganizationClient.ExecuteAsync(GetUserId()!, request, cancellationToken);
+			var response = await createOrganizationClient.ExecuteAsync(GetIssuer()!, GetSubject()!, request, cancellationToken);
 			return Ok(response);
 		}
 
@@ -71,10 +74,10 @@ namespace ClientProfiles.Api.Controllers
 		public async Task<IActionResult> UpdateOrganizationAsync([FromBody] UpdateOrganizationRequest request, CancellationToken cancellationToken)
 		{
 			// Validate user ID return null if valid, otherwise return an IActionResult with the error response
-			var validation = ValidateUserId();
+			var validation = ValidateExternalIdentity();
 			if (validation != null) return validation;
 
-			var clientResponse = await getClientByUserId.ExecuteAsync(GetUserId()!, cancellationToken);
+			var clientResponse = await getClientByExternalIdentity.ExecuteAsync(GetIssuer()!, GetSubject()!, cancellationToken);
 			if (!clientResponse.Success)
 				return Ok(clientResponse);
 
@@ -86,10 +89,10 @@ namespace ClientProfiles.Api.Controllers
 		public async Task<IActionResult> DeleteAsync(CancellationToken cancellationToken)
 		{
 			// Validate user ID return null if valid, otherwise return an IActionResult with the error response
-			var validation = ValidateUserId();
+			var validation = ValidateExternalIdentity();
 			if (validation != null) return validation;
 
-			var clientResponse = await getClientByUserId.ExecuteAsync(GetUserId()!, cancellationToken);
+			var clientResponse = await getClientByExternalIdentity.ExecuteAsync(GetIssuer()!, GetSubject()!, cancellationToken);
 			if (!clientResponse.Success)
 				return Ok(clientResponse);
 

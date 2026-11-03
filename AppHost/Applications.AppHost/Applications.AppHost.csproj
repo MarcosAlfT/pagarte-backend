@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.AppHost" Version="13.2.2" />
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.2.2" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.7" />
   </ItemGroup>
 
@@ -20,8 +21,11 @@
     <ProjectReference Include="..\..\src\PaymentSwitch\PaymentSwitch.Worker\PaymentSwitch.Worker.csproj" />
     <ProjectReference Include="..\..\src\PaymentSwitch\PaymentSwitch.Processor\PaymentSwitch.Processor.csproj" />
     <ProjectReference Include="..\..\src\ClientProfiles\ClientProfiles.Api\ClientProfiles.Api.csproj" />
-    <ProjectReference Include="..\..\src\Identity\Identity.Client\Identity.Client.Api\Identity.Client.Api.csproj" />
     <ProjectReference Include="..\..\src\PayableServices\PayableServices.Api\PayableServices.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\infra\keycloak\pagarte-realm.json" Link="keycloak-realm\pagarte-realm.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

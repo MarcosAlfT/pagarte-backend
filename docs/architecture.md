@@ -5,21 +5,23 @@ This document maps the current implementation and runtime ownership.
 ## Runtime Map
 
 ```text
-Identity.Client.Api
-  -> issues OpenIddict access tokens
-  -> owns IdentityClientDb
+Keycloak (local Aspire container; PostgreSQL)
+  -> issues user access tokens for the pagarte realm
+  -> owns credentials, sessions, and signing keys
 
 ClientProfiles.Api
-  -> validates client access tokens
+  -> validates Keycloak access tokens and maps (issuer, subject) to Client.Id
   -> owns ClientProfilesDb
 
 Payments.Api
   -> validates client access tokens
+  -> resolves the internal Client.Id through ClientProfiles
   -> exposes public stored-card HTTP endpoints
   -> calls PaymentSwitch.Processor over gRPC
 
 PayableServices.Api
   -> validates client access tokens for quote operations
+  -> resolves the internal Client.Id through ClientProfiles
   -> owns PayableServicesDb, catalogue, routes, and customer-visible quotes
   -> sends authenticated immutable execution packages to Processor
 
@@ -77,7 +79,8 @@ and company rollback. See [Quote Lifecycle](flows/quote-lifecycle.md) and
 
 | Capability | Owner |
 | --- | --- |
-| Client identities and tokens | `Identity.Client` |
+| Client identities and tokens | Keycloak |
+| External identity to Pagarte client mapping | `ClientProfiles` |
 | Client profile data | `ClientProfiles` |
 | Public stored-card HTTP surface | `Payments.Api` |
 | Rich catalogue, routes, and quotes | `PayableServices` |
@@ -92,7 +95,9 @@ implementation, but it no longer owns payment quotes.
 ## Integration Style
 
 - HTTP is used for client-facing APIs and third-party adapters.
-- OpenIddict secures public APIs.
+- ASP.NET Core JWT bearer validation and named policies secure public APIs.
+- Payments and PayableServices resolve `(iss, sub)` over a protected internal
+  ClientProfiles HTTP endpoint before client-owned operations.
 - A workload API key secures the internal quote-execution gRPC boundary.
 - gRPC connects public services to Processor.
 - SQL Server stores context-owned state.
@@ -107,8 +112,8 @@ implementation, but it no longer owns payment quotes.
 
 | Database | Writers | Main data |
 | --- | --- | --- |
-| `IdentityClientDb` | `Identity.Client` | Users and identity tokens |
-| `ClientProfilesDb` | `ClientProfiles` | Clients and contact information |
+| Keycloak PostgreSQL | Keycloak | Users, sessions, realm configuration, and keys |
+| `ClientProfilesDb` | `ClientProfiles` | Clients, external identity mapping, and contact information |
 | `PayableServicesDb` | `PayableServices` | Catalogue, routes, mappings, quote snapshots and status |
 | `PaymentDb` | Processor; Worker for refund fields | Cards, payment execution snapshots, retry state, operators, retained service catalogue, outbox |
 
@@ -122,12 +127,19 @@ implementation, but it no longer owns payment quotes.
   transaction status, and clock abstractions.
 - `Infrastructure.RabbitMQ` provides connection and publishing infrastructure.
 - `Applications.ServiceDefaults` provides common Aspire service defaults.
+- `Pagarte.Security` provides JWT policies and internal client-ID resolution.
 
 ## Deployment and Local Orchestration
 
-The Aspire AppHost starts Identity, ClientProfiles, Payments, PayableServices,
-Processor, and Worker. It supplies the two databases used by quote execution,
-the workload credential, and the company credential through secret parameters.
+The Aspire AppHost starts Keycloak with a dedicated PostgreSQL volume, then
+ClientProfiles, Payments, PayableServices, Processor, and Worker. It supplies
+the database connections and workload credentials through parameters. The
+local realm import bootstraps a fresh realm; it does not reconcile an existing
+realm. AppHost startup, realm import, and API calls with real Keycloak tokens
+were verified locally on 2026-10-19. The retired Identity.Client source remains
+in the repository until release acceptance and the data inventory are verified.
+The requester confirmed that no browser or native client applications exist
+yet.
 
 The Processor saga migration requires legacy active payments and pending
 `payment.request` messages to be drained before deployment.

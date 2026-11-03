@@ -14,15 +14,15 @@ namespace ClientProfiles.Application.UseCases.Clients
 		IOrganizationRepository organizationRepository,
 		IUnitOfWork unitOfWork)
 	{
-		public async Task<ApiResponse<OrganizationResponse>> ExecuteAsync(string userId, CreateOrganizationRequest request, CancellationToken cancellationToken)
+		public async Task<ApiResponse<OrganizationResponse>> ExecuteAsync(string issuer, string subject, CreateOrganizationRequest request, CancellationToken cancellationToken)
 		{
 			try
 			{
-				var existing = await clientRepository.GetByUserIdAsync(userId, cancellationToken);
+				var existing = await clientRepository.GetByExternalIdentityAsync(issuer, subject, cancellationToken);
 				if (existing != null)
 					return ApiResponse<OrganizationResponse>.CreateFailure(Messages.Client.AlreadyExists);
 
-				var client = Client.CreateClient(userId, ClientType.Organization);
+				var client = Client.CreateClient(issuer, subject, ClientType.Organization);
 				await clientRepository.AddAsync(client, cancellationToken);
 
 				var organization = Organization.CreateOrganization(client.Id, request.Name, request.Industry, request.IdentificationNumber);
@@ -31,9 +31,9 @@ namespace ClientProfiles.Application.UseCases.Clients
 
 				return ApiResponse<OrganizationResponse>.CreateSuccess(organization.Adapt<OrganizationResponse>(), Messages.Client.Created);
 			}
-			catch (Exception ex)
+			catch (Exception)
 			{
-				return ApiResponse<OrganizationResponse>.CreateFailure($"An error occurred: {ex.Message}");
+				return ApiResponse<OrganizationResponse>.CreateFailure("Client profile could not be created.");
 			}
 		}
 	}

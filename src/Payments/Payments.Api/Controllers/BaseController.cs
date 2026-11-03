@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using OpenIddict.Abstractions;
+using Pagarte.Security;
 using Utilities.Responses;
 
 namespace Payments.Api.Controllers
@@ -8,7 +8,7 @@ namespace Payments.Api.Controllers
     {
         protected string? GetClientId()
         {
-            return User.FindFirst(OpenIddictConstants.Claims.Subject)?.Value;
+            return User.FindFirst(KeycloakSecurity.ClientIdClaim)?.Value;
         }
 
         protected IActionResult? ValidateClientId()

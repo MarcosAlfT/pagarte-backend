@@ -1,0 +1,175 @@
+{
+  "realm": "pagarte",
+  "enabled": true,
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "verifyEmail": true,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "eventsEnabled": true,
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": false,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 60,
+  "maxFailureWaitSeconds": 900,
+  "accessTokenLifespan": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "defaultRole": {
+    "name": "default-roles-pagarte",
+    "composite": true
+  },
+  "roles": {
+    "realm": [
+      { "name": "client" },
+      { "name": "support" },
+      { "name": "admin" },
+      {
+        "name": "default-roles-pagarte",
+        "composite": true,
+        "composites": {
+          "realm": ["client"]
+        }
+      }
+    ]
+  },
+  "clientScopes": [
+    {
+      "name": "basic",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "false", "display.on.consent.screen": "false" },
+      "protocolMappers": [{
+        "name": "sub",
+        "protocol": "openid-connect",
+        "protocolMapper": "oidc-sub-mapper",
+        "config": { "access.token.claim": "true", "introspection.token.claim": "true" }
+      }]
+    },
+    {
+      "name": "profile",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" }
+    },
+    {
+      "name": "email",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" },
+      "protocolMappers": [{
+        "name": "email verified",
+        "protocol": "openid-connect",
+        "protocolMapper": "oidc-usermodel-property-mapper",
+        "config": {
+          "user.attribute": "emailVerified",
+          "claim.name": "email_verified",
+          "jsonType.label": "boolean",
+          "access.token.claim": "true",
+          "id.token.claim": "true",
+          "userinfo.token.claim": "true"
+        }
+      }]
+    },
+    {
+      "name": "roles",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "false", "display.on.consent.screen": "false" },
+      "protocolMappers": [{
+        "name": "realm roles",
+        "protocol": "openid-connect",
+        "protocolMapper": "oidc-usermodel-realm-role-mapper",
+        "config": {
+          "claim.name": "realm_access.roles",
+          "jsonType.label": "String",
+          "multivalued": "true",
+          "access.token.claim": "true",
+          "introspection.token.claim": "true"
+        }
+      }]
+    },
+    {
+      "name": "web-origins",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "false", "display.on.consent.screen": "false" },
+      "protocolMappers": [{
+        "name": "allowed web origins",
+        "protocol": "openid-connect",
+        "protocolMapper": "oidc-allowed-origins-mapper",
+        "config": { "access.token.claim": "true" }
+      }]
+    },
+    {
+      "name": "client-profiles-api",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" },
+      "protocolMappers": [{
+        "name": "client-profiles-api-audience",
+        "protocol": "openid-connect",
+        "protocolMapper": "oidc-audience-mapper",
+        "config": { "included.custom.audience": "client-profiles-api", "access.token.claim": "true", "id.token.claim": "false" }
+      }]
+    },
+    {
+      "name": "payments-api",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" },
+      "protocolMappers": [{
+        "name": "payments-api-audience",
+        "protocol": "openid-connect",
+        "protocolMapper": "oidc-audience-mapper",
+        "config": { "included.custom.audience": "payments-api", "access.token.claim": "true", "id.token.claim": "false" }
+      }]
+    },
+    {
+      "name": "payable-services-api",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" },
+      "protocolMappers": [{
+        "name": "payable-services-api-audience",
+        "protocol": "openid-connect",
+        "protocolMapper": "oidc-audience-mapper",
+        "config": { "included.custom.audience": "payable-services-api", "access.token.claim": "true", "id.token.claim": "false" }
+      }]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "pagarte-browser",
+      "name": "Pagarte local browser",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:3000/auth/callback"],
+      "webOrigins": ["http://localhost:3000"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3000/"
+      },
+      "defaultClientScopes": ["basic", "profile", "email", "roles", "web-origins"],
+      "optionalClientScopes": ["client-profiles-api", "payments-api", "payable-services-api"]
+    },
+    {
+      "clientId": "pagarte-native",
+      "name": "Pagarte local native",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://127.0.0.1:3001/auth/callback"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://127.0.0.1:3001/"
+      },
+      "defaultClientScopes": ["basic", "profile", "email", "roles"],
+      "optionalClientScopes": ["client-profiles-api", "payments-api", "payable-services-api"]
+    }
+  ]
+}

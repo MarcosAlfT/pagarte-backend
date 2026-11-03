@@ -36,7 +36,7 @@ authenticated client
 
 ```text
 Create quote
-  -> derive ClientId from access-token subject
+  -> resolve validated token `(iss, sub)` through ClientProfiles
   -> validate service, route, references, currency, and amount components
   -> persist immutable one-service Quote snapshot
   -> Quote = Unpaid
@@ -75,7 +75,11 @@ the user.
 
 ## Domain Rules
 
-- Public quote operations derive `ClientId` from the authenticated `sub` claim.
+- Public quote operations require `VerifiedClient` and receive the internal
+  `Client.Id` from the protected ClientProfiles resolver. A missing mapping
+  returns `403 PROFILE_REQUIRED`; resolver failure returns 503 before any
+  Processor call.
+- Catalogue sync and payment-route activation require `VerifiedAdmin`.
 - A service must be active and allow quoting and payment.
 - One quote represents one payable service and one payment attempt.
 - A quote can contain multiple finalized amount components, but its full total

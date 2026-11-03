@@ -9,7 +9,7 @@ using Utilities.Responses;
 namespace PayableServices.Api.Controllers;
 
 [ApiController]
-[Authorize]
+[Authorize(Policy = "VerifiedClient")]
 [Route("api/quotes")]
 public sealed class QuoteController(
 	CreateQuoteUseCase createQuoteUseCase,
