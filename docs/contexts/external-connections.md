@@ -83,6 +83,17 @@ The mock adapter is disabled by default and rejected outside Development.
 
 ## Change Guidance
 
+The draft [Payment Methods requirement](../requirements/payment-methods.md)
+proposes payment-operator setup/token verification, challenge/status callbacks,
+and optional detachment adapters. Its development operator mock is separate
+from the company catalogue/balance mock; provider capabilities remain unverified.
+Tokenization is selected to run from the mobile app directly with dLocal.
+Pagarte's adapters will handle token-based card saving, verification, and
+payment APIs; challenge handling depends on dLocal's supported mechanism.
+`PM-009` requires replaceable provider adapters with normalized capabilities
+and results. Provider payloads, signing, and callback parsing remain here;
+application rules and public card contracts must not depend on dLocal shapes.
+
 The implemented [catalogue and amount-inquiry requirement](../requirements/mock-amount-inquiry.md)
 uses [Mock Company](mock-company.md) as the external substitute. Application
 workflows, persistence, idempotency, and quote consumption remain in PayableServices.
