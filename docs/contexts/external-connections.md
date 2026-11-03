@@ -72,6 +72,11 @@ currently syncs from Processor's retained internal catalogue.
 
 ## Change Guidance
 
+The proposed [catalogue and amount-inquiry requirement](../requirements/mock-amount-inquiry.md)
+adds mock company catalogue and balance HTTP adapters. The mock substitutes
+for external companies; application workflows and persistence remain in
+PayableServices. These adapters are not implemented yet.
+
 Keep provider contracts here and expose stable internal outcomes. Read
 [ADR 0003](../decisions/0003-quote-execution-saga.md) and
 [ADR 0004](../decisions/0004-money-handling.md) before changing monetary or
