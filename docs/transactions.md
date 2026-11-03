@@ -104,29 +104,15 @@ provider inquiry. Imported services remain inactive until approved.
 
 ## Payment Methods
 
-The [Payment Methods requirement](requirements/payment-methods.md) is a draft
-covering `CARD-01` through `CARD-07`, including tokenization, setup challenges,
-default-card concurrency, and deletion/payment coordination. Existing Complete
-labels below describe baseline CRUD availability, not acceptance of the new
-requirements. In particular, registration currently persists the submitted
-full card number; removing that storage is required by the draft. The selected
-design uses dLocal mobile tokenization: card details go directly to dLocal,
-and Pagarte receives the temporary token for backend saved-card operations.
-CARD-07 excludes PAN/CVV from Pagarte services. Account-specific dLocal
-capabilities and sandbox integration remain to be verified.
-The requirement also mandates replaceable operators (`PM-009`): central
-selection for new registrations, provider-neutral backend/mobile interfaces,
-and original-provider routing for existing cards and outstanding operations.
-
 | ID | Transaction | Status | Current implementation or missing work | Owner |
 | --- | --- | --- | --- | --- |
-| `CARD-01` | Add a stored card | Complete | Baseline registration exists but stores the submitted full card number alongside the operator token and metadata. The new requirement replaces this with verified tokenization and durable registration sessions. | `Payments.Api` and `PaymentSwitch.Processor` |
+| `CARD-01` | Add a stored card | Complete | `RegisterCreditCardUseCase` registers the card with the operator and stores its token and safe metadata. | `Payments.Api` and `PaymentSwitch.Processor` |
 | `CARD-02` | List stored cards | Complete | Client-owned cards are available through the authenticated card API. | `Payments.Api` and `PaymentSwitch.Processor` |
 | `CARD-03` | View one stored card | Complete | The transaction checks client ownership. | `Payments.Api` and `PaymentSwitch.Processor` |
 | `CARD-04` | Update card metadata or select the default card | Complete | `UpdateCreditCardUseCase` implements both operations. | `Payments.Api` and `PaymentSwitch.Processor` |
 | `CARD-05` | Delete a stored card | Complete | `DeleteCreditCardUseCase` is exposed through the authenticated card API. | `Payments.Api` and `PaymentSwitch.Processor` |
 | `CARD-06` | Complete a provider challenge such as 3-D Secure | Missing | No redirect, challenge, callback, or continuation transaction is modeled. | Product and payment-operator decision required |
-| `CARD-07` | Tokenize in the mobile app without sending PAN/CVV through Pagarte | Decision required | dLocal mobile tokenization is selected; implementation remains pending. Replace raw-card backend contracts/storage with temporary-token processing and reusable card_id. Account-specific save/recovery capabilities remain to be confirmed. | Mobile app, `Payments.Api`, `PaymentSwitch.Processor`, and `ExternalConnections` |
+| `CARD-07` | Tokenize a card without sending PAN and CVV through Pagarte services | Decision required | The current backend receives card data and forwards it to the operator. Provider-hosted or client-side tokenization would reduce PCI scope. | Security and payment-operator decision required |
 
 ## Quotes
 

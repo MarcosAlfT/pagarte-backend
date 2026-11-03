@@ -58,12 +58,5 @@ gRPC client operation, and map the result to `Utilities.Responses`.
 
 ## Change Guidance
 
-The draft [Payment Methods requirement](../requirements/payment-methods.md)
-proposes owned registration sessions, dLocal mobile-token input, challenge
-continuation, and consistent card responses. These are proposed changes, not
-current endpoints.
-The proposed public session/card contracts remain provider-neutral; operator
-selection and safe mobile initialization come from central backend configuration.
-
 Keep this API narrow. Add a new route here only when it is part of the public
 card boundary or the team explicitly changes the bounded-context ownership.
