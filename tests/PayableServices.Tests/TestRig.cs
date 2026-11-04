@@ -39,6 +39,7 @@ public sealed class Faults : SaveChangesInterceptor
 {
     public bool FailCompletion;
     public bool FailQuote;
+    public bool FailExecutionCommit;
     public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
         InterceptionResult<int> result, CancellationToken cancellationToken = default)
     {
@@ -48,6 +49,9 @@ public sealed class Faults : SaveChangesInterceptor
         { FailCompletion = false; throw new DbUpdateException("Synthetic completion persistence failure."); }
         if (FailQuote && db.ChangeTracker.Entries<PayableServices.Domain.Entities.Quote>().Any(x => x.State == EntityState.Added))
         { FailQuote = false; throw new DbUpdateException("Synthetic quote persistence failure."); }
+        if (FailExecutionCommit && db.ChangeTracker.Entries<PayableServices.Domain.Entities.Quote>().Any(x =>
+            x.State == EntityState.Modified && x.Entity.PaymentId is not null))
+        { FailExecutionCommit = false; throw new DbUpdateException("Synthetic execution persistence failure."); }
         return ValueTask.FromResult(result);
     }
 }

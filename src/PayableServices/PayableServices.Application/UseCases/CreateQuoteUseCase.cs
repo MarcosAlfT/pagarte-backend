@@ -31,7 +31,7 @@ public sealed class CreateQuoteUseCase(
             if (inquiry.QuoteId is { } existingId)
             {
                 var existing = await quoteRepository.GetByIdAsync(existingId, cancellationToken);
-                return existing is null ? Failure("Inquiry quote unavailable.") : new(true, QuoteMapper.Map(existing), null);
+                return existing is null ? Failure("Inquiry quote unavailable.") : new(true, QuoteMapper.Map(existing, clock.UtcNow), null);
             }
             if (!inquiry.CanQuote(request.ClientId, clock.UtcNow)) return Failure("Inquiry is not payable or has expired.");
             request = request with { ServiceId = inquiry.ServiceId, Currency = inquiry.Currency, ReferenceValues = inquiry.References() };
@@ -138,7 +138,7 @@ public sealed class CreateQuoteUseCase(
                     {
                         ComponentType = "ServiceAmount",
                         Description = service.Name,
-                        Amount = inquiry.AmountMinorUnits!.Value / 100m,
+                        Amount = MoneyValue.FromMinorUnits(inquiry.AmountMinorUnits!.Value, inquiry.Currency!, currencyCatalog).Amount,
                         Currency = inquiry.Currency!,
                         Source = "AmountInquiry",
                         IsRequired = true,
@@ -234,7 +234,7 @@ public sealed class CreateQuoteUseCase(
             await quoteRepository.CreateAsync(quote, cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return new CreateQuoteResult(true, QuoteMapper.Map(quote), null);
+            return new CreateQuoteResult(true, QuoteMapper.Map(quote, clock.UtcNow), null);
         }
         catch (MoneyValidationException exception)
         {

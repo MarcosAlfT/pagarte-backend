@@ -1,4 +1,4 @@
-# Catalogue and Inquiry Acceptance Tests
+# Catalogue, Inquiry, and Quote Acceptance Tests
 
 Run `dotnet test tests/PayableServices.Tests/PayableServices.Tests.csproj`.
 The suite uses .NET 10, ASP.NET HTTP TestServer, signed access tokens with the
@@ -27,6 +27,19 @@ commit. Concurrent HTTP calls exercise SQL locks and unique indexes.
 | INQ-01 | All six account scenarios, unknown and malformed references, unknown/duplicate fields, transport timeout, invalid monetary/timestamp/reference evidence. |
 | INQ-02 | SQL persistence, safe failure retrieval, ownership, independent client keys, conflict/replay, pending duplicates, completion failure, lease recovery with original provider key, capped and short expiry. |
 | QUOTE-08 | Owned positive evidence, exact base replacement plus configured components, atomic rollback, concurrent retries, expiry/currency/route rejection, unchanged Processor execution validation and quote confirmation. |
+| QUOTE-03, QUOTE-04, QUOTE-05 | Verified-client quote history, owner isolation, all lifecycle/service/date filters, UTC offsets/inclusive bounds, stable ID ties/pages, bounded/invalid pagination, safe summaries, effective expiry shared with detail/creation replay, and no provider or execution calls from reads. |
+| Quote execution recovery | Injected local commit failure after the execution probe accepts, source-quote lookup without local PaymentId after expiry, same payment recovery, foreign-ID hiding, and unchanged local state on not-found/outage. |
+
+Run only the new slice with
+`dotnet test tests/PayableServices.Tests/PayableServices.Tests.csproj --filter FullyQualifiedName~QuoteHistoryAcceptanceTests`.
+The execution probe uses the real Processor package validator and retains source-quote
+results, but it does not exercise live gRPC acceptance, fencing, or saga execution.
+Fixed five-minute creation, cancellation/submission fencing, bill keys/verification,
+and charge-first confirmation/refund are not implemented by this slice.
+
+Verified on 2026-11-04 with SQL Server LocalDB: all 46 PayableServices tests and
+all 7 shared-money tests passed. The build reports existing dependency audit
+warnings for Microsoft.OpenApi and System.Security.Cryptography.Pkcs.
 
 Run the existing `PaymentSwitch.Processor.Tests`, `Utilities.Money.Tests`, and
 `Pagarte.Security.Tests` suites for saga, money, and security regressions.

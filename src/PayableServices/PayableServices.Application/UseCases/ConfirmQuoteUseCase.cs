@@ -54,15 +54,17 @@ public sealed class ConfirmQuoteUseCase(
             return Failure("QUOTE_NOT_FOUND", "Quote not found.");
         }
 
-        if (quote.PaymentId is null)
-        {
-            return Failure("EXECUTION_NOT_STARTED", "Quote execution has not started.");
-        }
-
         var result = await paymentExecutionClient.GetStatusAsync(
             clientId,
             quoteId,
             cancellationToken);
+        // Processor may have accepted before the response or local commit was lost.
+        // A missing execution does not authorize a new submission or cancellation.
+        if (!result.Accepted && result.PaymentId is null)
+        {
+            return result;
+        }
+
         ApplyExecutionResult(quote, result);
         await quoteRepository.UpdateAsync(quote, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);

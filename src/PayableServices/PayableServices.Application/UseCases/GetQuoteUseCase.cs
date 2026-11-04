@@ -3,7 +3,7 @@ using PayableServices.Application.Models;
 
 namespace PayableServices.Application.UseCases;
 
-public sealed class GetQuoteUseCase(IQuoteRepository quoteRepository)
+public sealed class GetQuoteUseCase(IQuoteRepository quoteRepository, IClock clock)
 {
 	public async Task<QuoteDto?> ExecuteAsync(
 		string clientId,
@@ -11,6 +11,6 @@ public sealed class GetQuoteUseCase(IQuoteRepository quoteRepository)
 		CancellationToken cancellationToken = default)
 	{
 		var quote = await quoteRepository.GetByIdAsync(quoteId, cancellationToken);
-		return quote is null || quote.ClientId != clientId ? null : QuoteMapper.Map(quote);
+		return quote is null || quote.ClientId != clientId ? null : QuoteMapper.Map(quote, clock.UtcNow);
 	}
 }

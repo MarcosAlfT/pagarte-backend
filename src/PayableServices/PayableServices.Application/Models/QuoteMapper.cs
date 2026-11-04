@@ -4,7 +4,7 @@ namespace PayableServices.Application.Models;
 
 public static class QuoteMapper
 {
-    public static QuoteDto Map(Quote quote) =>
+    public static QuoteDto Map(Quote quote, DateTime utcNow) =>
         new(
             quote.Id,
             quote.ClientId,
@@ -15,7 +15,7 @@ public static class QuoteMapper
             quote.Currency,
             quote.CurrencyScale,
             quote.RoundingMode,
-            quote.Status.ToString(),
+            quote.GetEffectiveStatus(utcNow).ToString(),
             quote.TotalAmount,
             quote.TotalMinorUnits,
             quote.CreatedAt,

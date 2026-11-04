@@ -45,6 +45,7 @@ public static class DependencyInjection
         services.AddScoped<CreateQuoteUseCase>();
         services.AddScoped<ConfirmQuoteUseCase>();
         services.AddScoped<GetQuoteUseCase>();
+        services.AddScoped<ListQuotesUseCase>();
         services.AddScoped<SyncExternalCatalogueUseCase>();
         services.AddScoped<ActivatePaymentRouteUseCase>();
 
