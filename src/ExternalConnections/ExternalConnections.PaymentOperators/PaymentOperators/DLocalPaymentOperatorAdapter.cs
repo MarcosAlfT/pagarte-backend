@@ -1,7 +1,8 @@
+using ExternalConnections.PaymentOperators.Config;
+using ExternalConnections.PaymentOperators.PaymentOperators.DLocal;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Net;
-using System.Text;
 using System.Text.Json;
 
 namespace ExternalConnections.PaymentOperators.PaymentOperators;
@@ -9,73 +10,32 @@ namespace ExternalConnections.PaymentOperators.PaymentOperators;
 public sealed class DLocalPaymentOperatorAdapter(
 	IHttpClientFactory httpClientFactory,
 	IConfiguration configuration,
-	ILogger<DLocalPaymentOperatorAdapter> logger) : IPaymentOperatorAdapter
+	ILogger<DLocalPaymentOperatorAdapter> logger, PaymentOperatorRegistry registry, OperatorCardIdentity? identity = null) : IPaymentOperatorAdapter, IStoredCardRemovalAdapter
 {
-	private readonly HttpClient _httpClient = CreateHttpClient(httpClientFactory);
-	private readonly string _apiKey = configuration["PaymentOperator:ApiKey"]
-		?? throw new InvalidOperationException("PaymentOperator:ApiKey not configured.");
-	private readonly string _apiSecret = configuration["PaymentOperator:ApiSecret"]
-		?? throw new InvalidOperationException("PaymentOperator:ApiSecret not configured.");
+	private readonly DLocalApiClient api = new(httpClientFactory, DLocalConnection.Resolve(configuration, identity));
+
+	public async Task<OperatorCardRemovalOutcome> GetRemovalStatusAsync(OperatorCardIdentity route, string reference, CancellationToken ct)
+	{
+		if (!GetRemovalCapabilities(route).Supported) return OperatorCardRemovalOutcome.Unsupported;
+		var result = await new DLocalCardVaultClient(api).GetCardAsync(reference, ct);
+		return result.Outcome switch { OperatorSetupOutcome.NotFound => OperatorCardRemovalOutcome.Removed,
+			OperatorSetupOutcome.Succeeded => OperatorCardRemovalOutcome.Pending, _ => OperatorCardRemovalOutcome.Unknown };
+	}
+	public OperatorCardRemovalCapabilities GetRemovalCapabilities(OperatorCardIdentity route)
+	{
+		if (identity is null || route.IntegrationId != identity.IntegrationId || route.Provider != identity.Provider
+			|| route.Account != identity.Account || route.Environment != identity.Environment || route.Version != identity.Version)
+			return new(false, false);
+		var settings = registry.GetRequired(identity.IntegrationId);
+		return new(settings.CardRemovalEnabled, settings.RefundsSurviveDetachment);
+	}
+	public Task<OperatorCardRemovalOutcome> RemoveCardAsync(OperatorCardIdentity route, string reference, string key, CancellationToken ct) =>
+		GetRemovalCapabilities(route).Supported ? new DLocalCardVaultClient(api).RemoveAsync(reference, key, ct)
+			: Task.FromResult(OperatorCardRemovalOutcome.Unsupported);
+	public Task<OperatorCardRemovalOutcome> RemoveSetupResourceAsync(OperatorSetupContext context, CancellationToken ct) =>
+		Task.FromResult(OperatorCardRemovalOutcome.Unsupported); // No confirmed setup-specific resource ownership contract.
 
 	public string ProviderCode => "DLocal";
-
-	public async Task<PaymentOperatorCardResult> RegisterCardAsync(
-		string cardNumber,
-		string cvv,
-		string cardHolderName,
-		int expiryMonth,
-		int expiryYear,
-		CancellationToken cancellationToken = default)
-	{
-		try
-		{
-			var payload = new
-			{
-				card = new
-				{
-					number = cardNumber,
-					cvv,
-					holder_name = cardHolderName,
-					expiration_month = expiryMonth,
-					expiration_year = expiryYear
-				}
-			};
-			using var response = await SendAsync(
-				HttpMethod.Post,
-				"/secure_cards",
-				payload,
-				null,
-				cancellationToken);
-			if (!response.IsSuccessStatusCode)
-			{
-				logger.LogWarning(
-					"dLocal card registration returned HTTP {StatusCode}.",
-					(int)response.StatusCode);
-				return new PaymentOperatorCardResult(
-					false, null, null, null, 0, 0, "Card registration failed.");
-			}
-
-			var result = await ReadJsonAsync(response, cancellationToken);
-			return new PaymentOperatorCardResult(
-				true,
-				ReadString(result, "card_id"),
-				ReadString(result, "last4"),
-				ReadString(result, "brand"),
-				result.TryGetProperty("expiration_month", out var month)
-					? month.GetInt32()
-					: expiryMonth,
-				result.TryGetProperty("expiration_year", out var year)
-					? year.GetInt32()
-					: expiryYear,
-				null);
-		}
-		catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
-		{
-			logger.LogWarning(exception, "dLocal card registration transport failure.");
-			return new PaymentOperatorCardResult(
-				false, null, null, null, 0, 0, "Card registration is temporarily unavailable.");
-		}
-	}
 
 	public async Task<CardReadinessResult> CheckCardAsync(
 		string cardToken,
@@ -83,35 +43,16 @@ public sealed class DLocalPaymentOperatorAdapter(
 	{
 		try
 		{
-			using var response = await SendAsync(
-				HttpMethod.Get,
-				$"/cards/{Uri.EscapeDataString(cardToken)}",
-				null,
-				null,
-				cancellationToken);
-			if (response.IsSuccessStatusCode)
+			var result = await new DLocalCardVaultClient(api).GetCardAsync(cardToken, cancellationToken);
+			return result.Outcome switch
 			{
-				return new CardReadinessResult(PaymentOperatorOutcome.Succeeded, null, null);
-			}
-
-			return IsRetryable(response.StatusCode)
-				? new CardReadinessResult(
-					PaymentOperatorOutcome.RetryableFailure,
-					"CARD_CHECK_RETRYABLE",
-					"The operator could not check the card temporarily.")
-				: new CardReadinessResult(
-					PaymentOperatorOutcome.DefinitiveDecline,
-					"CARD_NOT_USABLE",
-					"The operator rejected the stored card.");
+				OperatorSetupOutcome.Succeeded => new(PaymentOperatorOutcome.Succeeded, null, null),
+				OperatorSetupOutcome.NotFound => new(PaymentOperatorOutcome.DefinitiveDecline, "CARD_NOT_USABLE", "The saved card was not found."),
+				_ => new(PaymentOperatorOutcome.Unknown, "CARD_CHECK_UNKNOWN", "The operator could not verify the saved card.")
+			};
 		}
-		catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
-		{
-			logger.LogWarning(exception, "dLocal card readiness outcome is unknown.");
-			return new CardReadinessResult(
-				PaymentOperatorOutcome.Unknown,
-				"CARD_CHECK_UNKNOWN",
-				"The card readiness outcome is unknown.");
-		}
+		catch (Exception error) when (error is HttpRequestException or OperationCanceledException or JsonException)
+		{ return new(PaymentOperatorOutcome.Unknown, "CARD_CHECK_UNKNOWN", "The card readiness outcome is unknown."); }
 	}
 
 	public async Task<PaymentOperatorChargeResult> ChargeAsync(
@@ -125,7 +66,7 @@ public sealed class DLocalPaymentOperatorAdapter(
 	{
 		try
 		{
-			using var response = await SendAsync(
+			using var response = await api.SendAsync(
 				HttpMethod.Post,
 				"/payments",
 				new
@@ -142,9 +83,9 @@ public sealed class DLocalPaymentOperatorAdapter(
 				cancellationToken);
 			return await MapChargeResponseAsync(response, cancellationToken);
 		}
-		catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+		catch (Exception exception) when (exception is HttpRequestException or OperationCanceledException or JsonException)
 		{
-			logger.LogWarning(exception, "dLocal charge outcome is unknown for {Reference}.", reference);
+			logger.LogWarning( "dLocal charge outcome is unknown for {Reference}.", reference);
 			return new PaymentOperatorChargeResult(
 				PaymentOperatorOutcome.Unknown,
 				null,
@@ -159,17 +100,19 @@ public sealed class DLocalPaymentOperatorAdapter(
 	{
 		try
 		{
-			using var response = await SendAsync(
+			using var response = await api.SendAsync(
 				HttpMethod.Get,
 				$"/payments/{Uri.EscapeDataString(operatorPaymentId)}",
 				null,
 				null,
 				cancellationToken);
-			return await MapChargeResponseAsync(response, cancellationToken);
+			var result = await MapChargeResponseAsync(response, cancellationToken);
+			return result.OperatorPaymentId is not null && result.OperatorPaymentId != operatorPaymentId
+				? new(PaymentOperatorOutcome.Unknown, operatorPaymentId, "CHARGE_REFERENCE_MISMATCH", "The operator returned another payment reference.") : result;
 		}
-		catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+		catch (Exception exception) when (exception is HttpRequestException or OperationCanceledException or JsonException)
 		{
-			logger.LogWarning(exception, "dLocal charge status outcome is unknown.");
+			logger.LogWarning( "dLocal charge status outcome is unknown.");
 			return new PaymentOperatorChargeResult(
 				PaymentOperatorOutcome.Unknown,
 				operatorPaymentId,
@@ -188,7 +131,7 @@ public sealed class DLocalPaymentOperatorAdapter(
 	{
 		try
 		{
-			using var response = await SendAsync(
+			using var response = await api.SendAsync(
 				HttpMethod.Post,
 				"/refunds",
 				new
@@ -211,16 +154,15 @@ public sealed class DLocalPaymentOperatorAdapter(
 					"Refund failed.");
 			}
 
-			var result = await ReadJsonAsync(response, cancellationToken);
-			return new PaymentOperatorRefundResult(
-				PaymentOperatorOutcome.Succeeded,
-				ReadString(result, "id"),
-				null,
-				null);
+			var result = await DLocalApiClient.ReadJsonAsync(response, cancellationToken);
+			var refundId = ReadString(result, "id"); var status = ReadString(result, "status");
+			return status == "SUCCESS" && !string.IsNullOrWhiteSpace(refundId)
+				? new(PaymentOperatorOutcome.Succeeded, refundId, null, null)
+				: new(PaymentOperatorOutcome.Unknown, refundId, "REFUND_UNCONFIRMED", "The operator has not confirmed a successful refund.");
 		}
-		catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+		catch (Exception exception) when (exception is HttpRequestException or OperationCanceledException or JsonException)
 		{
-			logger.LogWarning(exception, "dLocal refund outcome is unknown.");
+			logger.LogWarning( "dLocal refund outcome is unknown.");
 			return new PaymentOperatorRefundResult(
 				PaymentOperatorOutcome.Unknown,
 				null,
@@ -246,7 +188,7 @@ public sealed class DLocalPaymentOperatorAdapter(
 					: "The card charge was declined.");
 		}
 
-		var result = await ReadJsonAsync(response, cancellationToken);
+		var result = await DLocalApiClient.ReadJsonAsync(response, cancellationToken);
 		var paymentId = ReadString(result, "id");
 		var status = ReadString(result, "status");
 		if (string.Equals(status, "REJECTED", StringComparison.OrdinalIgnoreCase))
@@ -267,74 +209,16 @@ public sealed class DLocalPaymentOperatorAdapter(
 				"The operator charge is still processing.");
 		}
 
-		return new PaymentOperatorChargeResult(
-			PaymentOperatorOutcome.Succeeded,
-			paymentId,
-			null,
-			null);
+		return string.Equals(status, "PAID", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(paymentId)
+			? new(PaymentOperatorOutcome.Succeeded, paymentId, null, null)
+			: new(PaymentOperatorOutcome.Unknown, paymentId, "CHARGE_STATUS_UNCONFIRMED", "The operator has not confirmed a paid charge.");
 	}
 
-	private async Task<HttpResponseMessage> SendAsync(
-		HttpMethod method,
-		string endpoint,
-		object? payload,
-		string? idempotencyKey,
-		CancellationToken cancellationToken)
-	{
-		var body = payload is null ? string.Empty : JsonSerializer.Serialize(payload);
-		using var request = new HttpRequestMessage(method, endpoint);
-		if (payload is not null)
-		{
-			request.Content = new StringContent(body, Encoding.UTF8, "application/json");
-		}
-
-		var timestamp = DateTimeOffset.UtcNow.ToString("O");
-		var signature = GenerateSignature(timestamp, body);
-		request.Headers.Add("X-Date", timestamp);
-		request.Headers.Add("X-Login", _apiKey);
-		request.Headers.Add("X-Trans-Key", _apiSecret);
-		request.Headers.Add("X-Version", "2.1");
-		if (!string.IsNullOrWhiteSpace(idempotencyKey))
-		{
-			request.Headers.Add("X-Idempotency-Key", idempotencyKey);
-		}
-
-		request.Headers.TryAddWithoutValidation(
-			"Authorization",
-			$"V2-HMAC-SHA256, Signature: {signature}");
-		return await _httpClient.SendAsync(
-			request,
-			HttpCompletionOption.ResponseHeadersRead,
-			cancellationToken);
-	}
-
-	private string GenerateSignature(string timestamp, string body)
-	{
-		var message = _apiKey + timestamp + body;
-		using var hmac = new System.Security.Cryptography.HMACSHA256(
-			Encoding.UTF8.GetBytes(_apiSecret));
-		return Convert.ToHexString(
-			hmac.ComputeHash(Encoding.UTF8.GetBytes(message))).ToLowerInvariant();
-	}
-
-	private static async Task<JsonElement> ReadJsonAsync(
-		HttpResponseMessage response,
-		CancellationToken cancellationToken) =>
-		JsonSerializer.Deserialize<JsonElement>(
-			await response.Content.ReadAsStringAsync(cancellationToken));
-
-	private static string? ReadString(JsonElement element, string propertyName) =>
-		element.TryGetProperty(propertyName, out var property) ? property.GetString() : null;
+	private static string? ReadString(JsonElement element, string name) => element.ValueKind == JsonValueKind.Object
+		&& element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
 	private static bool IsRetryable(HttpStatusCode statusCode) =>
 		statusCode is HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests
 		|| (int)statusCode >= 500;
 
-	private static HttpClient CreateHttpClient(IHttpClientFactory httpClientFactory)
-	{
-		var httpClient = httpClientFactory.CreateClient("payment-operator");
-		return httpClient.BaseAddress is null
-			? throw new InvalidOperationException("PaymentOperator:ApiUrl is not configured.")
-			: httpClient;
-	}
 }

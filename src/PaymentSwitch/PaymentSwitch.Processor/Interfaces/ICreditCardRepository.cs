@@ -5,6 +5,9 @@ namespace PaymentSwitch.Processor.Interfaces
 	public interface ICreditCardRepository
 	{
 		Task<IEnumerable<CreditCard>> GetByClientIdAsync(string clientId);
+		Task<IReadOnlyList<CreditCard>> GetPageAsync(string clientId, int page, int pageSize, CancellationToken cancellationToken);
+		Task<CreditCard?> FindProviderReferenceAsync(string clientId, string provider, string digest, CancellationToken cancellationToken);
+		Task ClearDefaultsAsync(string clientId, CancellationToken cancellationToken);
 		Task<CreditCard?> GetByIdAsync(Guid id);
 		Task<CreditCard> CreateAsync(CreditCard card);
 		Task UpdateAsync(CreditCard card);

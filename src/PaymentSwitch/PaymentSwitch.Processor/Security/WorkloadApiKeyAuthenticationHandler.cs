@@ -19,25 +19,16 @@ public sealed class WorkloadApiKeyAuthenticationHandler(
 
 	protected override Task<AuthenticateResult> HandleAuthenticateAsync()
 	{
-		var configuredKey = configuration["WorkloadAuth:ApiKey"];
-		if (string.IsNullOrWhiteSpace(configuredKey))
-		{
-			return Task.FromResult(AuthenticateResult.Fail("Workload authentication is not configured."));
-		}
-
-		var suppliedKey = Request.Headers[HeaderName].ToString();
-		if (string.IsNullOrWhiteSpace(suppliedKey)
-			|| !CryptographicOperations.FixedTimeEquals(
-				Encoding.UTF8.GetBytes(configuredKey),
-				Encoding.UTF8.GetBytes(suppliedKey)))
-		{
-			return Task.FromResult(AuthenticateResult.Fail("Invalid workload credentials."));
-		}
-
-		var identity = new ClaimsIdentity(
-			[new Claim(ClaimTypes.NameIdentifier, "payable-services")],
-			SchemeName);
-		return Task.FromResult(AuthenticateResult.Success(
-			new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));
+		var suppliedKey = Request.Headers[HeaderName].Count == 1 ? Request.Headers[HeaderName].ToString() : "";
+		var generalKey = configuration["WorkloadAuth:ApiKey"];
+		var operationsKey = configuration["CardOperationsAuth:ApiKey"];
+		var operations = !string.Equals(generalKey, operationsKey, StringComparison.Ordinal) && Matches(operationsKey, suppliedKey);
+		if (!operations && !Matches(generalKey, suppliedKey)) return Task.FromResult(AuthenticateResult.Fail("Invalid workload credentials."));
+		var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, operations ? "pagarte-card-operations" : "pagarte-workload") };
+		if (operations) claims.Add(new("card-operations", "true"));
+		var identity = new ClaimsIdentity(claims, SchemeName);
+		return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));
 	}
+	private static bool Matches(string? configured, string supplied) => !string.IsNullOrWhiteSpace(configured) && !string.IsNullOrWhiteSpace(supplied)
+		&& CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(configured), Encoding.UTF8.GetBytes(supplied));
 }
