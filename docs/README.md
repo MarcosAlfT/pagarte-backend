@@ -28,14 +28,15 @@ is explicitly marked as proposed.
 
 - [Authentication](flows/authentication.md)
 - [Quote Lifecycle](flows/quote-lifecycle.md)
-- [Quote Review and Payment Revalidation](flows/quote-review-and-payment.md) - accepted target flow; implementation pending.
+- [Quote Review, Expiry, and Payment Confirmation](flows/quote-review-and-payment.md) - accepted target flow; implementation pending.
 - [Payment Lifecycle](flows/payment-lifecycle.md)
 - [Card Registration and Removal](flows/card-registration.md)
 
 ## Requirements and Acceptance
 
 - [Quotes](requirements/quotes.md) - complete QUOTE-01 through QUOTE-08 with
-  Composite/Strategy pricing, resumable summaries, and payment revalidation.
+  Composite/Strategy pricing and business keys, five-minute expiry, and charge-first
+  company confirmation with full refund on rejection.
 - [Payment Methods](requirements/payment-methods.md) - scope, status, and acceptance rules.
 - [Payment-Method Acceptance Tests](../tests/PaymentSwitch.Processor.Tests/README.md) -
   configuration, manual fixtures, and verification evidence.
@@ -54,7 +55,7 @@ is explicitly marked as proposed.
 - [SQL Outbox for Post-Charge Delivery](decisions/0002-sql-outbox.md) (historical; superseded by ADR 0003)
 - [Quote Execution Saga and Legacy Quote Removal](decisions/0003-quote-execution-saga.md)
 - [Global Money Handling](decisions/0004-money-handling.md)
-- [Resumable Quotes and Payment Revalidation](decisions/0005-resumable-quotes-and-payment-revalidation.md) - accepted; implementation pending.
+- [Five-Minute Quotes and Charge-First Confirmation](decisions/0005-resumable-quotes-and-payment-revalidation.md) - revised accepted direction; implementation pending.
 
 ## Maintenance Rules
 

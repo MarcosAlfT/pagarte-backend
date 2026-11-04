@@ -4,6 +4,12 @@
 
 Accepted and implemented.
 
+The revised [ADR 0005](0005-resumable-quotes-and-payment-revalidation.md) supersedes
+the execution-order and compensation direction for future implementation:
+charge first, notify the company, then complete or fully refund. This document
+retains the current company-first implementation and its historical rationale.
+Quote ownership and immutable execution snapshots remain applicable.
+
 ## Context
 
 Before this decision was implemented, PayableServices and

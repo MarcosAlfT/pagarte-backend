@@ -67,5 +67,12 @@ accepted execution/refunds. Live provider acceptance remains in
 
 ## Change Guidance
 
-Keep consumers and polling services thin. Do not reintroduce company delivery
-after card charge or place card tokens, API keys, or credentials in messages.
+The revised [Quotes requirement](../requirements/quotes.md) assigns post-charge
+company notification and rejection compensation to Processor. Worker does not
+become the company-notification owner. Coordinate the existing later-refund
+path with Processor's compensation so both cannot independently refund one
+charge; share the durable refund operation identity and prevent stale status
+updates. This is pending work, not a change to the current runtime above.
+
+Keep consumers and polling services thin. Never place card tokens, API keys,
+or credentials in messages.

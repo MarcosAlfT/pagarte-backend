@@ -57,10 +57,13 @@ See [PayableServices](payable-services.md) and
 ## Change Guidance
 
 The accepted [Quotes requirement](../requirements/quotes.md) needs additional
-mutable bill fixtures: external-channel payment, changed amount/period/version,
-and conditional acceptance between verification and payment. These fixtures
-are pending and must retain isolated, deterministic test state; current fixed
-balance evidence does not verify these races.
+mutable bill fixtures: Strategy-selected identity items including billing dates,
+external-channel payment, changed amount/period, and post-charge notification
+OK/NOT OK with idempotent acknowledgment/status lookup. Inject lost responses
+and a different-channel payment between verification and notification to verify
+recovery or compensation. Notifications record bill payment, not money transfer.
+These fixtures are pending and must retain isolated, deterministic test state;
+current fixed balance evidence does not verify these cases.
 
 Keep all fixtures synthetic. A real company replaces the adapter/configuration;
 it must not replace inquiry ownership, idempotency, or quote domain rules.

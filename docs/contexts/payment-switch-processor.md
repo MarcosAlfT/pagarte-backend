@@ -140,10 +140,15 @@ retained catalogue is no longer the source of PayableServices synchronization.
 ## Change Guidance
 
 The accepted [Quotes requirement](../requirements/quotes.md) proposes a revised
-validation-bound acceptance contract, source-quote recovery without local
-PaymentId, and conditional company payment against verified bill evidence.
-This is pending implementation. Coordinate expiry/idempotency validation and
-cancellation fencing with PayableServices; preserve accepted execution recovery.
+five-minute acceptance deadline, source-quote recovery without local PaymentId,
+and duplicate protection by the Strategy-selected bill business key. Its new
+order is card charge, company notification, then success on matching OK or full
+card refund on definitive NOT OK. Unknown outcomes require reconciliation.
+Company notification records payment but transfers no money. Processor owns
+compensation; coordinate with Worker so one charge cannot be refunded twice.
+This is pending implementation and replaces the company-first order above only
+after a coordinated cutover. Preserve accepted execution recovery after expiry
+and prevent delayed submissions after cancellation.
 
 Processor owns the [card lifecycle](../flows/card-registration.md): durable sessions,
 protected token claims, verified cards, defaults, recovery/cleanup, route pins, and

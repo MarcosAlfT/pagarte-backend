@@ -1,80 +1,122 @@
-# Quote Review, Resume, and Payment Revalidation
+# Quote Review, Expiry, and Payment Confirmation
 
 ## Status
 
-Accepted target flow on 2026-11-04; not implemented. The
-[current quote lifecycle](quote-lifecycle.md) still uses expiry rejection.
-Implementation is specified in [Quotes](../requirements/quotes.md).
+Accepted revised target; implementation pending. This replaces the previous
+resumable-freshness/replacement proposal. The [Quotes requirement](../requirements/quotes.md)
+is authoritative. The [current quote flow](quote-lifecycle.md) and
+[current payment flow](payment-lifecycle.md) describe the implemented baseline.
 
 ## Customer Flow
 
 ```text
-Consult bill -> review saved payment summary
-  -> optionally leave to register a card or perform another task
-  -> retrieve the same quote and review it again
-  -> select an available stored card and tap Pay
-      -> recover any previous submission first
-      -> for a new submission, verify the same bill and current pricing
-          -> unchanged and unpaid: proceed without another review step
-          -> changed: show linked replacement and request approval
-          -> already paid / nothing due: explain and stop
-          -> verification unavailable: preserve quote and offer retry
+Consult bill -> create quote -> review fixed service amount + fees/taxes = total
+  -> optional card registration
+  -> Pay with quote ID and selected Pagarte card ID
+      -> recover an existing/uncertain submission first
+      -> otherwise require unexpired quote and verify the unpaid bill
+          -> unchanged: charge the displayed total without extra approval
+          -> changed / expired: consult again and create a new quote
+          -> paid / nothing due: stop without charging
+          -> verification unavailable: safe error; retry only before expiry
 ```
 
-There is no five-minute customer cutoff. Evidence expiry means NeedsRefresh,
-not lost work. Reads do not initiate payment. Every new Pay submission verifies
-the bill, even if the quote still appears fresh.
+Quotes expire exactly five minutes after server-side creation. New Processor
+acceptance must occur before that deadline. At the deadline, new payment is
+rejected; accepted payments keep running. There is no automatic refresh or
+linked replacement. Listing, retrieval, and card registration never charge.
 
-## Component Flow
+Example: a quote created at 10:00 for USD 102 expires at 10:05. Returning from
+card registration at 10:04 permits Pay after verification; returning at 10:12
+requires a new inquiry and quote. A payment accepted at 10:04 continues to
+completion or refund even after 10:05.
+
+## Quote Items and Business Identity
+
+Composite organizes monetary and reference/identity items. Pricing Strategies
+calculate monetary leaves; a separate service-specific key Strategy selects
+the items that identify the obligation. Snapshot selected names/values and
+Strategy versions. Nonmonetary identity items do not contribute to totals.
+
+For electricity, the key might be company + service + account + billing period.
+Changing any selected key value identifies a different obligation. The billing
+date/period is authoritative bill evidence, not the time of Pay or consultation.
+Technical QuoteId and request idempotency keys remain separate from this key.
+A new quote or Strategy version must not bypass duplicate protection.
+
+The reviewed pricing snapshot stays fixed during its five-minute life. New
+pricing configuration does not reallocate fees/taxes or change the total at Pay.
+Changed bill amount/currency requires a new consultation even if the key matches.
+An invalid route blocks payment; the backend cannot silently change destination.
+
+## Component and Payment Flow
 
 ```text
-Mobile -> PayableServices: owned quote ID + selected Pagarte card ID
-PayableServices: reserve/fence submission against cancellation and replacement
-  -> Processor: discover existing execution by source quote ID if uncertain
-  -> CompanyInquiries adapter: fresh bill status, identity, amount, version
-  -> pricing Strategies calculate Composite candidate breakdown
-  -> same material summary: append validation evidence; keep original quote
-  -> changed summary: persist replacement; wait for explicit customer approval
-PayableServices -> Processor: approved immutable snapshot + bound validation
-Processor: idempotent acceptance, selected-card eligibility/readiness
-  -> company adapter: conditional payment of the verified bill/version
-      -> already paid/changed: no operator charge
-      -> unknown: reconcile; do not assume failure
-      -> accepted: existing full-total card charge and compensation flow
-Processor -> PayableServices: processing/final execution state
+Mobile -> PayableServices: quote ID + Pagarte card ID
+PayableServices: claim submission against cancellation; recover prior submission
+  -> CompanyInquiries adapter: fresh unpaid-bill evidence
+  -> compare key, bill amount, currency, and original route; no repricing
+  -> Processor: immutable execution snapshot + verification/key evidence
+Processor: atomic idempotent acceptance before expiry and bill-key protection
+  -> operator: check card; charge complete quote total
+      -> definitive failure: Failed; no company notification
+      -> unknown: reconcile same charge; do not notify yet
+      -> confirmed charge:
+          -> company adapter: send payment confirmation (no funds transfer)
+              -> matching OK: Succeeded
+              -> definitive NOT OK: refund full card charge
+                  -> confirmed refund: Refunded
+                  -> pending/unknown/failure: RefundPending; recover/escalate
+              -> unknown/transient: Processing; reconcile/retry notification
+Processor -> PayableServices -> Mobile: payment status
 ```
 
-Fresh balance verification is read-only and does not reserve the bill by itself.
-The company payment boundary must prevent a payment made elsewhere between
-verification and acceptance. Same-key idempotency alone does not cover another
-channel's payment. Missing provider support is an explicit integration blocker.
+Processor owns durable orchestration and rejection compensation. The existing
+Worker refund path must coordinate with the same durable refund operation so
+one charge cannot be refunded twice. Adapters normalize evidence; they do not
+choose compensation or update application state.
 
-## Preserved Evidence and Pricing
+## Amounts and Company Response
 
-- The original inquiry and reviewed quote are immutable evidence. Revalidation
-  creates a separate record and never changes the old total or expiry in place.
-- The same unpaid obligation and unchanged material breakdown allow the original
-  Pay action to continue. A different bill period, price, or currency requires
-  review of a linked replacement, even when an account number is unchanged.
-- Composite groups organize components; Strategies calculate leaves. Finalized
-  leaves contribute once. Processor copies the approved total without repricing.
-- Technical validation deadlines bound new execution acceptance. They are
-  refreshed transparently and never terminate already accepted payment work.
-- No-longer-due evidence does not imply Pagarte charged the client. Only its
-  own successful payment can produce a Pagarte Paid result/payment association.
+For a USD 100 bill plus USD 2 fee, charge USD 102 and store the full breakdown.
+Notify the company about the USD 100 bill using its business key, Pagarte payment
+reference, charge evidence, and a stable notification key. Service amount and
+charged total are distinct fields; company settlement happens elsewhere.
 
-## Resume, Cancel, and Recovery
+Company OK acknowledges this exact payment and records the bill as paid.
+Definitive NOT OK requires a refund of the entire USD 102, including the fee.
+Do not report success at card charge alone, or report refunded before the
+operator confirms the refund. A retry of an accepted notification must return
+its original acknowledgment rather than reject it as another payment.
 
-The mobile app retains the quote ID while adding a card and restores it after
-navigation/login. Registering a card does not charge it or change the quote.
-An owned quote list provides recovery if the app loses its local navigation state.
+A read-before-charge check cannot eliminate another channel paying in the gap.
+The company must detect that conflict when notified, reject the new payment,
+and trigger compensation. This does not promise that no temporary charge occurs.
 
-Cancel is allowed only when no outstanding submission can take effect. Pending
-or unknown execution blocks cancellation and requote. Cross-instance fencing
-prevents delayed workers submitting after cancellation. Lost acceptance responses
-are recovered by source quote ID even if local PaymentId was never committed.
+## Recovery, Cancellation, and Status
 
-Example: a USD 102 quote remains accessible after a 12-minute card registration.
-If the bill and breakdown remain unchanged, Pay produces one USD 102 payment.
-If the total is now USD 105, the client approves a new quote first. If the bill
-was paid through a bank, Pagarte explains that nothing remains payable.
+Use separate stable operation keys for charge, notification, and refund. A lost
+response is unknown, not rejection. Recover status or replay the same operation
+safely; never create a second charge to recover a notification failure. Exhausted
+unknown outcomes remain unresolved with operational attention, not guessed success
+or an automatic refund.
+
+Pay and Cancel have one durable winner. Cancel before submission keeps history;
+once submission is claimed, cancellation is blocked until safe non-acceptance is
+established. A missing local PaymentId, expired worker lease, or Processor
+not-found lookup does not prove a delayed submission cannot arrive. Recover by
+source quote ID and require durable rejection of delayed attempts before release.
+
+Client payment statuses are Processing, Succeeded, Failed, RefundPending, and
+Refunded. Expiry/changed bill/verification errors before payment are ordinary
+operation results, not extra approval or freshness workflows. Accepted or
+unresolved payment prevents another payment for the same bill, even from a new
+quote; successful payments remain protected while external balances lag.
+
+## Implementation Boundary
+
+The current company-first saga must be drained or explicitly versioned during
+cutover. Existing active payments retain their original order/evidence. Legacy
+unexecuted quotes lacking the new identity/expiry contract require new inquiry;
+expired quotes are never reopened. See the requirement for acceptance scenarios
+and migration rules.
