@@ -46,6 +46,11 @@ Verified client -> ClientProfiles identity resolution -> inquiry reservation
 - `CreateQuoteUseCase` consumes an eligible inquiry and persists its quote in
   one transaction. `ConfirmQuoteUseCase` and `GetQuoteUseCase` preserve the
   existing quote execution and owner-only retrieval behavior.
+- `ListQuotesUseCase` returns owner-only stored summaries with lifecycle,
+  service, and inclusive UTC created-date filters. Pages default to 20 and
+  allow at most 100 rows, ordered by creation and ID descending. It does not
+  consult a company or Processor. The summary excludes connection and pricing
+  source metadata and reports locally stored payment association/state.
 
 ## Domain Rules
 
@@ -74,6 +79,14 @@ Verified client -> ClientProfiles identity resolution -> inquiry reservation
   a new inquiry.
 - Legacy services without `RequiresInquiry` retain configured-amount quoting.
   Processor payment transitions and confirmation payloads are unchanged.
+- Detail, creation replay, and history derive Expired for an Unpaid quote with
+  no local PaymentId at its stored deadline, without changing the row. Processing
+  and final states retain their lifecycle. Display expiry is not proof that an
+  uncertain submission cannot exist or that cancellation/replacement is safe.
+- Explicit execution refresh looks up Processor by ClientId + SourceQuoteId,
+  including when local PaymentId is absent or the quote deadline has passed.
+  A found execution repairs the association/state; not-found or unavailable
+  results do not clear state or authorize another submission.
 
 ## Data Ownership
 
@@ -99,14 +112,15 @@ across API instances. The inquiry table retains keys for its lifetime.
 
 ## Change Guidance
 
-The accepted [Quotes requirement](../requirements/quotes.md) adds
-Composite/Strategy pricing and service-specific business-key selection, owned
-history/cancel, and durable submission recovery. Quotes expire five minutes
-after creation; expiry or changed bill evidence requires a new inquiry/quote,
-without automatic refresh or replacement approval. Its
+Remaining work in the accepted [Quotes requirement](../requirements/quotes.md)
+includes Composite/Strategy pricing, service-specific business-key selection,
+cancellation, and durable submission intent/restart recovery. The target fixes
+expiry at five minutes after creation; expiry or changed bill evidence requires
+a new inquiry/quote, without automatic refresh or replacement approval. Its
 [target flow](../flows/quote-review-and-payment.md) verifies the bill before
 submission and uses Processor's proposed charge-first confirmation/refund flow.
-These changes are pending; the domain rules above describe existing code.
+These changes are pending; owned history and explicit source-quote status
+recovery are implemented as described above.
 
 See [Quote Lifecycle](../flows/quote-lifecycle.md),
 [amount-inquiry requirement](../requirements/mock-amount-inquiry.md), and

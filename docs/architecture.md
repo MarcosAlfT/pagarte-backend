@@ -111,6 +111,9 @@ longer reads Processor for this workflow. Processor does not own inquiries or qu
   locks and unique indexes protect versioned imports, inquiry reservations,
   lease recovery, and atomic single-quote consumption. HTTP runs outside those
   transactions.
+- Owned quote history and detail read stored snapshots without company or
+  Processor calls. Explicit execution refresh recovers by source quote ID even
+  without local PaymentId; complete submission fencing/restart recovery is pending.
 - ASP.NET Core JWT bearer validation and named policies secure public APIs.
 - Payments and PayableServices resolve `(iss, sub)` over a protected internal
   ClientProfiles HTTP endpoint before client-owned operations.

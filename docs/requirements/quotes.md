@@ -4,7 +4,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Accepted revised product definitions; implementation pending |
+| Status | Accepted revised product definitions; history and explicit status recovery implemented; remaining work pending |
 | Transactions | QUOTE-01 through QUOTE-08, with required payment-execution changes |
 | Primary owner | PayableServices |
 | Integration owners | PaymentSwitch.Processor and ExternalConnections; coordinate refund compatibility with Worker |
@@ -23,14 +23,15 @@ with the company are outside this application.
 
 ## Current Baseline and Required Changes
 
-- Itemized immutable quotes, owner-only retrieval, inquiry consumption, and
-  confirmation exist. Listing and cancellation use cases are missing.
+- Itemized immutable quotes, owner-only detail/history, inquiry consumption,
+  and confirmation exist. Cancellation and durable submission intent are missing.
 - Current legacy quotes expire after 60 minutes; inquiry-backed quotes inherit
   inquiry expiry. The target uses CreatedAt + five minutes for new quotes.
 - Current Processor execution calls the company before charging the card and
   rolls back the company on charge failure. The new order is not implemented.
-- Current status refresh requires a local PaymentId, so lost acceptance responses
-  need recovery by source quote ID before any retry or expiry rejection.
+- Explicit status refresh now recovers by source quote ID without local PaymentId.
+  Confirmation-time recovery before retry/expiry rejection and restart recovery
+  remain pending.
 - No production data exists. Historical/test records still must not acquire
   invented bill identities or pricing evidence during migration.
 

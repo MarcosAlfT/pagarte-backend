@@ -46,7 +46,7 @@ is explicitly marked as proposed.
 - [Service Catalogue and Amount Inquiry with a Mock Company](requirements/mock-amount-inquiry.md) -
   implemented catalogue search, details, mock feed synchronization, route checks,
   persisted USD inquiries, and linked inquiry-backed quote creation.
-- [Catalogue and Inquiry Acceptance Tests](../tests/PayableServices.Tests/README.md) -
+- [Catalogue, Inquiry, and Quote Acceptance Tests](../tests/PayableServices.Tests/README.md) -
   SQL/HTTP coverage, test prerequisites, and the local manual flow.
 
 ## Decisions

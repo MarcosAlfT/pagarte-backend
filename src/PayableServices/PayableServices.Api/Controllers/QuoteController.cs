@@ -15,8 +15,29 @@ public sealed class QuoteController(
     CreateQuoteUseCase createQuoteUseCase,
     ConfirmQuoteUseCase confirmQuoteUseCase,
     GetQuoteUseCase getQuoteUseCase,
+    ListQuotesUseCase listQuotesUseCase,
     ICurrentActorProvider currentActorProvider) : ControllerBase
 {
+    [HttpGet]
+    public async Task<IActionResult> ListAsync(
+        [FromQuery] QuoteHistoryQuery query,
+        CancellationToken cancellationToken)
+    {
+        var clientId = GetRequiredClientId();
+        if (clientId is null)
+        {
+            return Unauthorized(ApiResponse.CreateFailure("Authenticated client identifier is missing."));
+        }
+
+        if (!query.IsValid || Request.Query.Any(pair => pair.Value.Count != 1 || string.IsNullOrWhiteSpace(pair.Value[0])))
+        {
+            return BadRequest(ApiResponse.CreateFailure("Invalid quote filters or pagination."));
+        }
+
+        var result = await listQuotesUseCase.ExecuteAsync(clientId, query, cancellationToken);
+        return Ok(ApiResponse<object>.CreateSuccess(result));
+    }
+
     [HttpPost]
     public async Task<IActionResult> CreateAsync(
         [FromBody] CreateQuoteRequest request,

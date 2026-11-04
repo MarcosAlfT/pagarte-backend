@@ -39,11 +39,34 @@ Authenticated client
 Legacy services without `RequiresInquiry` retain configured-amount quoting.
 Inquiry-backed services reject direct quoting or supplied currency/reference
 overrides. Zero balances and failure outcomes cannot create quotes.
+Provider minor units are converted through the shared currency scale; creation
+does not assume two decimal places. External mock feeds remain USD-only.
 
 The snapshot includes the source inquiry, service and route IDs, external service code, company
 operation endpoints, server-side credential reference, reference values,
 amount components, total minor units, currency scale, rounding rule, and
 expiry. It contains no API key or payment-operator card token.
+
+## Owned History and Detail
+
+`GET /api/quotes` reads owner-only summaries from PayableServicesDb. Status,
+service ID, and inclusive created-from/created-to filters combine with AND.
+Date offsets normalize to UTC. Pagination defaults to page 1 with 20 rows;
+page size is limited to 100 and page number to 1,000,000. Invalid values,
+repeated/empty query values, and reversed date ranges return 400. Ordering is
+CreatedAt descending, then ID descending, for deterministic ties.
+
+Summaries include the immutable total, expiry, reference values, inquiry ID,
+and locally stored payment ID/lifecycle. Connection fields, credentials, and
+internal pricing source metadata are omitted. Empty pages succeed. A stored
+summary is not a live payment-status query; use the explicit execution endpoint
+to reconcile the payment association/state.
+
+Detail, history, and creation replay derive Expired for stored Unpaid quotes
+without a PaymentId at `now >= ExpiresAt`. Reads never persist this projection,
+reprice, contact the company, or call Processor. Processing and final states
+are preserved. Existing stored deadlines still apply; fixed five-minute creation
+is pending. Display expiry does not prove an uncertain submission cannot exist.
 
 ## Confirmation
 
@@ -72,7 +95,15 @@ attempt requires a new quote even when all values are unchanged.
 ## Status Refresh
 
 `GET /api/quotes/{quoteId}/execution` retrieves the current Processor state and
-updates the local quote:
+updates the local quote. Lookup uses ClientId + SourceQuoteId even when local
+PaymentId is missing or quote evidence has expired. This recovers an accepted
+execution after its response or the local association commit was lost. It never
+dispatches a payment or revalidates the company bill. Not-found/unavailable
+results do not clear a saved association or establish safe cancellation/retry.
+Durable submission intent, automatic restart recovery, and confirmation-time
+recovery before expiry rejection remain pending.
+
+The local transitions are:
 
 ```text
 Unpaid

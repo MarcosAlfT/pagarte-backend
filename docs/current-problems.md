@@ -159,9 +159,12 @@ and [verification guide](../tests/PaymentSwitch.Processor.Tests/README.md).
 ## Verified Resolved by the Quote Execution Change
 
 The historical verification below does not close the newer
-[Quotes requirement](requirements/quotes.md). Current quote detail reads can
-return Unpaid after evidence expiry; execution refresh requires a locally saved
-PaymentId and cannot recover a lost acceptance response through that path.
+[Quotes requirement](requirements/quotes.md). Owned quote history is implemented;
+detail/list/creation replay derive Expired at the stored deadline without writes.
+Explicit execution refresh now discovers Processor state by source quote ID even
+without local PaymentId, including after expiry. Missing/unavailable execution
+does not release a potentially dispatched submission. Durable submission intent,
+confirmation-time recovery before expiry rejection, and restart recovery remain open.
 Five-minute expiry, cancellation/submission coordination, Strategy-defined bill
 keys, and fresh bill verification remain pending. Current execution also calls
 the company before charging; the revised target charges first and then either

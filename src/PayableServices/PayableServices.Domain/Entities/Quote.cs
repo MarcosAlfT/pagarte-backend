@@ -34,4 +34,10 @@ public sealed class Quote
     public string? ExecutionErrorMessage { get; set; }
     public ICollection<QuoteItem> Items { get; set; } = [];
     public ICollection<QuoteReferenceValue> ReferenceValues { get; set; } = [];
+
+    // This is a read projection, not proof that an uncertain submission cannot exist.
+    public QuoteStatus GetEffectiveStatus(DateTime utcNow) =>
+        Status == QuoteStatus.Unpaid && PaymentId is null && utcNow >= ExpiresAt
+            ? QuoteStatus.Expired
+            : Status;
 }
