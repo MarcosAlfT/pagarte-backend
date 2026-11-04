@@ -49,7 +49,21 @@ have been removed.
 
 Processor owns `PaymentDb`. Worker updates only refund-related fields and
 statuses through `IPaymentStatusRepository` and direct SQL, without referencing
-the Processor project.
+the Processor project. It also reads Processor-owned PaymentOperatorRoutes to
+validate retained integration identities; it never creates or updates route pins.
+
+## Integrations
+
+Refunds use the payment's retained integration ID through the shared factory, not the
+current default. Worker loads Processor-owned identity/credential pins before consumers,
+waits briefly for schema/pins, and rejects repointed routes. AppHost orders it after
+Processor and retains mock-a's configuration. Keep routes until dependent work is resolved.
+
+Configured dLocal accounts use separate credentials; refunds require explicit SUCCESS.
+The [test guide](../../tests/PaymentSwitch.Processor.Tests/README.md) owns credential setup.
+[Card removal](../flows/card-registration.md#stored-cards-and-payment-ordering) preserves
+accepted execution/refunds. Live provider acceptance remains in
+[Current Problems](../current-problems.md#6-payment-method-acceptance-and-recovery-gaps).
 
 ## Change Guidance
 

@@ -9,7 +9,7 @@ contracts from application and domain workflows.
 
 - Provider-specific request authentication and HTTP mapping.
 - Company catalogue snapshots, balance inquiry HTTP calls, and safe normalized outcomes.
-- Stored-card registration, readiness, charge status, charge, and refund calls.
+- Tokenized setup/status/notification adaptation, stored-card readiness, charge status, charge, and refund calls.
 - Company service payment, status reconciliation, and rollback calls.
 - Translation of provider responses into succeeded, definitive, retryable, or
   unknown outcomes.
@@ -79,26 +79,26 @@ PayableServices further validates identity, references, timestamps, and expiry.
 Read-only inquiry timeouts normalize to `TemporarilyUnavailable`; balance evidence
 is absent for failures. Latency and timeout counters use .NET metrics.
 Catalogue parsing/transport failure yields no snapshot, preserving local state.
-The mock adapter is disabled by default and rejected outside Development.
+The company-inquiry mock configuration is disabled by default and rejected
+outside Development. Card-operator mock use is also restricted to Development.
 
 ## Change Guidance
 
-The draft [Payment Methods requirement](../requirements/payment-methods.md)
-proposes payment-operator setup/token verification, challenge/status callbacks,
-and optional detachment adapters. Its development operator mock is separate
-from the company catalogue/balance mock; provider capabilities remain unverified.
-Tokenization is selected to run from the mobile app directly with dLocal.
-Pagarte's adapters will handle token-based card saving, verification, and
-payment APIs; challenge handling depends on dLocal's supported mechanism.
-`PM-009` requires replaceable provider adapters with normalized capabilities
-and results. Provider payloads, signing, and callback parsing remain here;
-application rules and public card contracts must not depend on dLocal shapes.
+Use the existing factory/resolver and central integration registry. Processor pins
+provider/account/environment/version/credential identity; Worker loads it read-only.
+New defaults or registration disablement must preserve original routes for existing work.
 
-The implemented [catalogue and amount-inquiry requirement](../requirements/mock-amount-inquiry.md)
-uses [Mock Company](mock-company.md) as the external substitute. Application
-workflows, persistence, idempotency, and quote consumption remain in PayableServices.
+The Development-only mock has independent provider state and optional idempotent removal.
+Configured dLocal clients use matching account credentials, fixed HTTPS hosts, separate
+login/transaction/signing keys, and bounded signed HTTP without redirects, retries, or
+HTTP logging. Known-card readiness/removal and offline vault/signature contracts are
+implemented; public setup remains gated by unconfirmed binding/recovery/challenge contracts.
 
-Keep provider contracts here and expose stable internal outcomes. Read
-[ADR 0003](../decisions/0003-quote-execution-saga.md) and
-[ADR 0004](../decisions/0004-money-handling.md) before changing monetary or
-execution semantics.
+Keep provider mappings here and return normalized evidence to Application use cases.
+[Card flow](../flows/card-registration.md) covers lifecycle semantics; the
+[test guide](../../tests/PaymentSwitch.Processor.Tests/README.md) owns configuration and
+fixtures; [Current Problems](../current-problems.md#6-payment-method-acceptance-and-recovery-gaps)
+tracks acceptance. Company catalogue/inquiry ownership remains in
+[PayableServices](payable-services.md), using [Mock Company](mock-company.md).
+Follow [ADR 0003](../decisions/0003-quote-execution-saga.md) and
+[ADR 0004](../decisions/0004-money-handling.md) for execution/money changes.

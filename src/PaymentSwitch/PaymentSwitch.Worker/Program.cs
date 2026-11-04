@@ -30,6 +30,7 @@ namespace PaymentSwitch.Worker
                     // Email service
                     services.AddScoped<IEmailSenderService, EmailSenderService>();
                     services.AddScoped<IRefundGateway, PaymentOperatorRefundGateway>();
+                    services.AddScoped<PaymentOperatorRouteLoader>();
 
                     // Application use cases
                     services.AddScoped<ProcessRefundRequestUseCase>();
@@ -45,6 +46,9 @@ namespace PaymentSwitch.Worker
                     services.AddHostedService<RefundRetryDispatcherService>();
                 })
                 .Build();
+
+            using (var routeScope = host.Services.CreateScope())
+                await routeScope.ServiceProvider.GetRequiredService<PaymentOperatorRouteLoader>().LoadAsync();
 
             var rabbitFactory = host.Services.GetRequiredService<RabbitMqConnectionFactory>();
             var connection = await rabbitFactory.GetConnectionAsync();

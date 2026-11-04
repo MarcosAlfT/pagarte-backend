@@ -17,7 +17,22 @@ namespace PaymentSwitch.Processor.Infrastructure.Repository
 				.Where(c => c.ClientId == clientId && !c.IsDeleted)
 				.OrderByDescending(c => c.IsDefault)
 				.ThenByDescending(c => c.CreatedAt)
+				.ThenBy(c => c.Id)
 				.ToListAsync();
+
+		public async Task<IReadOnlyList<CreditCard>> GetPageAsync(string clientId, int page, int pageSize, CancellationToken ct) =>
+			await _context.CreditCards.AsNoTracking().Where(c => c.ClientId == clientId && !c.IsDeleted)
+				.OrderByDescending(c => c.IsDefault).ThenByDescending(c => c.CreatedAt).ThenBy(c => c.Id)
+				.Skip((page - 1) * pageSize).Take(pageSize).ToArrayAsync(ct);
+
+		public Task<CreditCard?> FindProviderReferenceAsync(string clientId, string provider, string digest, CancellationToken ct) =>
+			_context.CreditCards.FirstOrDefaultAsync(c => c.ClientId == clientId && c.ProviderReferenceDigest == digest && !c.IsDeleted, ct);
+
+		public async Task ClearDefaultsAsync(string clientId, CancellationToken ct)
+		{
+			var defaults = await _context.CreditCards.Where(c => c.ClientId == clientId && c.IsDefault && !c.IsDeleted).ToArrayAsync(ct);
+			foreach (var card in defaults) card.Update(card.CardHolderName, false, _clock.UtcNow);
+		}
 
 		public async Task<CreditCard?> GetByIdAsync(Guid id)
 			=> await _context.CreditCards

@@ -27,7 +27,6 @@ public sealed class PaymentExecutionSagaTests
 			"different-client",
 			"mock",
 			"card-token",
-			"************1111",
 			"Other Client",
 			"1111",
 			CardType.Visa,
@@ -44,7 +43,7 @@ public sealed class PaymentExecutionSagaTests
 			continuation,
 			catalog,
 			Options.Create(new PaymentExecutionOptions()),
-			clock);
+			clock, new FakeCardMutationScope());
 		var execution = CreateExecution(foreignCard.Id, clock.UtcNow);
 
 		var result = await useCase.ExecuteAsync(execution);
@@ -188,7 +187,6 @@ public sealed class PaymentExecutionSagaTests
 			"client-1",
 			"mock",
 			"card-token",
-			"************1111",
 			"Test Client",
 			"1111",
 			CardType.Visa,
@@ -251,6 +249,16 @@ public sealed class PaymentExecutionSagaTests
 			Task.FromResult(1);
 	}
 
+	private sealed class FakeCardMutationScope : ICardMutationScope
+	{
+		public Task<ICardMutationTransaction> BeginAsync(string clientId, CancellationToken ct) => Task.FromResult<ICardMutationTransaction>(new Transaction());
+		private sealed class Transaction : ICardMutationTransaction
+		{
+			public Task CommitAsync(CancellationToken ct) => Task.CompletedTask;
+			public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+		}
+	}
+
 	private sealed class FakeCreditCardRepository(CreditCard card) : ICreditCardRepository
 	{
 		public Task<IEnumerable<CreditCard>> GetByClientIdAsync(string clientId) =>
@@ -258,6 +266,10 @@ public sealed class PaymentExecutionSagaTests
 
 		public Task<CreditCard?> GetByIdAsync(Guid id) =>
 			Task.FromResult<CreditCard?>(id == card.Id ? card : null);
+
+		public Task<IReadOnlyList<CreditCard>> GetPageAsync(string clientId, int page, int pageSize, CancellationToken ct) => Task.FromResult<IReadOnlyList<CreditCard>>([card]);
+		public Task<CreditCard?> FindProviderReferenceAsync(string clientId, string provider, string digest, CancellationToken ct) => Task.FromResult<CreditCard?>(null);
+		public Task ClearDefaultsAsync(string clientId, CancellationToken ct) => Task.CompletedTask;
 
 		public Task<CreditCard> CreateAsync(CreditCard candidate) => Task.FromResult(candidate);
 		public Task UpdateAsync(CreditCard candidate) => Task.CompletedTask;
@@ -294,6 +306,8 @@ public sealed class PaymentExecutionSagaTests
 	{
 		private readonly Queue<PaymentOperationResult> _results = new(results);
 		public long? ChargedMinorUnits { get; private set; }
+
+		public Task<bool> SupportsExecutionAsync(CreditCard card, string country, string currency, CancellationToken ct = default) => Task.FromResult(true);
 
 		public Task<string> EnsureOperatorProviderAsync(CreditCard card, CancellationToken cancellationToken = default) =>
 			Task.FromResult(card.OperatorProvider);

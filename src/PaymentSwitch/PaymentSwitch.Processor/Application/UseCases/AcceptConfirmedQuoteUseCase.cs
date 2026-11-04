@@ -17,7 +17,8 @@ public sealed class AcceptConfirmedQuoteUseCase(
 	ContinuePaymentExecutionUseCase continuePaymentExecutionUseCase,
 	ICurrencyCatalog currencyCatalog,
 	IOptions<PaymentExecutionOptions> options,
-	IClock clock)
+	IClock clock,
+	ICardMutationScope mutations)
 {
 	public async Task<PaymentExecutionResult> ExecuteAsync(
 		ConfirmedQuoteExecution execution,
@@ -30,120 +31,132 @@ public sealed class AcceptConfirmedQuoteUseCase(
 		}
 
 		var fingerprint = ConfirmedQuoteValidator.Fingerprint(execution);
-		var existing = await paymentRepository.GetBySourceQuoteIdAsync(
-			execution.SourceQuoteId,
-			cancellationToken);
-		if (existing is not null)
+		Payment payment;
+		await using (var transaction = await mutations.BeginAsync(execution.ClientId, cancellationToken))
 		{
-			if (existing.ClientId != execution.ClientId)
-			{
-				return Failure("SOURCE_QUOTE_CONFLICT", "The source quote is already owned by another client.");
-			}
-
-			if (!string.Equals(
-				existing.PackageFingerprint,
-				fingerprint,
-				StringComparison.Ordinal))
-			{
-				return Failure(
-					"SOURCE_QUOTE_FINGERPRINT_CONFLICT",
-					"The source quote was already submitted with a different execution package or card.");
-			}
-
-			return PaymentExecutionResultMapper.Map(existing, replayed: true);
-		}
-
-		var card = await creditCardRepository.GetByIdAsync(execution.CreditCardId);
-		if (card is null || card.ClientId != execution.ClientId)
-		{
-			return Failure(
-				"CARD_NOT_OWNED",
-				"The stored card does not belong to the authenticated client.");
-		}
-
-		var operatorProvider = await cardPaymentGateway.EnsureOperatorProviderAsync(
-			card,
-			cancellationToken);
-		var executionOptions = options.Value;
-		var currency = currencyCatalog.GetRequired(execution.Currency);
-		var payment = Payment.Create(
-			new PaymentCreationData(
-				execution.ClientId,
+			var existing = await paymentRepository.GetBySourceQuoteIdAsync(
 				execution.SourceQuoteId,
-				fingerprint,
-				execution.CreditCardId,
-				execution.ServiceId,
-				execution.ServiceName,
-				execution.CountryId,
-				execution.CountryCode,
-				execution.RouteId,
-				execution.RouteType,
-				execution.PaymentNetworkId,
-				execution.ProviderId,
-				execution.ExternalSourceCode,
-				execution.ExternalServiceCode,
-				execution.CompanyPaymentEndpoint,
-				execution.CompanyRollbackEndpoint,
-				execution.CompanyStatusEndpoint,
-				execution.CompanyCredentialReference,
-				execution.TotalMinorUnits,
-				currency.Code,
-				currency.MinorUnitScale,
-				execution.RoundingMode,
-				execution.QuoteCreatedAt,
-				execution.QuoteExpiresAt,
-				operatorProvider,
-				executionOptions.MaxCardCheckAttempts,
-				executionOptions.MaxCompanyPaymentAttempts,
-				executionOptions.MaxChargeAttempts,
-				executionOptions.MaxRollbackAttempts,
-				executionOptions.RetryIntervalSeconds),
-			clock.UtcNow);
-
-		foreach (var component in execution.Components)
-		{
-			payment.Details.Add(new PaymentDetail
+				cancellationToken);
+			if (existing is not null)
 			{
-				Id = Guid.NewGuid(),
-				PaymentId = payment.Id,
-				ComponentType = component.ComponentType,
-				Description = component.Description,
-				Source = component.Source,
-				IsVisibleToClient = component.VisibleToClient,
-				DisplayOrder = component.DisplayOrder,
-				MinorUnits = component.MinorUnits,
-				Currency = component.Currency
-			});
-		}
+				if (existing.ClientId != execution.ClientId)
+				{
+					return Failure("SOURCE_QUOTE_CONFLICT", "The source quote is already owned by another client.");
+				}
 
-		foreach (var reference in execution.ReferenceValues)
-		{
-			payment.ReferenceValues.Add(new PaymentReferenceValue
-			{
-				Id = Guid.NewGuid(),
-				PaymentId = payment.Id,
-				Key = reference.Key,
-				Value = reference.Value
-			});
-		}
-
-		var insertion = await paymentRepository.InsertIfSourceQuoteAbsentAsync(
-			payment,
-			cancellationToken);
-		if (!insertion.Inserted)
-		{
-			if (insertion.Payment.ClientId != execution.ClientId
-				|| !string.Equals(
-					insertion.Payment.PackageFingerprint,
+				if (!string.Equals(
+					existing.PackageFingerprint,
 					fingerprint,
 					StringComparison.Ordinal))
-			{
-				return Failure(
-					"SOURCE_QUOTE_FINGERPRINT_CONFLICT",
-					"The source quote was concurrently submitted with a different execution package or card.");
+				{
+					return Failure(
+						"SOURCE_QUOTE_FINGERPRINT_CONFLICT",
+						"The source quote was already submitted with a different execution package or card.");
+				}
+
+				return PaymentExecutionResultMapper.Map(existing, replayed: true);
 			}
 
-			return PaymentExecutionResultMapper.Map(insertion.Payment, replayed: true);
+			var card = await creditCardRepository.GetByIdAsync(execution.CreditCardId);
+			if (card is null || card.ClientId != execution.ClientId)
+			{
+				return Failure(
+					"CARD_NOT_OWNED",
+					"The stored card does not belong to the authenticated client.");
+			}
+
+			if (!card.IsAvailable(clock.UtcNow))
+				return Failure("CARD_UNAVAILABLE", "The stored card is unavailable for new payments.");
+
+			if (!await cardPaymentGateway.SupportsExecutionAsync(card, execution.CountryCode, execution.Currency, cancellationToken))
+				return Failure("CARD_MARKET_UNSUPPORTED", "The card integration does not support this country and currency.");
+
+			var operatorProvider = await cardPaymentGateway.EnsureOperatorProviderAsync(
+				card,
+				cancellationToken);
+			var executionOptions = options.Value;
+			var currency = currencyCatalog.GetRequired(execution.Currency);
+			payment = Payment.Create(
+				new PaymentCreationData(
+					execution.ClientId,
+					execution.SourceQuoteId,
+					fingerprint,
+					execution.CreditCardId,
+					execution.ServiceId,
+					execution.ServiceName,
+					execution.CountryId,
+					execution.CountryCode,
+					execution.RouteId,
+					execution.RouteType,
+					execution.PaymentNetworkId,
+					execution.ProviderId,
+					execution.ExternalSourceCode,
+					execution.ExternalServiceCode,
+					execution.CompanyPaymentEndpoint,
+					execution.CompanyRollbackEndpoint,
+					execution.CompanyStatusEndpoint,
+					execution.CompanyCredentialReference,
+					execution.TotalMinorUnits,
+					currency.Code,
+					currency.MinorUnitScale,
+					execution.RoundingMode,
+					execution.QuoteCreatedAt,
+					execution.QuoteExpiresAt,
+					operatorProvider,
+					executionOptions.MaxCardCheckAttempts,
+					executionOptions.MaxCompanyPaymentAttempts,
+					executionOptions.MaxChargeAttempts,
+					executionOptions.MaxRollbackAttempts,
+					executionOptions.RetryIntervalSeconds),
+				clock.UtcNow);
+
+			foreach (var component in execution.Components)
+			{
+				payment.Details.Add(new PaymentDetail
+				{
+					Id = Guid.NewGuid(),
+					PaymentId = payment.Id,
+					ComponentType = component.ComponentType,
+					Description = component.Description,
+					Source = component.Source,
+					IsVisibleToClient = component.VisibleToClient,
+					DisplayOrder = component.DisplayOrder,
+					MinorUnits = component.MinorUnits,
+					Currency = component.Currency
+				});
+			}
+
+			foreach (var reference in execution.ReferenceValues)
+			{
+				payment.ReferenceValues.Add(new PaymentReferenceValue
+				{
+					Id = Guid.NewGuid(),
+					PaymentId = payment.Id,
+					Key = reference.Key,
+					Value = reference.Value
+				});
+			}
+
+			var insertion = await paymentRepository.InsertIfSourceQuoteAbsentAsync(
+				payment,
+				cancellationToken);
+			if (!insertion.Inserted)
+			{
+				if (insertion.Payment.ClientId != execution.ClientId
+					|| !string.Equals(
+						insertion.Payment.PackageFingerprint,
+						fingerprint,
+						StringComparison.Ordinal))
+				{
+					return Failure(
+						"SOURCE_QUOTE_FINGERPRINT_CONFLICT",
+						"The source quote was concurrently submitted with a different execution package or card.");
+				}
+
+				return PaymentExecutionResultMapper.Map(insertion.Payment, replayed: true);
+			}
+
+			await transaction.CommitAsync(cancellationToken);
 		}
 
 		await continuePaymentExecutionUseCase.ExecuteAsync(payment.Id, cancellationToken);

@@ -1,4 +1,5 @@
 using ExternalConnections.PaymentOperators.PaymentOperators;
+using ExternalConnections.PaymentOperators.Config;
 using PaymentSwitch.Processor.Application.Abstractions;
 using PaymentSwitch.Processor.Domain.Entities;
 using PaymentSwitch.Processor.Interfaces;
@@ -8,14 +9,27 @@ namespace PaymentSwitch.Processor.Infrastructure.Gateways;
 
 public sealed class PaymentOperatorCardPaymentGateway(
 	IPaymentOperatorResolver paymentOperatorResolver,
-	ICurrencyCatalog currencyCatalog) : ICardPaymentGateway
+	ICurrencyCatalog currencyCatalog, PaymentOperatorRegistry registry) : ICardPaymentGateway
 {
+	public Task<bool> SupportsExecutionAsync(CreditCard card, string country, string currency, CancellationToken ct = default)
+	{
+		var integration = registry.GetRequired(card.OperatorProvider);
+		return Task.FromResult(integration.SupportedCountries.Contains(country, StringComparer.OrdinalIgnoreCase)
+			&& integration.SupportedCurrencies.Contains(currency, StringComparer.OrdinalIgnoreCase));
+	}
+
 	public async Task<string> EnsureOperatorProviderAsync(
 		CreditCard card,
 		CancellationToken cancellationToken = default)
 	{
 		if (!string.IsNullOrWhiteSpace(card.OperatorProvider))
 		{
+			if (!string.IsNullOrWhiteSpace(card.ProviderAccount))
+			{
+				var original = registry.GetRequired(card.OperatorProvider);
+				if ((!string.IsNullOrEmpty(card.AdapterProvider) && original.Adapter != card.AdapterProvider) || original.Account != card.ProviderAccount || original.Environment != card.ProviderEnvironment || original.Version != card.IntegrationVersion)
+					throw new InvalidOperationException("The original card integration identity must remain configured.");
+			}
 			return card.OperatorProvider;
 		}
 
@@ -40,6 +54,7 @@ public sealed class PaymentOperatorCardPaymentGateway(
 		CreditCard card,
 		CancellationToken cancellationToken = default)
 	{
+		await EnsureOperatorProviderAsync(card, cancellationToken);
 		var money = MoneyValue.FromMinorUnits(
 			payment.TotalMinorUnits,
 			payment.Currency,

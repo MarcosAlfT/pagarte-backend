@@ -18,6 +18,8 @@ public sealed record PaymentOperationResult(
 
 public interface ICardPaymentGateway
 {
+	Task<bool> SupportsExecutionAsync(CreditCard card, string country, string currency, CancellationToken cancellationToken = default);
+
 	Task<string> EnsureOperatorProviderAsync(
 		CreditCard card,
 		CancellationToken cancellationToken = default);

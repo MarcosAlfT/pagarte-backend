@@ -6,12 +6,10 @@
 
 ## Owns
 
-- Public routes for listing credit cards.
-- Reading one credit card.
-- Registering a card.
-- Updating card metadata.
-- Deleting a card.
-- Authentication and HTTP response mapping for those routes.
+- Client card/session HTTP routes, including policy, defaults, and removal status.
+- Bounded provider callback transport.
+- VerifiedAdmin review/list/audit routes with a distinct workload credential.
+- Authentication, identity resolution, request validation, and response mapping.
 
 ## Does Not Own
 
@@ -19,7 +17,7 @@
 - Catalogue browsing.
 - Quote creation or confirmation.
 - Card charging.
-- Asynchronous company delivery or refunds.
+- Company payment execution or refunds.
 
 ## Runtime Boundary
 
@@ -28,7 +26,12 @@ Client
   -> Payments.Api HTTP
   -> Keycloak JWT validation and VerifiedClient policy
   -> protected ClientProfiles identity resolution
-  -> PaymentSwitch.Processor gRPC
+  -> workload-authenticated PaymentSwitch.Processor CreditCardService gRPC
+
+Provider notification (no client JWT)
+  -> bounded Payments.Api callback transport
+  -> workload-authenticated CreditCardService gRPC
+  -> ExternalConnections signature validation + Processor session/inbox handling
 ```
 
 ## Main Use Cases
@@ -39,9 +42,10 @@ payment-history HTTP endpoints.
 
 ## Domain Rules
 
-Business rules remain behind the Processor boundary. Controllers validate
-transport shape, obtain the authenticated client identity, call the matching
-gRPC client operation, and map the result to `Utilities.Responses`.
+Business rules remain behind the Processor boundary. Client-facing card/session
+controllers validate transport shape, obtain the authenticated client identity,
+call the matching gRPC operation, and map results to Utilities.Responses. The
+provider callback has its separate signature-verification path below.
 
 ## Data Ownership
 
@@ -49,7 +53,7 @@ gRPC client operation, and map the result to `Utilities.Responses`.
 
 ## Integrations
 
-- Validates Keycloak `payments-api` access tokens. Before each card operation,
+- Validates Keycloak `payments-api` access tokens. Before each client-owned card/session operation,
   resolves `(iss, sub)` to the internal client GUID and passes that GUID to
   Processor. Missing mappings return `403 PROFILE_REQUIRED`; resolver failure
   returns 503 without a Processor call.
@@ -58,12 +62,15 @@ gRPC client operation, and map the result to `Utilities.Responses`.
 
 ## Change Guidance
 
-The draft [Payment Methods requirement](../requirements/payment-methods.md)
-proposes owned registration sessions, dLocal mobile-token input, challenge
-continuation, and consistent card responses. These are proposed changes, not
-current endpoints.
-The proposed public session/card contracts remain provider-neutral; operator
-selection and safe mobile initialization come from central backend configuration.
+[Card lifecycle](../flows/card-registration.md) use cases remain in Processor.
+The API rejects unknown fields and retired raw-card submissions, derives client
+identity, and returns safe views with meaningful HTTP statuses. Provider callbacks
+forward bounded raw bytes/allowlisted headers; adapters verify them.
 
-Keep this API narrow. Add a new route here only when it is part of the public
-card boundary or the team explicitly changes the bounded-context ownership.
+Admin routes derive actor from authenticated issuer/subject and accept coded reasons,
+expected state, action, and request key. CardOperationsAuth must differ from the general
+workload key. Requests cannot supply actor, success evidence, or provider references.
+
+Keep transports thin. See the [test guide](../../tests/PaymentSwitch.Processor.Tests/README.md)
+for routes/configuration and [remaining acceptance](../current-problems.md#6-payment-method-acceptance-and-recovery-gaps)
+for dLocal/mobile work.

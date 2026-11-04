@@ -7,6 +7,9 @@ var paymentDbConnectionString = builder.AddParameter("payment-db-connection-stri
 var clientProfilesDbConnectionString = builder.AddParameter("client-profiles-db-connection-string", secret: true);
 var payableServicesDbConnectionString = builder.AddParameter("payable-services-db-connection-string", secret: true);
 var workloadApiKey = builder.AddParameter("payable-services-workload-api-key", secret: true);
+var mockCardCallbackKey = builder.AddParameter("mock-card-callback-signing-key", secret: true);
+var cardOperationsKey = builder.AddParameter("card-operations-workload-api-key", secret: true);
+var cardTokenDigestKey = builder.AddParameter("card-token-digest-key", secret: true);
 var qecApiKey = builder.AddParameter("qec-company-api-key", secret: true);
 var keycloakDbPassword = builder.AddParameter("keycloak-db-password", secret: true);
 var keycloakDbUsername = builder.AddParameter("keycloak-db-username");
@@ -51,8 +54,22 @@ var paymentSwitchProcessor = builder.AddProject<Projects.PaymentSwitch_Processor
     .WithEnvironment("ConnectionStrings__PagQueue", rabbitConnectionString)
     .WithEnvironment("ConnectionStrings__PaymentDb", paymentDbConnectionString)
     .WithEnvironment("WorkloadAuth__ApiKey", workloadApiKey)
+    .WithEnvironment("CardOperationsAuth__ApiKey", cardOperationsKey)
     .WithEnvironment("CompanyCredentials__QEC__ApiKey", qecApiKey)
-    .WithEnvironment("CompanyCredentials__MockCompany__ApiKey", qecApiKey);
+    .WithEnvironment("CompanyCredentials__MockCompany__ApiKey", qecApiKey)
+    .WithEnvironment("PaymentMethods__TokenDigestKey", cardTokenDigestKey)
+    .WithEnvironment("PaymentOperatorCallbackSecrets__mock-card", mockCardCallbackKey)
+    .WithEnvironment("PaymentOperators__Integrations__mock-a__CallbackKeyReference", "mock-card")
+    .WithEnvironment("PaymentOperators__DefaultIntegration", "mock-a")
+    .WithEnvironment("PaymentOperators__Integrations__mock-a__Adapter", "Mock")
+    .WithEnvironment("PaymentOperators__Integrations__mock-a__Account", "synthetic-a")
+    .WithEnvironment("PaymentOperators__Integrations__mock-a__Environment", "Development")
+    .WithEnvironment("PaymentOperators__Integrations__mock-a__Version", "1")
+    .WithEnvironment("PaymentOperators__Integrations__mock-a__RegistrationEnabled", "true")
+    .WithEnvironment("PaymentOperators__Integrations__mock-a__CardRemovalEnabled", "true")
+    .WithEnvironment("PaymentOperators__Integrations__mock-a__RefundsSurviveDetachment", "true")
+    .WithEnvironment("PaymentOperators__Integrations__mock-a__SupportedCountries__0", "EC")
+    .WithEnvironment("PaymentOperators__Integrations__mock-a__SupportedCurrencies__0", "USD");
 
 var payableServicesApi = builder.AddProject<Projects.PayableServices_Api>("payable-services-api", launchProfileName: "PayableServices.Api")
     .WithReference(mockCompany)
@@ -79,13 +96,20 @@ var paymentsApi = builder.AddProject<Projects.Payments_Api>("payments-api")
     .WithEnvironment("ClientIdentityResolver__BaseUrl", clientProfilesApi.GetEndpoint("https"))
     .WithEnvironment("ClientIdentityResolver__ApiKey", resolverApiKey)
     .WithEnvironment("PaymentSwitchProcessor__GrpcUrl", paymentSwitchProcessor.GetEndpoint("https"))
+    .WithEnvironment("WorkloadAuth__ApiKey", workloadApiKey)
+    .WithEnvironment("CardOperationsAuth__ApiKey", cardOperationsKey)
     .WaitFor(keycloak);
 
 // Payment switch worker
 builder.AddProject<Projects.PaymentSwitch_Worker>("payment-switch-worker")
+    .WaitFor(paymentSwitchProcessor)
     .WithEnvironment("RabbitMQ__Mode", "FromEnvironment")
     .WithEnvironment("ConnectionStrings__PagQueue", rabbitConnectionString)
-    .WithEnvironment("ConnectionStrings__PaymentDb", paymentDbConnectionString);
+    .WithEnvironment("ConnectionStrings__PaymentDb", paymentDbConnectionString)
+    .WithEnvironment("PaymentOperators__Integrations__mock-a__Adapter", "Mock")
+    .WithEnvironment("PaymentOperators__Integrations__mock-a__Account", "synthetic-a")
+    .WithEnvironment("PaymentOperators__Integrations__mock-a__Environment", "Development")
+    .WithEnvironment("PaymentOperators__Integrations__mock-a__Version", "1");
 
 
 builder.Build().Run();

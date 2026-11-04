@@ -1,45 +1,37 @@
 using Microsoft.Extensions.Logging;
-using System.Text.RegularExpressions;
 
 namespace ExternalConnections.PaymentOperators.PaymentOperators;
 
-public partial class MockPaymentOperatorAdapter(
-	ILogger<MockPaymentOperatorAdapter> logger) : IPaymentOperatorAdapter
+public class MockPaymentOperatorAdapter(
+	ILogger<MockPaymentOperatorAdapter> logger, MockCardSetupJournal setups, OperatorCardIdentity? identity = null) : IPaymentOperatorAdapter, ITokenizedCardSetupAdapter, IStoredCardRemovalAdapter
 {
 	public string ProviderCode => "Mock";
 
-	public Task<PaymentOperatorCardResult> RegisterCardAsync(
-		string cardNumber,
-		string cvv,
-		string cardHolderName,
-		int expiryMonth,
-		int expiryYear,
-		CancellationToken cancellationToken = default)
-	{
-		var digits = DigitsOnlyRegex().Replace(cardNumber, string.Empty);
-		var last4 = digits.Length >= 4 ? digits[^4..] : "4242";
-		var brand = InferBrand(digits);
-		var token = $"mock_card_{Guid.NewGuid():N}";
-		logger.LogInformation(
-			"Mock operator registered {Brand} card ending in {Last4}.",
-			brand,
-			last4);
-		return Task.FromResult(new PaymentOperatorCardResult(
-			true,
-			token,
-			last4,
-			brand,
-			expiryMonth,
-			expiryYear,
-			null));
-	}
+	public OperatorSetupNotification? VerifySetupNotification(string integrationId, IReadOnlyDictionary<string, string> headers, byte[] payload, DateTime utcNow) =>
+		headers.TryGetValue("X-Operator-Timestamp", out var timestamp) && headers.TryGetValue("X-Operator-Signature", out var signature)
+			? setups.VerifyNotification(integrationId, timestamp, signature, payload, utcNow) : null;
+	public bool SupportsTokenizedSaving => true;
+	public bool SupportsSetupRecovery => true;
+	public bool SupportsDetachment => true;
+	public Task<OperatorCardRemovalOutcome> GetRemovalStatusAsync(OperatorCardIdentity route, string reference, CancellationToken ct) =>
+		Task.FromResult(setups.IsRemoved(route, reference) ? OperatorCardRemovalOutcome.Removed : OperatorCardRemovalOutcome.Pending);
+	public OperatorCardRemovalCapabilities GetRemovalCapabilities(OperatorCardIdentity identity) => setups.GetRemovalCapabilities(identity);
+	public Task<OperatorCardRemovalOutcome> RemoveCardAsync(OperatorCardIdentity identity, string reference, string operationKey, CancellationToken ct) => setups.RemoveCardAsync(identity, reference, operationKey, ct);
+	public Task<OperatorCardRemovalOutcome> RemoveSetupResourceAsync(OperatorSetupContext context, CancellationToken ct) => setups.RemoveSetupResourceAsync(context, ct);
+	public bool SupportsSetupChallenges => true;
+	public string IntegrationVersion => "1";
+	public string MobileMethod => "SyntheticToken";
+	public string MobileVersion => "1";
+	public Task<OperatorSetupResult> SaveTokenAsync(OperatorSetupContext context, string token, CancellationToken ct) => setups.SaveAsync(context, token, ct);
+	public Task<OperatorSetupResult> GetSetupStatusAsync(OperatorSetupContext context, CancellationToken ct) => setups.GetStatusAsync(context, ct);
 
 	public Task<CardReadinessResult> CheckCardAsync(
 		string cardToken,
 		CancellationToken cancellationToken = default)
 	{
 		var ready = !string.IsNullOrWhiteSpace(cardToken)
-			&& !cardToken.Contains("declined", StringComparison.OrdinalIgnoreCase);
+			&& !cardToken.Contains("declined", StringComparison.OrdinalIgnoreCase)
+			&& (identity is null || !setups.IsRemoved(identity, cardToken));
 		return Task.FromResult(ready
 			? new CardReadinessResult(PaymentOperatorOutcome.Succeeded, null, null)
 			: new CardReadinessResult(
@@ -66,7 +58,7 @@ public partial class MockPaymentOperatorAdapter(
 				"Mock retryable charge failure."));
 		}
 
-		if (cardToken.Contains("declined", StringComparison.OrdinalIgnoreCase))
+		if (cardToken.Contains("declined", StringComparison.OrdinalIgnoreCase) || (identity is not null && setups.IsRemoved(identity, cardToken)))
 		{
 			return Task.FromResult(new PaymentOperatorChargeResult(
 				PaymentOperatorOutcome.DefinitiveDecline,
@@ -113,23 +105,4 @@ public partial class MockPaymentOperatorAdapter(
 			null));
 	}
 
-	private static string InferBrand(string digits)
-	{
-		if (digits.StartsWith('4'))
-		{
-			return "Visa";
-		}
-
-		if (digits.Length >= 2
-			&& int.TryParse(digits[..2], out var firstTwo)
-			&& firstTwo is >= 51 and <= 55)
-		{
-			return "Mastercard";
-		}
-
-		return digits.StartsWith("34") || digits.StartsWith("37") ? "Amex" : "Other";
-	}
-
-	[GeneratedRegex("\\D")]
-	private static partial Regex DigitsOnlyRegex();
 }

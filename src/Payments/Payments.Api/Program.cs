@@ -6,12 +6,17 @@ namespace Payments.Api
 {
     public class Program
     {
-        public static void Main(string[] args)
+        public static void Main(string[] args) => Build(args).Run();
+
+        public static WebApplication Build(string[] args, Action<WebApplicationBuilder>? configure = null)
         {
             var builder = WebApplication.CreateBuilder(args);
             var configuration = builder.Configuration;
 
-			builder.Services.AddControllers();
+			builder.Services.AddControllers(options => options.Filters.Add<Payments.Api.Controllers.CardRpcExceptionFilter>())
+                .AddApplicationPart(typeof(Payments.Api.Controllers.CreditCardController).Assembly)
+                .ConfigureApiBehaviorOptions(options => options.InvalidModelStateResponseFactory = _ =>
+                    new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(Utilities.Responses.ApiResponse.CreateFailure("INVALID_CARD_REQUEST")));
 
 			// gRPC clients call PaymentSwitch.Processor.
 			var workerUrl = configuration["PaymentSwitchProcessor:GrpcUrl"];
@@ -29,11 +34,15 @@ namespace Payments.Api
 				o => o.Address = new Uri(workerUrl))
 				.ConfigurePrimaryHttpMessageHandler(() => CreateGrpcHttpHandler(allowUntrustedWorkerCertificate));
 			builder.Services.AddScoped<CreditCardGrpcClient>();
+			builder.Services.AddGrpcClient<CardOperationsService.CardOperationsServiceClient>(o => o.Address = new Uri(workerUrl))
+				.ConfigurePrimaryHttpMessageHandler(() => CreateGrpcHttpHandler(allowUntrustedWorkerCertificate));
+			builder.Services.AddScoped<CardOperationsGrpcClient>();
 
 			builder.Services.AddPagarteJwtSecurity(configuration, builder.Environment);
 			builder.Services.AddClientIdentityResolution(configuration, builder.Environment);
             builder.Services.AddOpenApi();
 
+            configure?.Invoke(builder);
             var app = builder.Build();
 
             if (app.Environment.IsDevelopment())
@@ -48,7 +57,7 @@ namespace Payments.Api
 			app.UseClientIdentityResolution();
             app.MapControllers();
 
-			app.Run();
+			return app;
         }
 
 		private static HttpMessageHandler CreateGrpcHttpHandler(bool allowUntrustedCertificate)

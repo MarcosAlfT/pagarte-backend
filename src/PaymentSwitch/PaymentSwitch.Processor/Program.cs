@@ -22,6 +22,32 @@ namespace PaymentSwitch.Processor
 	{
 		public static async Task Main(string[] args)
 		{
+			var app = await BuildAsync(args);
+			var logger = app.Services.GetRequiredService<ILogger<Program>>();
+			app.Lifetime.ApplicationStarted.Register(() =>
+			{
+				_ = Task.Run(async () =>
+				{
+					try
+					{
+						using var scope = app.Services.CreateScope();
+						var rabbitFactory = scope.ServiceProvider.GetRequiredService<RabbitMqConnectionFactory>();
+						var connection = await rabbitFactory.GetConnectionAsync();
+						using var channel = await connection.CreateChannelAsync();
+						await PaymentSwitchTopology.DeclareAllAsync(channel);
+					}
+					catch (Exception ex)
+					{
+						logger.LogError(ex, "Failed to declare payment switch RabbitMQ topology.");
+					}
+				});
+			});
+
+			await app.RunAsync();
+		}
+
+		public static async Task<WebApplication> BuildAsync(string[] args, Action<WebApplicationBuilder>? configure = null)
+		{
 			var builder = WebApplication.CreateBuilder(args);
 			var configuration = builder.Configuration;
 
@@ -57,7 +83,29 @@ namespace PaymentSwitch.Processor
 			builder.Services.AddScoped<AcceptConfirmedQuoteUseCase>();
 			builder.Services.AddScoped<ContinuePaymentExecutionUseCase>();
 			builder.Services.AddScoped<GetPaymentExecutionStatusUseCase>();
-			builder.Services.AddScoped<RegisterCreditCardUseCase>();
+			builder.Services.AddOptions<CardRegistrationOptions>().Bind(configuration.GetSection("PaymentMethods"))
+				.Validate(value => !string.IsNullOrWhiteSpace(value.ConsentVersion) && value.ConsentVersion.Length <= 100,
+					"Configure a saved-card consent version of 1 to 100 characters.").ValidateOnStart();
+			builder.Services.AddDataProtection();
+			builder.Services.AddScoped<ICardRegistrationRepository, CardRegistrationRepository>();
+			builder.Services.AddScoped<ICardDetachmentRepository, CardDetachmentRepository>();
+			builder.Services.AddScoped<IPaymentOperatorRouteRepository, PaymentOperatorRouteRepository>();
+			builder.Services.AddScoped<PinPaymentOperatorRoutesUseCase>();
+			builder.Services.AddScoped<IPaymentOperatorRouteConfiguration, PaymentOperatorRouteConfiguration>();
+			builder.Services.AddScoped<DetachCreditCardUseCase>();
+			builder.Services.AddScoped<ICardReviewRepository, CardReviewRepository>();
+			builder.Services.AddScoped<ReviewCardOperationUseCase>();
+			builder.Services.AddScoped<VerifiedCardPersistenceService>();
+			builder.Services.AddScoped<GetCardRemovalUseCase>();
+			builder.Services.AddScoped<ICardMutationScope, CardMutationScope>();
+			builder.Services.AddScoped<IRegistrationTokenProtector, RegistrationTokenProtector>();
+			builder.Services.AddScoped<StartCardRegistrationUseCase>();
+			builder.Services.AddScoped<CompleteCardRegistrationUseCase>();
+			builder.Services.AddScoped<ContinueCardRegistrationUseCase>();
+			builder.Services.AddScoped<ReconcileTerminatedCardRegistrationUseCase>();
+			builder.Services.AddScoped<GetCardRegistrationUseCase>();
+			builder.Services.AddScoped<ReceiveCardSetupNotificationUseCase>();
+			builder.Services.AddHostedService<CardRegistrationDispatcherService>();
 			builder.Services.AddScoped<UpdateCreditCardUseCase>();
 			builder.Services.AddScoped<DeleteCreditCardUseCase>();
 			builder.Services.AddScoped<GetServiceCatalogUseCase>();
@@ -74,7 +122,7 @@ namespace PaymentSwitch.Processor
 				.AddScheme<AuthenticationSchemeOptions, WorkloadApiKeyAuthenticationHandler>(
 					WorkloadApiKeyAuthenticationHandler.SchemeName,
 					_ => { });
-			builder.Services.AddAuthorization();
+			builder.Services.AddAuthorization(options => options.AddPolicy("CardOperationsWorkload", policy => policy.RequireAuthenticatedUser().RequireClaim("card-operations", "true")));
 
 			// gRPC server
 			builder.Services.AddGrpc();
@@ -82,6 +130,7 @@ namespace PaymentSwitch.Processor
 			// RabbitMQ publisher
 			builder.Services.AddRabbitMq(builder.Configuration);
 
+			configure?.Invoke(builder);
 			var app = builder.Build();
 			var logger = app.Services.GetRequiredService<ILogger<Program>>();
 
@@ -94,6 +143,7 @@ namespace PaymentSwitch.Processor
 				var clock = scope.ServiceProvider.GetRequiredService<IClock>();
 				await db.Database.MigrateAsync();
 				await PaymentDbSeeder.SeedAsync(db, configuration, clock);
+				await scope.ServiceProvider.GetRequiredService<PinPaymentOperatorRoutesUseCase>().ExecuteAsync();
 
 				logger.LogInformation("Payment database migrations and seed data completed.");
 			}
@@ -101,32 +151,14 @@ namespace PaymentSwitch.Processor
 			app.UseAuthentication();
 			app.UseAuthorization();
 
-			// The execution endpoint additionally requires workload authentication.
-			app.MapGrpcService<CreditCardGrpcService>();
+			// Stored-card and execution boundaries require workload authentication.
+			app.MapGrpcService<CreditCardGrpcService>().RequireAuthorization();
+			app.MapGrpcService<CardOperationsGrpcService>().RequireAuthorization("CardOperationsWorkload");
 			app.MapGrpcService<PaymentGrpcService>();
 			app.MapGrpcService<PaymentExecutionGrpcService>();
 			app.MapGrpcService<ServiceCatalogGrpcService>();
 
-			app.Lifetime.ApplicationStarted.Register(() =>
-			{
-				_ = Task.Run(async () =>
-				{
-					try
-					{
-						using var scope = app.Services.CreateScope();
-						var rabbitFactory = scope.ServiceProvider.GetRequiredService<RabbitMqConnectionFactory>();
-						var connection = await rabbitFactory.GetConnectionAsync();
-						using var channel = await connection.CreateChannelAsync();
-						await PaymentSwitchTopology.DeclareAllAsync(channel);
-					}
-					catch (Exception ex)
-					{
-						logger.LogError(ex, "Failed to declare payment switch RabbitMQ topology.");
-					}
-				});
-			});
-
-			app.Run();
+			return app;
 		}
 	}
 }

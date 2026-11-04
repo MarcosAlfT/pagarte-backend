@@ -54,6 +54,10 @@ or endpoints at confirmation.
 
 A confirmation rejected before Processor creates a payment, such as a foreign
 client's stored card, leaves the quote available for a corrected confirmation.
+Processor also rejects deleted, unverified, expired, or unsupported-market cards
+before creating a new execution. Card references and lifecycle state stay in
+Processor; see [Card Registration](card-registration.md) for removal/acceptance
+ordering and real-provider acceptance limits.
 Once an execution exists, a definitive decline closes the quote and another
 attempt requires a new quote even when all values are unchanged.
 

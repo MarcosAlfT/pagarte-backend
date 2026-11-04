@@ -12,14 +12,6 @@ public interface IPaymentOperatorAdapter
 {
 	string ProviderCode { get; }
 
-	Task<PaymentOperatorCardResult> RegisterCardAsync(
-		string cardNumber,
-		string cvv,
-		string cardHolderName,
-		int expiryMonth,
-		int expiryYear,
-		CancellationToken cancellationToken = default);
-
 	Task<CardReadinessResult> CheckCardAsync(
 		string cardToken,
 		CancellationToken cancellationToken = default);
@@ -45,15 +37,6 @@ public interface IPaymentOperatorAdapter
 		string? idempotencyKey = null,
 		CancellationToken cancellationToken = default);
 }
-
-public record PaymentOperatorCardResult(
-	bool Success,
-	string? CardToken,
-	string? Last4Digits,
-	string? CardType,
-	int ExpiryMonth,
-	int ExpiryYear,
-	string? ErrorMessage);
 
 public sealed record CardReadinessResult(
 	PaymentOperatorOutcome Outcome,

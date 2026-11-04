@@ -2,17 +2,47 @@ syntax = "proto3";
 option csharp_namespace = "PaymentSwitch.Contracts";
 package payment_switch;
 
+// Operations require a separate workload credential and authenticated admin actor.
+service CardOperationsService {
+  rpc ListReviews (ListCardReviewsRequest) returns (ListCardReviewsResponse);
+  rpc ReviewOperation (ReviewCardOperationRequest) returns (CardReviewDto);
+  rpc GetReview (GetCardReviewRequest) returns (CardReviewDto);
+}
+message ListCardReviewsRequest { int32 limit = 1; }
+message CardReviewItemDto { string id = 1; string kind = 2; string state = 3; string client_id = 4; int32 attempts = 5; string created_at = 6; }
+message ListCardReviewsResponse { repeated CardReviewItemDto items = 1; }
+message ReviewCardOperationRequest { string actor = 1; string idempotency_key = 2; string target_id = 3; string kind = 4; string action = 5; string expected_state = 6; string reason_code = 7; }
+message GetCardReviewRequest { string id = 1; }
+message CardReviewDto { string id = 1; string target_id = 2; string kind = 3; string action = 4; string actor = 5; string reason_code = 6; string before_state = 7; string after_state = 8; string outcome = 9; string created_at = 10; string completed_at = 11; }
+
 // Credit cards
 
 service CreditCardService {
+  rpc GetCardRemoval (GetCardRequest) returns (CardRemovalDto);
+  rpc GetCardRegistrationPolicy (CardRegistrationPolicyRequest) returns (CardRegistrationPolicyDto);
+  rpc ReceiveCardSetupNotification (CardSetupNotificationRequest) returns (MutationResponse);
   rpc GetCards (GetCardsRequest) returns (GetCardsResponse);
   rpc GetCard (GetCardRequest) returns (GetCardResponse);
-  rpc RegisterCard (RegisterCardRequest) returns (RegisterCardResponse);
+  rpc StartCardRegistration (StartCardRegistrationRequest) returns (CardRegistrationDto);
+  rpc CompleteCardRegistration (CompleteCardRegistrationRequest) returns (CardRegistrationDto);
+  rpc GetCardRegistration (CardRegistrationRequest) returns (CardRegistrationDto);
+  rpc ContinueCardRegistration (CardRegistrationRequest) returns (CardRegistrationDto);
+  rpc CancelCardRegistration (CardRegistrationRequest) returns (CardRegistrationDto);
   rpc UpdateCard (UpdateCardRequest) returns (MutationResponse);
   rpc DeleteCard (DeleteCardRequest) returns (MutationResponse);
 }
 
-message GetCardsRequest { string client_id = 1; }
+message CardSetupNotificationRequest {
+  string integration_id = 1;
+  string timestamp = 2 [deprecated = true];
+  string signature = 3 [deprecated = true];
+  bytes payload = 4;
+  map<string, string> headers = 5;
+}
+
+message CardRemovalDto { string id = 1; bool is_deleted = 2; string provider_removal_state = 3; string next_attempt_at = 4; }
+
+message GetCardsRequest { string client_id = 1; int32 page = 2; int32 page_size = 3; }
 message GetCardsResponse { repeated CreditCardDto cards = 1; }
 
 message GetCardRequest {
@@ -25,24 +55,37 @@ message GetCardResponse {
   CreditCardDto card = 2;
 }
 
-message RegisterCardRequest {
-  string client_id = 1;
-  string card_number = 2;
-  string cvv = 3;
-  string card_holder_name = 4;
-  bool is_default = 5;
-  int32 expiry_month = 6;
-  int32 expiry_year = 7;
-}
+// Raw-card registration RPC and field numbers are intentionally retired.
+message CardRegistrationPolicyRequest {}
+message CardRegistrationPolicyDto { string consent_version = 1; string purpose = 2; }
 
-message RegisterCardResponse {
-  bool success = 1;
-  string card_id = 2;
-  string last4_digits = 3;
-  string card_type = 4;
-  string error_message = 5;
-  int32 expiry_month = 6;
-  int32 expiry_year = 7;
+message StartCardRegistrationRequest {
+  string client_id = 1;
+  string idempotency_key = 2;
+  string card_holder_name = 3;
+  bool is_default = 4;
+  bool consent_accepted = 5;
+  string consent_version = 6;
+}
+message CompleteCardRegistrationRequest {
+  string client_id = 1;
+  string session_id = 2;
+  string idempotency_key = 3;
+  string temporary_token = 4;
+}
+message CardRegistrationRequest { string client_id = 1; string session_id = 2; }
+message CardRegistrationDto {
+  string id = 1;
+  string state = 2;
+  string expires_at = 3;
+  string card_id = 4;
+  string next_action = 5;
+  string error_code = 6;
+  string provider = 7;
+  string mobile_method = 8;
+  string mobile_version = 9;
+  string public_key = 10;
+  string cleanup_state = 11;
 }
 
 message UpdateCardRequest {
@@ -67,6 +110,8 @@ message CreditCardDto {
   bool is_default = 7;
   string created_at = 8;
   string operator_provider = 9;
+  bool available = 10;
+  bool expired = 11;
 }
 
 // Payments and execution

@@ -1,21 +1,19 @@
+using PaymentSwitch.Messaging;
+using PaymentSwitch.Processor.Application.Abstractions;
 using PaymentSwitch.Processor.Application.Models;
-using PaymentSwitch.Processor.Interfaces;
 
-namespace PaymentSwitch.Processor.Application.UseCases
+namespace PaymentSwitch.Processor.Application.UseCases;
+
+public sealed class DeleteCreditCardUseCase(ICardDetachmentRepository cards, ICardMutationScope mutations, IClock clock)
 {
-	public sealed class DeleteCreditCardUseCase(
-		ICreditCardRepository creditCardRepository,
-		IUnitOfWork unitOfWork)
+	public async Task ExecuteAsync(DeleteCreditCardCommand request, CancellationToken ct = default)
 	{
-		private readonly ICreditCardRepository _creditCardRepository = creditCardRepository;
-		private readonly IUnitOfWork _unitOfWork = unitOfWork;
-
-		public async Task ExecuteAsync(
-			DeleteCreditCardCommand request,
-			CancellationToken cancellationToken = default)
-		{
-			await _creditCardRepository.DeleteAsync(request.CardId, request.ClientId);
-			await _unitOfWork.SaveChangesAsync(cancellationToken);
-		}
+		await using var transaction = await mutations.BeginAsync(request.ClientId, ct);
+		var card = await cards.GetAsync(request.CardId, ct);
+		if (card is null || card.ClientId != request.ClientId || card.IsDeleted) return;
+		card.Delete(clock.UtcNow);
+		card.DetachmentState = "Pending";
+		card.DetachmentNextAttemptAt = clock.UtcNow;
+		await transaction.CommitAsync(ct);
 	}
 }

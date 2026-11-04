@@ -5,12 +5,12 @@ payment, and operational transactions. It separates current implementation
 facts from planned work so the team can deliver and close one transaction at a
 time.
 
-Historical baseline reviewed against `main` commit `e5b50d0` on 2026-10-08. The
-`codex/keycloak-security-migration` branch now contains Keycloak JWT validation,
-profile identity mapping, and administrator policies. The status table below
-retains unrelated baseline statuses. The catalogue/inquiry rows and affected
-prerequisites below have separate SQL/HTTP implementation evidence; this is not
-a complete re-audit of all post-migration transactions.
+Historical baseline: main commit e5b50d0, reviewed on 2026-10-08. Current
+ownership/status was reconciled on 2026-11-04 with the Keycloak backend,
+catalogue/inquiry delivery, and payment-method backend/offline-provider work. Historical
+Identity.Client use cases are retired source, not active transactions. Provider
+account-lifecycle release checks and real dLocal/mobile acceptance remain open;
+this inventory does not treat configured capabilities as completed acceptance.
 
 ## Status Definitions
 
@@ -29,17 +29,18 @@ are complete.
 
 ## Current Snapshot
 
-The inventory tracks 55 client and operational transactions. The seven previously
-incomplete catalogue/inquiry and linked quote transactions were closed by the
-2026-11-02 implementation; unrelated baseline rows retain their prior status:
+The inventory tracks 60 client and operational transactions. Counts below
+are derived from the transaction rows, excluding the separate prerequisites.
+Keycloak account-lifecycle work and mock-versus-live payment acceptance are
+included in the current statuses.
 
 | Status | Count |
 | --- | ---: |
-| Complete | 31 |
-| Partial | 7 |
-| Missing | 15 |
+| Complete | 25 |
+| Partial | 23 |
+| Missing | 11 |
 | Security gap | 0 |
-| Decision required | 2 |
+| Decision required | 1 |
 
 Eight security, architecture, and testing prerequisites are tracked separately
 near the end of this document.
@@ -64,18 +65,18 @@ in the current inventory and do not require reimplementation.
 
 | ID | Transaction | Status | Current implementation or missing work | Owner |
 | --- | --- | --- | --- | --- |
-| `AUTH-01` | Register client user | Complete | `RegisterUserUseCase` creates a user pending email confirmation. | `Identity.Client` |
-| `AUTH-02` | Confirm email | Complete | `ConfirmEmailUseCase` validates the confirmation token and activates the account. | `Identity.Client` |
-| `AUTH-03` | Log in with password | Complete | `LoginWithPasswordUseCase` authenticates the user and issues access and refresh tokens. | `Identity.Client` |
-| `AUTH-04` | Refresh client session | Complete | `RefreshTokenUseCase` validates and rotates refresh tokens. | `Identity.Client` |
-| `AUTH-05` | Log out | Complete | `LogoutUseCase` revokes refresh-token access. | `Identity.Client` |
-| `AUTH-06` | Recover forgotten password | Complete | Forgot-password and reset-password use cases are implemented. | `Identity.Client` |
-| `AUTH-07` | Change password | Complete | `ChangePasswordUseCase` supports an authenticated password change. | `Identity.Client` |
+| `AUTH-01` | Register client user | Partial | Keycloak self-registration is configured; SMTP-backed registration/email verification release acceptance remains pending. | Keycloak |
+| `AUTH-02` | Confirm email | Partial | Keycloak owns email verification; configured SMTP and the end-to-end email flow remain pending release acceptance. | Keycloak |
+| `AUTH-03` | Log in with password | Complete | Keycloak Authorization Code + PKCE login with password and real API access tokens was verified locally; no production client application exists yet. | Keycloak |
+| `AUTH-04` | Refresh client session | Partial | Keycloak owns refresh tokens and persistent sessions; refresh/session lifecycle release acceptance remains pending. | Keycloak |
+| `AUTH-05` | Log out | Partial | Logout is delegated to Keycloak; the documented release checks remain pending. | Keycloak |
+| `AUTH-06` | Recover forgotten password | Partial | Recovery is delegated to Keycloak; configured SMTP and recovery-flow acceptance remain pending. | Keycloak |
+| `AUTH-07` | Change password | Partial | Password changes belong to Keycloak account management; acceptance of the account-lifecycle journey remains pending. | Keycloak |
 | `AUTH-08` | Create person or organization profile | Complete | Separate person and organization creation use cases are implemented. | `ClientProfiles` |
 | `AUTH-09` | Manage addresses and phone numbers | Complete | Create, read, update, delete, and primary-contact operations are implemented. | `ClientProfiles` |
-| `AUTH-10` | Complete registration and profile onboarding as one client journey | Partial | Identity registration and profile creation exist, but no workflow coordinates their completion or recovery. | Cross-context: `Identity.Client` and `ClientProfiles` |
-| `AUTH-11` | View and revoke active sessions or devices | Missing | Refresh tokens can be revoked, but there is no client-visible session inventory. | `Identity.Client` |
-| `AUTH-12` | Enroll and use MFA or passkeys | Missing | A passkey domain entity exists, but enrollment, challenge, and authentication transactions do not. | `Identity.Client` |
+| `AUTH-10` | Complete registration and profile onboarding as one client journey | Partial | Keycloak login and ClientProfiles mapping exist, but no client application coordinates the complete onboarding/recovery journey. | Keycloak, ClientProfiles, and future client application |
+| `AUTH-11` | View and revoke active sessions or devices | Partial | Keycloak owns persistent sessions; client-facing session/device management and its release acceptance remain pending. | Keycloak and future client application |
+| `AUTH-12` | Enroll and use MFA or passkeys | Missing | No configured and accepted MFA/passkey enrollment/authentication journey is recorded. Retired Identity.Client entities are not an active implementation. | Keycloak and future client application |
 | `AUTH-13` | Close a client account | Partial | Client-profile deletion exists; coordinated identity closure, stored-card handling, and legal data retention do not. | Cross-context decision required |
 
 ## Service Catalogue and Amount Inquiry
@@ -104,29 +105,29 @@ provider inquiry. Imported services remain inactive until approved.
 
 ## Payment Methods
 
-The [Payment Methods requirement](requirements/payment-methods.md) is a draft
-covering `CARD-01` through `CARD-07`, including tokenization, setup challenges,
-default-card concurrency, and deletion/payment coordination. Existing Complete
-labels below describe baseline CRUD availability, not acceptance of the new
-requirements. In particular, registration currently persists the submitted
-full card number; removing that storage is required by the draft. The selected
-design uses dLocal mobile tokenization: card details go directly to dLocal,
-and Pagarte receives the temporary token for backend saved-card operations.
-CARD-07 excludes PAN/CVV from Pagarte services. Account-specific dLocal
-capabilities and sandbox integration remain to be verified.
-The requirement also mandates replaceable operators (`PM-009`): central
-selection for new registrations, provider-neutral backend/mobile interfaces,
-and original-provider routing for existing cards and outstanding operations.
+The [requirement](requirements/payment-methods.md) defines CARD-01 through CARD-07;
+CARD-08 through CARD-12 track supporting backend and integration delivery.
+The [flow](flows/card-registration.md) documents implementation;
+the [test guide](../tests/PaymentSwitch.Processor.Tests/README.md) records verification.
 
 | ID | Transaction | Status | Current implementation or missing work | Owner |
 | --- | --- | --- | --- | --- |
-| `CARD-01` | Add a stored card | Complete | Baseline registration exists but stores the submitted full card number alongside the operator token and metadata. The new requirement replaces this with verified tokenization and durable registration sessions. | `Payments.Api` and `PaymentSwitch.Processor` |
-| `CARD-02` | List stored cards | Complete | Client-owned cards are available through the authenticated card API. | `Payments.Api` and `PaymentSwitch.Processor` |
-| `CARD-03` | View one stored card | Complete | The transaction checks client ownership. | `Payments.Api` and `PaymentSwitch.Processor` |
-| `CARD-04` | Update card metadata or select the default card | Complete | `UpdateCreditCardUseCase` implements both operations. | `Payments.Api` and `PaymentSwitch.Processor` |
-| `CARD-05` | Delete a stored card | Complete | `DeleteCreditCardUseCase` is exposed through the authenticated card API. | `Payments.Api` and `PaymentSwitch.Processor` |
-| `CARD-06` | Complete a provider challenge such as 3-D Secure | Missing | No redirect, challenge, callback, or continuation transaction is modeled. | Product and payment-operator decision required |
-| `CARD-07` | Tokenize in the mobile app without sending PAN/CVV through Pagarte | Decision required | dLocal mobile tokenization is selected; implementation remains pending. Replace raw-card backend contracts/storage with temporary-token processing and reusable card_id. Account-specific save/recovery capabilities remain to be confirmed. | Mobile app, `Payments.Api`, `PaymentSwitch.Processor`, and `ExternalConnections` |
+| `CARD-01` | Add a stored card | Partial | Consent, owned token-only setup, verified metadata, idempotency, recovery, and audited rechecks are tested with the mock. Bound live dLocal setup remains pending. | `Payments.Api` and `PaymentSwitch.Processor` |
+| `CARD-02` | List stored cards | Complete | Safe owned listing, stable pagination, removed exclusion, and availability/expiry are tested. | `Payments.Api` and `PaymentSwitch.Processor` |
+| `CARD-03` | View one stored card | Complete | Safe owned detail, uniform missing/foreign responses, and malformed-ID handling are tested. | `Payments.Api` and `PaymentSwitch.Processor` |
+| `CARD-04` | Update card metadata or select the default card | Complete | Allowed metadata and atomic defaults cover uniqueness, concurrency, eligibility, and rollback. | `Payments.Api` and `PaymentSwitch.Processor` |
+| `CARD-05` | Delete a stored card | Partial | Local removal/default clearing, deferred cleanup, removal status, and audited retries preserve shared resources and accepted work/refunds. Live-provider acceptance remains pending. | `Payments.Api` and `PaymentSwitch.Processor` |
+| `CARD-06` | Complete a provider challenge such as 3-D Secure | Partial | Owned status/continue/cancel, mock challenges, bounded callback headers, and signed event deduplication are tested. Real issuer UI/timing and required payment continuation remain pending. | Mobile, `Payments.Api`, Processor, ExternalConnections |
+| `CARD-07` | Tokenize in the mobile app without sending PAN/CVV through Pagarte | Partial | Backend accepts token/session data only and removes raw-card storage; mobile tokenization/live acceptance remains pending. | Mobile, `Payments.Api`, Processor, ExternalConnections |
+| `CARD-08` | Manage registration sessions and consent | Partial | Policy/version audit, owned creation/status/continue/cancel, protected tokens, leases, and bounded recovery are implemented. Live dLocal setup continuation remains pending. | `Payments.Api` and `PaymentSwitch.Processor` |
+| `CARD-09` | Select and retain the payment-operator integration | Partial | Provider-neutral contracts, central selection, immutable identity/credential pins, account keys, market checks, and retained refund routing are implemented. Full bound-setup replacement remains pending. | Processor, Worker, ExternalConnections |
+| `CARD-10` | Review and reconcile stuck card operations | Complete | VerifiedAdmin queue, authoritative rechecks, safe cleanup retries, and audit lookup are HTTP/gRPC/SQL-tested; separate workload credentials, expected-state/idempotency, and dependency/expiry checks are enforced. | `Payments.Api` and `PaymentSwitch.Processor` |
+| `CARD-11` | Save, inspect, and remove a card through dLocal | Partial | Token-only vault HTTP, known-card lookup/deletion verification, signing, and strict result parsing are offline-tested. Customer binding, public setup integration, and live acceptance remain pending. | `ExternalConnections.PaymentOperators` |
+| `CARD-12` | Migrate legacy stored-card data | Complete | SQL migration tests cover raw-column removal, retained card/payment references, unverified legacy eligibility, and rejection of incompatible populated data. | `PaymentSwitch.Processor` |
+
+Public dLocal registration stays disabled pending Direct-token/customer binding,
+trusted payer projection, lost-reference recovery, setup-event/challenge contracts,
+and mobile/live acceptance. Offline HTTP tests do not close those gaps.
 
 ## Quotes
 
@@ -174,9 +175,9 @@ One quote currently represents one payable service and one payment attempt.
 | `OPS-01` | List payments requiring manual intervention | Missing | The saga can enter manual intervention, but no operator queue exists. | `PaymentSwitch.Processor` plus an operational API |
 | `OPS-02` | Reconcile or resolve a manual-intervention payment | Missing | No authorized operational command records the resolution and safely resumes or closes the saga. | `PaymentSwitch.Processor` |
 | `OPS-03` | Search payments for client support | Missing | Internal queries are client-oriented and there is no support authorization model. | Operational API decision required |
-| `OPS-04` | Receive and reconcile provider webhooks | Missing | Current adapters use request/response calls and polling reconciliation only. | `ExternalConnections` and `PaymentSwitch.Processor` |
+| `OPS-04` | Receive and reconcile provider webhooks | Partial | Mock setup callbacks authenticate/deduplicate wakeups; dLocal signature primitives are offline-tested. Live setup/payment/refund webhook integration remains pending. | ExternalConnections and PaymentSwitch.Processor |
 | `OPS-05` | Reconcile provider settlement and produce financial reports | Missing | There is no settlement-file, ledger, or provider financial-reconciliation workflow. | New financial operations boundary likely required |
-| `OPS-06` | Audit privileged operational actions | Missing | No administrator identity model or append-only operational audit transaction exists. | Identity and operations decision required |
+| `OPS-06` | Audit privileged operational actions | Partial | Card-review intents/results audit actor, coded reason, request key, and state changes. Comprehensive append-only auditing across privileged operations remains open. | `Payments.Api` and `PaymentSwitch.Processor` for card reviews |
 
 ## Security and Architecture Prerequisites
 
@@ -186,13 +187,13 @@ several transactions above.
 | ID | Prerequisite | Status | Required outcome |
 | --- | --- | --- | --- |
 | `SEC-01` | Authenticate client profile, card, and quote operations | Complete | Public profile, stored-card, and quote endpoints validate access tokens and derive client ownership from the token. |
-| `SEC-02` | Authenticate every internal Processor gRPC service | Partial | `PaymentExecutionService` validates the workload API key; card, payment-query, and catalogue gRPC services still require an explicit workload boundary. |
-| `SEC-03` | Add administrator/support identities and permissions | Missing | Maintenance, route activation, refunds, manual review, and support search need roles or scoped permissions. |
+| `SEC-02` | Authenticate every internal Processor gRPC service | Partial | Card/execution gRPC require workload authentication; CardOperationsService requires a distinct operations credential. Payment-query/catalogue gRPC protection remains pending. |
+| `SEC-03` | Add administrator/support identities and permissions | Partial | Keycloak roles and VerifiedAdmin catalogue/card-review boundaries exist. Payment/refund manual-review and broader support permissions remain pending. |
 | `SEC-04` | Decide whether catalogue browsing is public or authenticated | Complete | The accepted amount-inquiry requirement preserves public catalogue browsing/details; HTTP tests verify that boundary while customer inquiries remain protected. |
 | `ARCH-01` | Resolve duplicate catalogue ownership and the external feed | Open | Choose the canonical catalogue and implement the real external catalogue adapter. |
 | `ARCH-02` | Resolve company endpoints and credentials server-side | Open | The execution package should carry stable route or destination identifiers rather than connection details. |
 | `ARCH-03` | Implement PayableServices application-owned transaction boundaries | Complete | Registered IUnitOfWork owns commits; repositories stage writes. SQL transaction-owned application locks protect catalogue sync/activation, durable inquiry reservations/completion, and atomic quote consumption; HTTP runs outside transactions. |
-| `TEST-01` | Add database-backed and transport-level integration coverage | Partial | Cover authentication, duplicate confirmations, SQL concurrency, restart recovery, provider contracts, and production-like migrations. |
+| `TEST-01` | Add database-backed and transport-level integration coverage | Partial | SQL/HTTP/gRPC tests cover auth, concurrency, restart recovery, migrations, and offline provider contracts. Full runtime/live-provider acceptance remains pending. |
 
 See [Current Problems](current-problems.md) for the detailed architectural
 conflicts behind `ARCH-01` through `ARCH-03` and `TEST-01`.

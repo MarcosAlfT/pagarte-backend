@@ -1,136 +1,125 @@
+using Grpc.Core;
+using Microsoft.Extensions.Options;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using PaymentSwitch.Contracts;
+using PaymentSwitch.Messaging;
 using PaymentSwitch.Processor.Application.Models;
 using PaymentSwitch.Processor.Application.UseCases;
-using Grpc.Core;
 
-namespace PaymentSwitch.Processor.GrpcServices
+namespace PaymentSwitch.Processor.GrpcServices;
+
+public sealed class CreditCardGrpcService(GetCreditCardsUseCase list, GetCreditCardUseCase detail,
+	UpdateCreditCardUseCase update, DeleteCreditCardUseCase delete, StartCardRegistrationUseCase start,
+	CompleteCardRegistrationUseCase complete, GetCardRegistrationUseCase getRegistration,
+	ContinueCardRegistrationUseCase continueRegistration, ReceiveCardSetupNotificationUseCase notifications, IClock clock, IOptions<CardRegistrationOptions> options, GetCardRemovalUseCase removal) : CreditCardService.CreditCardServiceBase
 {
-	public class CreditCardGrpcService(
-		GetCreditCardsUseCase getCreditCardsUseCase,
-		GetCreditCardUseCase getCreditCardUseCase,
-		RegisterCreditCardUseCase registerCreditCardUseCase,
-		UpdateCreditCardUseCase updateCreditCardUseCase,
-		DeleteCreditCardUseCase deleteCreditCardUseCase)
-		: PaymentSwitch.Contracts.CreditCardService.CreditCardServiceBase
+	public override Task<CardRemovalDto> GetCardRemoval(GetCardRequest request, ServerCallContext context) => Run(async () =>
 	{
-		private readonly GetCreditCardsUseCase _getCreditCardsUseCase =
-			getCreditCardsUseCase;
-		private readonly GetCreditCardUseCase _getCreditCardUseCase =
-			getCreditCardUseCase;
-		private readonly RegisterCreditCardUseCase _registerCreditCardUseCase =
-			registerCreditCardUseCase;
-		private readonly UpdateCreditCardUseCase _updateCreditCardUseCase =
-			updateCreditCardUseCase;
-		private readonly DeleteCreditCardUseCase _deleteCreditCardUseCase =
-			deleteCreditCardUseCase;
+		var view = await removal.ExecuteAsync(Client(request.ClientId), Id(request.CardId), context.CancellationToken);
+		return new CardRemovalDto { Id = view.Id.ToString(), IsDeleted = view.IsDeleted, ProviderRemovalState = view.ProviderRemovalState, NextAttemptAt = view.NextAttemptAt?.ToString("O") ?? "" };
+	});
 
-		public override async Task<GetCardsResponse> GetCards(
-			GetCardsRequest request, ServerCallContext context)
+	public override Task<CardRegistrationPolicyDto> GetCardRegistrationPolicy(CardRegistrationPolicyRequest request, ServerCallContext context) =>
+		Task.FromResult(new CardRegistrationPolicyDto { ConsentVersion = options.Value.ConsentVersion, Purpose = "CustomerInitiatedCardPayments" });
+
+	public override Task<MutationResponse> ReceiveCardSetupNotification(CardSetupNotificationRequest request, ServerCallContext context) => Run(async () =>
+	{
+		if (request.Payload.Length > 8192 || request.IntegrationId.Length > 100) throw new CardOperationException("INVALID_PROVIDER_CALLBACK", "Invalid callback.", 401);
+		if (request.Headers.Count > 10 || request.Headers.Sum(h => h.Key.Length + h.Value.Length) > 4096
+			|| request.Headers.Keys.Distinct(StringComparer.OrdinalIgnoreCase).Count() != request.Headers.Count)
+			throw new CardOperationException("INVALID_PROVIDER_CALLBACK", "Invalid callback headers.", 401);
+		var headers = new Dictionary<string, string>(request.Headers, StringComparer.OrdinalIgnoreCase);
+		await notifications.ExecuteAsync(request.IntegrationId, headers, request.Payload.ToByteArray(), context.CancellationToken);
+		return new MutationResponse { Success = true };
+	});
+
+	public override Task<GetCardsResponse> GetCards(GetCardsRequest request, ServerCallContext context) => Run(async () =>
+	{
+		var cards = await list.ExecuteAsync(Client(request.ClientId), request.Page == 0 ? 1 : request.Page,
+			request.PageSize == 0 ? 20 : request.PageSize, context.CancellationToken);
+		var response = new GetCardsResponse();
+		response.Cards.AddRange(cards.Select(MapCard));
+		return response;
+	});
+
+	public override Task<GetCardResponse> GetCard(GetCardRequest request, ServerCallContext context) => Run(async () =>
+	{
+		var card = await detail.ExecuteAsync(Client(request.ClientId), Id(request.CardId));
+		return card is null ? new GetCardResponse { Found = false } : new GetCardResponse { Found = true, Card = MapCard(card) };
+	});
+
+	public override Task<MutationResponse> UpdateCard(UpdateCardRequest request, ServerCallContext context) => Run(async () =>
+	{
+		var error = await update.ExecuteAsync(new UpdateCreditCardCommand(Client(request.ClientId), Id(request.CardId),
+			request.CardHolderName, request.IsDefault), context.CancellationToken);
+		if (error is not null) throw new CardOperationException("CARD_NOT_FOUND", "Card not found.", 404);
+		return new MutationResponse { Success = true };
+	});
+
+	public override Task<MutationResponse> DeleteCard(DeleteCardRequest request, ServerCallContext context) => Run(async () =>
+	{
+		await delete.ExecuteAsync(new DeleteCreditCardCommand(Client(request.ClientId), Id(request.CardId)), context.CancellationToken);
+		return new MutationResponse { Success = true };
+	});
+
+	public override Task<CardRegistrationDto> StartCardRegistration(StartCardRegistrationRequest request, ServerCallContext context) =>
+		Run(async () => Map(await start.ExecuteAsync(new(Client(request.ClientId), request.IdempotencyKey,
+			request.CardHolderName, request.IsDefault, request.ConsentAccepted, request.ConsentVersion), context.CancellationToken)));
+
+	public override Task<CardRegistrationDto> CompleteCardRegistration(CompleteCardRegistrationRequest request, ServerCallContext context) =>
+		Run(async () => Map(await complete.ExecuteAsync(new(Client(request.ClientId), Id(request.SessionId),
+			request.IdempotencyKey, request.TemporaryToken), context.CancellationToken)));
+
+	public override Task<CardRegistrationDto> GetCardRegistration(CardRegistrationRequest request, ServerCallContext context) =>
+		Run(async () => Map(await getRegistration.ExecuteAsync(Client(request.ClientId), Id(request.SessionId), ct: context.CancellationToken)));
+
+	public override Task<CardRegistrationDto> CancelCardRegistration(CardRegistrationRequest request, ServerCallContext context) =>
+		Run(async () => Map(await getRegistration.ExecuteAsync(Client(request.ClientId), Id(request.SessionId), cancel: true, ct: context.CancellationToken)));
+
+	public override Task<CardRegistrationDto> ContinueCardRegistration(CardRegistrationRequest request, ServerCallContext context) =>
+		Run(async () => Map(await continueRegistration.ExecuteAsync(Id(request.SessionId), Client(request.ClientId), context.CancellationToken)));
+
+	private CreditCardDto MapCard(Domain.Entities.CreditCard card) => new()
+	{
+		Id = card.Id.ToString(), CardHolderName = card.CardHolderName, Last4Digits = card.Last4Digits,
+		CardType = card.CardType.ToString(), ExpiryMonth = card.ExpiryMonth, ExpiryYear = card.ExpiryYear,
+		IsDefault = card.IsDefault, CreatedAt = card.CreatedAt.ToString("O"), OperatorProvider = card.OperatorProvider,
+		Available = card.IsAvailable(clock.UtcNow),
+		Expired = card.ExpiryYear < clock.UtcNow.Year || (card.ExpiryYear == clock.UtcNow.Year && card.ExpiryMonth < clock.UtcNow.Month)
+	};
+
+	private static CardRegistrationDto Map(CardRegistrationView view) => new()
+	{
+		Id = view.Id.ToString(), State = view.State, ExpiresAt = view.ExpiresAt.ToString("O"),
+		CardId = view.CardId?.ToString() ?? "", NextAction = view.NextAction ?? "", ErrorCode = view.ErrorCode ?? "",
+		Provider = view.Initialization.Provider, MobileMethod = view.Initialization.Method,
+		MobileVersion = view.Initialization.Version, PublicKey = view.Initialization.PublicKey ?? "", CleanupState = view.CleanupState
+	};
+
+	private static Guid Id(string id) => Guid.TryParse(id, out var parsed) && parsed != Guid.Empty ? parsed
+		: throw new CardOperationException("INVALID_IDENTIFIER", "Supply a valid identifier.");
+	private static string Client(string clientId) => Id(clientId).ToString();
+
+	private static async Task<T> Run<T>(Func<Task<T>> action)
+	{
+		try { return await action(); }
+		catch (CardOperationException error)
 		{
-			var cards = await _getCreditCardsUseCase.ExecuteAsync(request.ClientId);
-			var response = new GetCardsResponse();
-			response.Cards.AddRange(cards.Select(MapCard));
-			return response;
+			var code = error.HttpStatus switch { 401 => StatusCode.Unauthenticated, 404 => StatusCode.NotFound, 409 => StatusCode.AlreadyExists, _ => StatusCode.InvalidArgument };
+			throw new RpcException(new Status(code, error.Code));
 		}
-
-		public override async Task<GetCardResponse> GetCard(
-			GetCardRequest request, ServerCallContext context)
+		catch (DbUpdateException error) when (error.InnerException is SqlException { Number: 2601 or 2627 })
 		{
-			var card = await _getCreditCardUseCase.ExecuteAsync(
-				request.ClientId,
-				Guid.Parse(request.CardId));
-
-			if (card == null)
-			{
-				return new GetCardResponse { Found = false };
-			}
-
-			return new GetCardResponse { Found = true, Card = MapCard(card) };
+			throw new RpcException(new Status(StatusCode.AlreadyExists, "CONCURRENT_CARD_CONFLICT"));
 		}
-
-		public override async Task<RegisterCardResponse> RegisterCard(
-			RegisterCardRequest request, ServerCallContext context)
+		catch (DbUpdateConcurrencyException)
 		{
-			var result = await _registerCreditCardUseCase.ExecuteAsync(
-				new RegisterCreditCardCommand(
-					request.ClientId,
-					request.CardNumber,
-					request.Cvv,
-					request.CardHolderName,
-					request.ExpiryMonth,
-					request.ExpiryYear,
-					request.IsDefault),
-				context.CancellationToken);
-
-			if (!result.Success)
-			{
-				return new RegisterCardResponse
-				{
-					Success = false,
-					ErrorMessage = result.ErrorMessage ?? "Card registration failed."
-				};
-			}
-
-			var card = result.Card!;
-
-			return new RegisterCardResponse
-			{
-				Success = true,
-				CardId = card.Id.ToString(),
-				Last4Digits = card.Last4Digits,
-				CardType = result.CardType ?? card.CardType.ToString(),
-				ExpiryMonth = card.ExpiryMonth,
-				ExpiryYear = card.ExpiryYear
-			};
+			throw new RpcException(new Status(StatusCode.Aborted, "CONCURRENT_CARD_CHANGE"));
 		}
-
-		public override async Task<MutationResponse> UpdateCard(
-			UpdateCardRequest request, ServerCallContext context)
+		catch (InvalidOperationException)
 		{
-			var errorMessage = await _updateCreditCardUseCase.ExecuteAsync(
-				new UpdateCreditCardCommand(
-					request.ClientId,
-					Guid.Parse(request.CardId),
-					request.CardHolderName,
-					request.IsDefault),
-				context.CancellationToken);
-
-			if (errorMessage != null)
-			{
-				return new MutationResponse
-				{
-					Success = false,
-					ErrorMessage = errorMessage
-				};
-			}
-
-			return new MutationResponse { Success = true };
+			throw new RpcException(new Status(StatusCode.Unavailable, "CARD_OPERATOR_UNAVAILABLE"));
 		}
-
-		public override async Task<MutationResponse> DeleteCard(
-			DeleteCardRequest request, ServerCallContext context)
-		{
-			await _deleteCreditCardUseCase.ExecuteAsync(
-				new DeleteCreditCardCommand(
-					request.ClientId,
-					Guid.Parse(request.CardId)),
-				context.CancellationToken);
-
-			return new MutationResponse { Success = true };
-		}
-
-		private static CreditCardDto MapCard(Domain.Entities.CreditCard card) =>
-			new()
-			{
-				Id = card.Id.ToString(),
-				CardHolderName = card.CardHolderName,
-				Last4Digits = card.Last4Digits,
-				CardType = card.CardType.ToString(),
-				ExpiryMonth = card.ExpiryMonth,
-				ExpiryYear = card.ExpiryYear,
-				IsDefault = card.IsDefault,
-				CreatedAt = card.CreatedAt.ToString("O"),
-				OperatorProvider = card.OperatorProvider
-			};
 	}
 }

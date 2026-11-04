@@ -8,7 +8,17 @@ namespace PaymentSwitch.Processor.Domain.Entities
 		public string ClientId { get; set; } = string.Empty;
 		public string OperatorProvider { get; set; } = string.Empty;
 		public string OperatorCardToken { get; set; } = string.Empty;
-		public string CardNumber { get; set; } = string.Empty;
+		public string AdapterProvider { get; set; } = string.Empty;
+		public string DetachmentState { get; set; } = "None";
+		public int DetachmentAttempts { get; set; }
+		public DateTime? DetachmentNextAttemptAt { get; set; }
+		public Guid? DetachmentLeaseId { get; set; }
+		public DateTime? DetachmentLeaseUntil { get; set; }
+		public string ProviderAccount { get; set; } = string.Empty;
+		public string ProviderEnvironment { get; set; } = string.Empty;
+		public string IntegrationVersion { get; set; } = string.Empty;
+		public string? ProviderReferenceDigest { get; set; }
+		public bool SetupVerified { get; set; }
 		public string CardHolderName { get; set; } = string.Empty;
 		public string Last4Digits { get; set; } = string.Empty;
 		public CardType CardType { get; set; }
@@ -24,7 +34,7 @@ namespace PaymentSwitch.Processor.Domain.Entities
 
 		public static CreditCard Create(string clientId, string operatorProvider,
 			string operatorCardToken,
-			string cardNumber, string cardHolderName,
+			string cardHolderName,
 			string last4Digits, CardType cardType, int expiryMonth,
 			int expiryYear, bool isDefault, DateTime utcNow)
 		{
@@ -34,7 +44,7 @@ namespace PaymentSwitch.Processor.Domain.Entities
 				ClientId = clientId,
 				OperatorProvider = operatorProvider,
 				OperatorCardToken = operatorCardToken,
-				CardNumber = cardNumber,
+				SetupVerified = true,
 				CardHolderName = cardHolderName,
 				Last4Digits = last4Digits,
 				CardType = cardType,
@@ -44,6 +54,11 @@ namespace PaymentSwitch.Processor.Domain.Entities
 				CreatedAt = utcNow
 			};
 		}
+
+		public bool IsAvailable(DateTime utcNow) => SetupVerified && !IsDeleted
+			&& !string.IsNullOrWhiteSpace(OperatorProvider) && !string.IsNullOrWhiteSpace(OperatorCardToken)
+			&& ExpiryMonth is >= 1 and <= 12 && ExpiryYear is >= 2000 and <= 9998
+			&& new DateTime(ExpiryYear, ExpiryMonth, 1).AddMonths(1) > utcNow;
 
 		public void Update(string cardHolderName, bool isDefault, DateTime utcNow)
 		{
@@ -55,6 +70,7 @@ namespace PaymentSwitch.Processor.Domain.Entities
 		public void Delete(DateTime utcNow)
 		{
 			IsDeleted = true;
+			IsDefault = false;
 			DeletedAt = utcNow;
 		}
 	}

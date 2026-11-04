@@ -16,7 +16,8 @@ ClientProfiles.Api
 Payments.Api
   -> validates client access tokens
   -> resolves the internal Client.Id through ClientProfiles
-  -> exposes public stored-card HTTP endpoints
+  -> exposes public owned card-registration sessions and stored-card HTTP endpoints
+  -> forwards signed setup notifications for provider verification
   -> calls PaymentSwitch.Processor over gRPC
 
 PayableServices.Api
@@ -26,8 +27,8 @@ PayableServices.Api
   -> sends authenticated immutable execution packages to Processor
 
 PaymentSwitch.Processor
-  -> authenticates the PayableServices workload
-  -> owns PaymentDb, stored cards, payments, retry state, operators, and outbox
+  -> authenticates card and quote-execution workloads
+  -> owns PaymentDb, card setup sessions/inbox, stored cards, payments, retry state, operators, and outbox
   -> checks card, pays company, charges full total, and rolls back when required
   -> reconciles unknown outcomes and schedules durable retries
 
@@ -113,7 +114,10 @@ longer reads Processor for this workflow. Processor does not own inquiries or qu
 - ASP.NET Core JWT bearer validation and named policies secure public APIs.
 - Payments and PayableServices resolve `(iss, sub)` over a protected internal
   ClientProfiles HTTP endpoint before client-owned operations.
-- A workload API key secures the internal quote-execution gRPC boundary.
+- A workload API key secures internal card and quote-execution gRPC boundaries.
+- Card setup uses durable owned sessions, token claims, leases, and provider
+  lookup. Callback signatures are verified in the adapter; notifications only
+  schedule status lookup. The synthetic operator is Development-only.
 - gRPC connects public services to Processor.
 - SQL Server stores context-owned state.
 - Processor uses its payment row as the durable saga schedule and concurrency
@@ -130,7 +134,7 @@ longer reads Processor for this workflow. Processor does not own inquiries or qu
 | Keycloak PostgreSQL | Keycloak | Users, sessions, realm configuration, and keys |
 | `ClientProfilesDb` | `ClientProfiles` | Clients, external identity mapping, and contact information |
 | `PayableServicesDb` | `PayableServices` | Catalogue, routes, mappings, inquiry reservations/results/leases, quote snapshots and status |
-| `PaymentDb` | Processor; Worker for refund fields | Cards, payment execution snapshots, retry state, operators, retained service catalogue, outbox |
+| `PaymentDb` | Processor; Worker for refund fields | Card setup sessions/inbox/consent/review audits, immutable integration/credential pins, deferred card removal, safe stored-card references, payment execution snapshots, retry state, operators, retained service catalogue, outbox |
 
 ## Shared Libraries
 
@@ -161,6 +165,14 @@ Development AppHost. The mock and PayableServices require server-supplied compan
 credentials; no provider destination is accepted from public clients. The
 AppHost build and manifest wiring are verified; a fresh full Aspire smoke run
 requires Docker. HTTP/SQL acceptance tests independently exercise the new flow.
+
+The [card lifecycle](flows/card-registration.md) implements token-only registration,
+consent, recovery/removal, immutable routing, and audited admin reviews with a
+Development-only provider. Processor owns its state; Worker reads route pins for refunds.
+dLocal HTTP contracts are offline-tested; public setup/mobile acceptance remains
+[pending](current-problems.md#6-payment-method-acceptance-and-recovery-gaps).
+The [test guide](../tests/PaymentSwitch.Processor.Tests/README.md) covers credentials,
+fixtures, migration evidence, and verification limits.
 
 The Processor saga migration requires legacy active payments and pending
 `payment.request` messages to be drained before deployment.

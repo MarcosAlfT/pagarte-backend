@@ -1,9 +1,9 @@
 # Current Problems for Discussion
 
-This document records unresolved problems observed after implementation of the
-confirmed-quote execution saga.
+This document records unresolved problems in the confirmed-quote execution
+saga, context boundaries, and card-lifecycle implementation.
 
-Last reviewed for catalogue/inquiry implementation: 2026-11-02.
+Last reviewed for card-lifecycle implementation: 2026-11-03.
 
 ## Review Status
 
@@ -14,6 +14,7 @@ Last reviewed for catalogue/inquiry implementation: 2026-11-02.
 | PayableServices unit of work | Resolved | Registered application-owned commits and SQL transactions cover catalogue synchronization, activation, and inquiry-to-quote consumption. |
 | Remaining integration coverage | Partially resolved | Keep the current unit coverage and add the database-backed and transport-level scenarios listed below. |
 | Execution package carries connection data | Open | Resolve company endpoints and credentials server-side from stable route identifiers. |
+| Payment-method acceptance and recovery gaps | Open | Confirm bound dLocal setup/recovery/challenge contracts and complete live-provider/mobile acceptance. |
 
 Seven quote-execution items have been verified as resolved and are listed at
 the end of this document.
@@ -76,7 +77,7 @@ persistence failures; no database transaction spans provider HTTP.
 
 **Status: Partially resolved.**
 
-The original three test suites contain 21 tests. They cover security policy and
+The baseline tests cover security policy and
 resolver failure behavior as well as ISO scale and
 rounding, checked money totals, the successful company-first sequence,
 full-total charging, retry without duplicate company payment,
@@ -89,11 +90,18 @@ An inquiry-backed quote is also tested against the existing Processor validator
 and public quote confirmation adapter. See the
 [acceptance-test guide](../tests/PayableServices.Tests/README.md).
 
+The [payment-method suite](../tests/PaymentSwitch.Processor.Tests/README.md)
+adds actual Payments HTTP to authenticated card gRPC and SQL coverage, including
+idempotency, callbacks, default concurrency/rollback, restart recovery, legacy
+migration, removal/payment ordering, and original-integration Worker refunds.
+It uses synthetic providers and does not close real dLocal/mobile acceptance.
+
 The repository still needs database-backed and transport-level coverage for:
 
 - Full authenticated quote confirmation/status refresh through live Processor
   gRPC and its SQL persistence, beyond the existing HTTP adapter/validator coverage.
-- Workload authentication rejection and success.
+- Quote-execution workload authentication rejection and success; the card
+  boundary now has both.
 - Concurrent duplicate confirmations against SQL Server.
 - Restart recovery and row-version contention between dispatcher instances.
 - Real provider contract fixtures for company status/rollback and dLocal
@@ -122,6 +130,30 @@ This does not match the selected contract boundary. Processor should resolve
 the current endpoint set and credential reference from the stable route data,
 or the requirement must be explicitly revised if immutable endpoint snapshots
 are intended.
+
+## 6. Payment-Method Acceptance and Recovery Gaps
+
+**Status: Open.** Public dLocal registration remains disabled until these contracts
+and acceptance conditions are established:
+
+- Direct-token standalone saving for the enabled merchant/market/card types.
+- Trusted payer projection and provider customer/session binding.
+- Recovery after a successful save with a lost provider reference.
+- Setup-event schema/correlation and issuer challenge timing; payment-time
+  continuation requires its separate execution design.
+- Mobile tokenization/public-key wiring, approved consent presentation, and live
+  removal/refund guarantees.
+
+The mock lifecycle, bounded recovery/removal, identity/credential pins, and audited
+admin reviews are implemented. dLocal vault HTTP/signature/account-routing tests use
+synthetic responses. Two mock accounts or separate dLocal HTTP clients do not prove
+complete token-setup replacement, merchant compatibility, or issuer UI.
+
+Unknown results retain Unresolved/RequiresReview barriers. Admin review needs
+authoritative provider evidence; it cannot supply success, reset automatic budgets,
+or invent lost-reference lookup. See the [flow](flows/card-registration.md),
+[requirement](requirements/payment-methods.md#confirmations-required-before-enabling-dlocal-registration),
+and [verification guide](../tests/PaymentSwitch.Processor.Tests/README.md).
 
 ## Verified Resolved by the Quote Execution Change
 

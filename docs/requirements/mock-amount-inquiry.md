@@ -356,8 +356,9 @@ and do not reserve an idempotency key.
 
 - For inquiry-backed services, quote creation shall accept an `InquiryId` and
   derive the base amount, currency, and references from its persisted result.
-  The current quote implementation uses configured catalogue components; those
-  shall no longer supply the base amount for inquiry-backed services.
+  Configured catalogue components shall not supply the base amount for
+  inquiry-backed services; they remain the base only for legacy services that
+  do not require inquiry.
 - The inquiry must belong to the authenticated client and have the
   `AmountDue` outcome.
 - The inquiry must be unexpired and compatible with the selected service,

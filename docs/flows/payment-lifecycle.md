@@ -7,26 +7,32 @@ later refund path.
 
 ## Card Management
 
-The draft [Payment Methods requirement](../requirements/payment-methods.md)
-describes proposed mobile-to-dLocal tokenization followed by token-to-Pagarte
-registration, backend saved-card operations, challenges, durable sessions,
-and removal semantics. The diagram below remains the current registration flow;
-the draft does not change the implemented company-first payment transitions.
-Its operator-replacement rule changes only selection for new registrations:
-existing cards, sessions, payments, and refunds retain their original operator.
-Tokens are not assumed portable between operators.
+The [card-registration flow](card-registration.md) implements owned durable
+sessions, token-based setup with the Development operator, challenge/status
+recovery, signed notification replay protection, and local removal. The mobile
+dLocal module and live operator acceptance remain pending.
 
 ```text
-Client
-  -> Payments.Api HTTP
-  -> ClientProfiles resolves the validated identity to internal Client.Id
-  -> PaymentSwitch.Processor CreditCardService gRPC
-  -> payment-operator registration adapter
-  -> PaymentDb
+Verified client
+  -> Payments.Api HTTP (session ID + temporary token; no PAN/CVV)
+  -> ClientProfiles resolves internal Client.Id
+  -> workload-authenticated Processor CreditCardService gRPC
+  -> application-owned session/lease transitions
+  -> ExternalConnections tokenized setup/status adapter outside SQL transactions
+  -> verified reusable reference + safe metadata in PaymentDb
 ```
 
+Cards, sessions, accepted payments, and refunds retain the selected integration.
+Changing the configured default affects only new registrations. Referenced
+registry identities must remain unchanged; complete real-provider routing and
+detachment acceptance is tracked in [Current Problems](../current-problems.md#6-payment-method-acceptance-and-recovery-gaps). Removal and
+payment acceptance share an owner lock: removed cards reject new acceptance,
+while already accepted work retains its references. Default clearing and
+selection are atomic and database-enforced. No replacement default is chosen.
+
 A stored card belongs to one client. The execution boundary verifies ownership
-again before accepting a confirmed quote. A card issued outside the service
+again before accepting a confirmed quote, along with setup verification, expiry,
+and declared country/currency support. A card issued outside the service
 country is not rejected merely for being foreign; operator capability and
 currency rules determine whether it can be used.
 
@@ -94,6 +100,15 @@ refund.request
 ```
 
 The legacy `payment.request -> company delivery` flow is removed.
+
+Worker reads Processor-owned PaymentOperatorRoutes before consuming refund work;
+configured adapter calls reject changes to the persisted integration identity and
+credential reference. dLocal account clients resolve separate signing/transaction keys;
+status mapping requires explicit PAID/SUCCESS and rejects mismatched payment evidence.
+Card removal retains historical references and defers provider detachment until
+accepted work is complete and payment-ID refunds are explicitly guaranteed to
+survive removal. See [Card Registration and Removal](card-registration.md) for
+cleanup states, unsupported capabilities, and the legacy-route limitation.
 
 ## Deployment Rule
 

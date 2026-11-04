@@ -1,49 +1,31 @@
-using PaymentSwitch.Processor.Application.Models;
 using PaymentSwitch.Messaging;
+using PaymentSwitch.Processor.Application.Abstractions;
+using PaymentSwitch.Processor.Application.Models;
 using PaymentSwitch.Processor.Interfaces;
 
-namespace PaymentSwitch.Processor.Application.UseCases
+namespace PaymentSwitch.Processor.Application.UseCases;
+
+public sealed class UpdateCreditCardUseCase(ICreditCardRepository cards, ICardMutationScope mutations,
+	IUnitOfWork unitOfWork, IClock clock)
 {
-	public sealed class UpdateCreditCardUseCase(
-		ICreditCardRepository creditCardRepository,
-		IUnitOfWork unitOfWork,
-		IClock clock)
+	public async Task<string?> ExecuteAsync(UpdateCreditCardCommand request, CancellationToken ct = default)
 	{
-		private readonly ICreditCardRepository _creditCardRepository = creditCardRepository;
-		private readonly IUnitOfWork _unitOfWork = unitOfWork;
-		private readonly IClock _clock = clock;
-
-		public async Task<string?> ExecuteAsync(
-			UpdateCreditCardCommand request,
-			CancellationToken cancellationToken = default)
+		if (string.IsNullOrWhiteSpace(request.CardHolderName) || request.CardHolderName.Length > 200)
+			throw new CardOperationException("INVALID_DISPLAY_NAME", "Supply a display name of 1 to 200 characters.");
+		await using var transaction = await mutations.BeginAsync(request.ClientId, ct);
+		var card = await cards.GetByIdAsync(request.CardId);
+		if (card is null || card.ClientId != request.ClientId) return "Card not found.";
+		if (request.IsDefault && !card.IsAvailable(clock.UtcNow))
+			throw new CardOperationException("CARD_UNAVAILABLE", "The card cannot be selected as default.", 409);
+		if (request.IsDefault)
 		{
-			var card = await _creditCardRepository.GetByIdAsync(request.CardId);
-			if (card == null || card.ClientId != request.ClientId)
-			{
-				return "Card not found.";
-			}
-
-			if (request.IsDefault)
-			{
-				var existing = await _creditCardRepository.GetByClientIdAsync(
-					request.ClientId);
-
-				foreach (var existingCard in existing.Where(c =>
-					c.IsDefault && c.Id != card.Id))
-				{
-					existingCard.Update(
-						existingCard.CardHolderName,
-						false,
-						_clock.UtcNow);
-					await _creditCardRepository.UpdateAsync(existingCard);
-				}
-			}
-
-			card.Update(request.CardHolderName, request.IsDefault, _clock.UtcNow);
-			await _creditCardRepository.UpdateAsync(card);
-			await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-			return null;
+			await cards.ClearDefaultsAsync(request.ClientId, ct);
+			// Flush the old default before the new one under the same transaction and owner lock.
+			await unitOfWork.SaveChangesAsync(ct);
 		}
+		card.Update(request.CardHolderName, request.IsDefault, clock.UtcNow);
+		await cards.UpdateAsync(card);
+		await transaction.CommitAsync(ct);
+		return null;
 	}
 }

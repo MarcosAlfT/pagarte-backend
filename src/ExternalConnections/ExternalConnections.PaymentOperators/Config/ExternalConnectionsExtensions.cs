@@ -23,8 +23,15 @@ public static class ExternalConnectionsExtensions
             }
 
             client.Timeout = TimeSpan.FromSeconds(30);
-        }).AddStandardResilienceHandler();
+        }).RemoveAllLoggers().AddStandardResilienceHandler();
 
+        services.AddHttpClient("dlocal", client => client.Timeout = TimeSpan.FromSeconds(30))
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false })
+            .RemoveAllLoggers();
+
+        services.AddSingleton<PaymentOperatorRegistry>();
+        services.AddSingleton<PaymentOperatorRouteGuard>();
+        services.AddSingleton<MockCardSetupJournal>();
         services.AddScoped<MockPaymentOperatorAdapter>();
         services.AddScoped<DLocalPaymentOperatorAdapter>();
         services.AddScoped<IPaymentOperatorAdapterFactory, PaymentOperatorAdapterFactory>();
