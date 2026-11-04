@@ -15,6 +15,7 @@ Last reviewed for card-lifecycle implementation: 2026-11-03.
 | Remaining integration coverage | Partially resolved | Keep the current unit coverage and add the database-backed and transport-level scenarios listed below. |
 | Execution package carries connection data | Open | Resolve company endpoints and credentials server-side from stable route identifiers. |
 | Payment-method acceptance and recovery gaps | Open | Confirm bound dLocal setup/recovery/challenge contracts and complete live-provider/mobile acceptance. |
+| Quote resume and submission recovery | Open | Implement the accepted resumable-freshness flow, missing quote transactions, source-quote recovery, and conditional bill acceptance. |
 
 Seven quote-execution items have been verified as resolved and are listed at
 the end of this document.
@@ -156,6 +157,13 @@ or invent lost-reference lookup. See the [flow](flows/card-registration.md),
 and [verification guide](../tests/PaymentSwitch.Processor.Tests/README.md).
 
 ## Verified Resolved by the Quote Execution Change
+
+The historical verification below does not close the newer
+[Quotes requirement](requirements/quotes.md). Current quote detail reads can
+return Unpaid after evidence expiry; execution refresh requires a locally saved
+PaymentId and cannot recover a lost acceptance response through that path.
+Cancellation/requote coordination and fresh bill verification remain pending;
+see the [accepted target flow](flows/quote-review-and-payment.md).
 
 The following items were rechecked against the working tree on 2026-09-13:
 

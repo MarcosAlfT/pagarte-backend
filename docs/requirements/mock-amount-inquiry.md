@@ -26,6 +26,12 @@ are preserved and tested during quote creation.
 
 ## Objective
 
+For future quote behavior, the accepted [Quotes requirement](quotes.md)
+supersedes the hard quote-lifetime cap in MAI-007 and the related MAI-009 expiry
+restriction. Inquiry evidence still expires; saved quotes remain resumable and
+new payment submissions require revalidation. This document's expiry clauses
+describe the existing implemented baseline until that migration is delivered.
+
 Pagarte shall complete the Service Catalogue and Amount Inquiry section of
 the transaction inventory. Because external companies are not available yet,
 a deterministic mock company HTTP service shall provide catalogue feeds and
