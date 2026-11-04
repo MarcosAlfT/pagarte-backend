@@ -57,7 +57,10 @@ with their external dependencies, and retirement of the old Identity.Client
 source and database. No actual browser or native application can be tested
 until one is built.
 
-## Problem Statement
+## Problem Statement (Historical Baseline)
+
+This section records the pre-migration problem; it is not the current runtime.
+See Requirement Status above for implemented behavior and remaining acceptance.
 
 Pagarte currently owns password authentication, registration, email
 confirmation, password recovery, refresh-token rotation, lockout policy, and

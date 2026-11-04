@@ -2,13 +2,14 @@
 
 ## Purpose
 
-`PaymentSwitch.Processor` is the authenticated internal payment boundary and
-owner of `PaymentDb`. It manages stored cards and durably orchestrates confirmed
+`PaymentSwitch.Processor` owns PaymentDb and hosts internal card and payment
+APIs. Card/session and quote-execution gRPC require workload authentication;
+legacy payment-query/catalogue gRPC protection remains SEC-02 work. It manages stored cards and durably orchestrates confirmed
 quote execution.
 
 ## Owns
 
-- Credit-card registration and persistence.
+- Durable card-registration sessions, token claims, setup leases/reconciliation, callback inbox, and safe stored-card persistence.
 - Stored-card ownership validation.
 - Payment-operator configuration and selection.
 - One payment and immutable execution snapshot per source quote.
@@ -30,6 +31,11 @@ quote execution.
 ## Runtime Boundary
 
 ```text
+Payments workload
+  -> authenticated CreditCardService gRPC
+  -> card/session use cases and PaymentDb registration state
+  -> ExternalConnections setup/status/signature adapter
+
 PayableServices workload
   -> authenticated PaymentExecutionService gRPC
   -> PaymentSwitch.Processor use cases
@@ -76,7 +82,9 @@ or unknown; the use case, not the adapter, decides the next state.
 
 ## Main Use Cases
 
-- Register, update, delete, list, and read stored cards.
+- Start/complete/read/continue/cancel card-registration sessions and receive verified setup notifications.
+- Update, remove, list, and read stored cards.
+- List/reconcile stuck card operations and safely retry removal through audited admin reviews.
 - `AcceptConfirmedQuoteUseCase` validates and idempotently accepts one immutable
   execution package per source quote.
 - `ContinuePaymentExecutionUseCase` advances the durable company-first saga.
@@ -104,8 +112,9 @@ or unknown; the use case, not the adapter, decides the next state.
 
 ## Data Ownership
 
-`PaymentSwitch.Processor` owns cards, payments, execution snapshots, retry
-state, operators, the retained internal catalogue, and outbox records in
+Processor owns card-registration sessions, notification inbox, cards, payments,
+execution snapshots, retry state, operators, the retained internal catalogue,
+review audits, immutable route/credential-reference pins, and outbox records in
 `PaymentDb`. The legacy Processor quote and fee tables are removed by
 migration.
 
@@ -130,18 +139,17 @@ retained catalogue is no longer the source of PayableServices synchronization.
 
 ## Change Guidance
 
-The draft [Payment Methods requirement](../requirements/payment-methods.md)
-proposes durable registration sessions, removal of full card-number storage,
-atomic default selection, and coordination of removal with accepted payments.
-The selected flow tokenizes directly with dLocal from the mobile app. Processor
-will accept temporary tokens and persist verified reusable card_id references;
-raw-card inputs are to be removed, not forwarded transiently.
-The requirement also proposes central operator selection for new sessions and
-immutable provider/account routing for existing cards and accepted operations.
-Changing the default must preserve old-provider recovery and refund paths.
-Provider-dependent payment-time challenges require a separate execution decision.
+Processor owns the [card lifecycle](../flows/card-registration.md): durable sessions,
+protected token claims, verified cards, defaults, recovery/cleanup, route pins, and
+review audits. Shared owner locks and filtered uniqueness order card mutations against
+payment acceptance. Removed cards preserve accepted-work/refund references.
 
-Keep gRPC services and the scheduler thin. Put workflow decisions in focused
-application use cases and persist a concurrency-protected transition before
-each external call. Read [ADR 0003](../decisions/0003-quote-execution-saga.md)
+CardOperationsService uses a distinct workload key. Reviews persist actor/reason and
+intent before provider calls, commit provider-derived results with audit, and preserve
+automatic caps, dependency checks, and cancellation/expiry fences.
+
+The migration retains legacy references but requires re-registration for new use;
+preconditions and downgrade limitations are in the flow. Live dLocal/mobile gaps remain
+in [Current Problems](../current-problems.md#6-payment-method-acceptance-and-recovery-gaps).
+Keep gRPC/schedulers thin and transitions durable; follow [ADR 0003](../decisions/0003-quote-execution-saga.md)
 and [ADR 0004](../decisions/0004-money-handling.md).

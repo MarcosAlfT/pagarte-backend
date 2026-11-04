@@ -90,6 +90,9 @@ across API instances. The inquiry table retains keys for its lifetime.
 - `PaymentSwitchExecutionClient` submits immutable snapshots to Processor using
   the workload credential. Existing connection fields remain in the execution
   package; broader route resolution is tracked in Current Problems.
+- Processor owns selected-card verification, expiry/market eligibility, and
+  removal ordering at acceptance. PayableServices still sends a Pagarte card ID
+  only; it does not receive temporary tokens or provider card references.
 - `Utilities.Money` supplies exact minor units, checked totals, and rounding.
 - The old Processor catalogue client remains unregistered legacy source;
   synchronization no longer calls Processor.

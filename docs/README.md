@@ -29,12 +29,13 @@ is explicitly marked as proposed.
 - [Authentication](flows/authentication.md)
 - [Quote Lifecycle](flows/quote-lifecycle.md)
 - [Payment Lifecycle](flows/payment-lifecycle.md)
+- [Card Registration and Removal](flows/card-registration.md)
 
 ## Requirements and Acceptance
 
-- [Payment Methods](requirements/payment-methods.md) - draft stored-card lifecycle,
-  dLocal mobile tokenization, replaceable operator adapters, defaults, and removal;
-  real-provider and client integration decisions remain open.
+- [Payment Methods](requirements/payment-methods.md) - scope, status, and acceptance rules.
+- [Payment-Method Acceptance Tests](../tests/PaymentSwitch.Processor.Tests/README.md) -
+  configuration, manual fixtures, and verification evidence.
 - [Keycloak Security Migration](requirements/keycloak-security-migration.md) -
   implementation status and acceptance criteria for the identity cutover
   onboarding while preserving Pagarte domain ownership.
@@ -47,7 +48,7 @@ is explicitly marked as proposed.
 ## Decisions
 
 - [Application Use Case Pattern](decisions/0001-application-use-case-pattern.md)
-- [SQL Outbox for Post-Charge Delivery](decisions/0002-sql-outbox.md)
+- [SQL Outbox for Post-Charge Delivery](decisions/0002-sql-outbox.md) (historical; superseded by ADR 0003)
 - [Quote Execution Saga and Legacy Quote Removal](decisions/0003-quote-execution-saga.md)
 - [Global Money Handling](decisions/0004-money-handling.md)
 
