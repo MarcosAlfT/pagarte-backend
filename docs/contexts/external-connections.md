@@ -84,6 +84,12 @@ outside Development. Card-operator mock use is also restricted to Development.
 
 ## Change Guidance
 
+The accepted [Quotes requirement](../requirements/quotes.md) proposes fresh
+bill identity/status/version evidence and conditional company payment to prevent
+stale or duplicate bill acceptance. These capabilities are not proven by current
+inquiry/payment adapters; implement them behind application-owned contracts and
+report unsupported providers explicitly. Quote price rules remain in PayableServices.
+
 Use the existing factory/resolver and central integration registry. Processor pins
 provider/account/environment/version/credential identity; Worker loads it read-only.
 New defaults or registration disablement must preserve original routes for existing work.

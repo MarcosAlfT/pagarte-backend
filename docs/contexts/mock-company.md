@@ -56,5 +56,11 @@ See [PayableServices](payable-services.md) and
 
 ## Change Guidance
 
+The accepted [Quotes requirement](../requirements/quotes.md) needs additional
+mutable bill fixtures: external-channel payment, changed amount/period/version,
+and conditional acceptance between verification and payment. These fixtures
+are pending and must retain isolated, deterministic test state; current fixed
+balance evidence does not verify these races.
+
 Keep all fixtures synthetic. A real company replaces the adapter/configuration;
 it must not replace inquiry ownership, idempotency, or quote domain rules.

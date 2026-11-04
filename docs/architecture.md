@@ -179,5 +179,11 @@ The Processor saga migration requires legacy active payments and pending
 
 ## Detailed Documentation
 
+The accepted [Quotes requirement](requirements/quotes.md) and
+[target flow](flows/quote-review-and-payment.md) propose Composite/Strategy
+pricing, resumable quote freshness, and payment-time bill verification with
+conditional company acceptance. These are not implemented in the runtime map
+above; PayableServices keeps pricing ownership and Processor keeps execution.
+
 See the [documentation index](README.md), [Quote Lifecycle](flows/quote-lifecycle.md),
 and [Payment Lifecycle](flows/payment-lifecycle.md).

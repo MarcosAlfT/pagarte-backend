@@ -36,8 +36,8 @@ included in the current statuses.
 
 | Status | Count |
 | --- | ---: |
-| Complete | 25 |
-| Partial | 23 |
+| Complete | 24 |
+| Partial | 24 |
 | Missing | 11 |
 | Security gap | 0 |
 | Decision required | 1 |
@@ -131,14 +131,21 @@ and mobile/live acceptance. Offline HTTP tests do not close those gaps.
 
 ## Quotes
 
+The accepted [Quotes requirement](requirements/quotes.md) covers all eight
+transactions with [new lifecycle definitions](flows/quote-review-and-payment.md).
+Composite/Strategy pricing, resumable quotes across card registration, and
+mandatory bill/price revalidation replace a five-minute hard cutoff. A freshness
+deadline requests refresh; it does not discard a saved quote. The statuses below
+describe the current baseline, not completion of these new acceptance criteria.
+
 | ID | Transaction | Status | Current implementation or missing work | Owner |
 | --- | --- | --- | --- | --- |
 | `QUOTE-01` | Create an itemized quote | Complete | `CreateQuoteUseCase` validates the service, route, references, currency, and amount composition. | `PayableServices` |
 | `QUOTE-02` | Display base value, taxes, fees, discounts, and total | Complete | The immutable quote stores and returns ordered amount components and the complete total. | `PayableServices` |
 | `QUOTE-03` | Retrieve a quote by ID | Complete | `GetQuoteUseCase` returns a quote only to its owning client. | `PayableServices` |
-| `QUOTE-04` | Reject an expired quote | Complete | Legacy configured-amount quotes have a 60-minute lifetime; inquiry-backed quotes expire no later than the inquiry. | `PayableServices` |
+| `QUOTE-04` | Handle quote freshness before payment | Partial | Current code rejects legacy/inquiry-expired quotes. Accepted target retains the quote and requires fresh verification before new payment; resumable freshness behavior is not implemented. | `PayableServices` |
 | `QUOTE-05` | List a client's quotes | Missing | Only retrieval by a known quote ID exists. | `PayableServices` |
-| `QUOTE-06` | Cancel an unpaid quote | Missing | No explicit cancellation status or use case exists. | `PayableServices` |
+| `QUOTE-06` | Cancel an unpaid quote | Missing | Cancelled exists in QuoteStatus, but no public use case or cancellation/submission race protection exists. | `PayableServices` |
 | `QUOTE-07` | Requote an expired or declined attempt | Partial | A new quote can be created manually, but no dedicated client transaction carries forward safe inputs. | `PayableServices` |
 | `QUOTE-08` | Create a quote from a verified amount inquiry | Complete | Owned positive inquiry evidence supplies the base exactly once; quote/consumption commit atomically with unique inquiry binding, concurrent replay, expiry/route/currency rejection, and existing execution-validator acceptance. | `PayableServices` |
 

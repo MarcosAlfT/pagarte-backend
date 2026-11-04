@@ -38,6 +38,13 @@ currency rules determine whether it can be used.
 
 ## Company-First Quote Execution
 
+The flow below is current implementation. The accepted
+[quote revalidation flow](quote-review-and-payment.md) proposes fresh evidence
+before new submission and conditional company acceptance before card charging.
+Its technical freshness deadline will not expire an already accepted payment.
+Implement the related [Quotes requirement](../requirements/quotes.md) across
+both contexts before changing the execution expiry contract.
+
 ```text
 Authenticated client
   -> PayableServices: create immutable quote
