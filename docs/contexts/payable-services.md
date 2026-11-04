@@ -100,10 +100,13 @@ across API instances. The inquiry table retains keys for its lifetime.
 ## Change Guidance
 
 The accepted [Quotes requirement](../requirements/quotes.md) adds
-Composite/Strategy pricing, owned quote history/cancel/requote, and durable
-submission/revalidation evidence. Its [target flow](../flows/quote-review-and-payment.md)
-replaces the current hard quote expiry with resumable freshness. These changes
-are pending; the domain rules above describe existing code.
+Composite/Strategy pricing and service-specific business-key selection, owned
+history/cancel, and durable submission recovery. Quotes expire five minutes
+after creation; expiry or changed bill evidence requires a new inquiry/quote,
+without automatic refresh or replacement approval. Its
+[target flow](../flows/quote-review-and-payment.md) verifies the bill before
+submission and uses Processor's proposed charge-first confirmation/refund flow.
+These changes are pending; the domain rules above describe existing code.
 
 See [Quote Lifecycle](../flows/quote-lifecycle.md),
 [amount-inquiry requirement](../requirements/mock-amount-inquiry.md), and

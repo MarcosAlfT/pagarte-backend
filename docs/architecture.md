@@ -181,9 +181,13 @@ The Processor saga migration requires legacy active payments and pending
 
 The accepted [Quotes requirement](requirements/quotes.md) and
 [target flow](flows/quote-review-and-payment.md) propose Composite/Strategy
-pricing, resumable quote freshness, and payment-time bill verification with
-conditional company acceptance. These are not implemented in the runtime map
-above; PayableServices keeps pricing ownership and Processor keeps execution.
+pricing and business-key selection, five-minute quote expiry, and payment-time
+bill verification. The revised target charges the card before notifying the
+company: OK completes payment; definitive NOT OK requires a full card refund.
+Notification transfers no funds; later company settlement is outside this app.
+These changes are not implemented in the runtime map above. PayableServices
+keeps quote/pricing ownership; Processor owns execution and compensation, with
+Worker refund coordination to prevent duplicate refunds.
 
 See the [documentation index](README.md), [Quote Lifecycle](flows/quote-lifecycle.md),
 and [Payment Lifecycle](flows/payment-lifecycle.md).

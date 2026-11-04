@@ -15,7 +15,7 @@ Last reviewed for card-lifecycle implementation: 2026-11-03.
 | Remaining integration coverage | Partially resolved | Keep the current unit coverage and add the database-backed and transport-level scenarios listed below. |
 | Execution package carries connection data | Open | Resolve company endpoints and credentials server-side from stable route identifiers. |
 | Payment-method acceptance and recovery gaps | Open | Confirm bound dLocal setup/recovery/challenge contracts and complete live-provider/mobile acceptance. |
-| Quote resume and submission recovery | Open | Implement the accepted resumable-freshness flow, missing quote transactions, source-quote recovery, and conditional bill acceptance. |
+| Quote expiry and revised payment execution | Open | Implement five-minute quotes, Strategy-defined bill keys, missing quote transactions, source-quote recovery, and charge-first company confirmation/full refund. |
 
 Seven quote-execution items have been verified as resolved and are listed at
 the end of this document.
@@ -162,7 +162,12 @@ The historical verification below does not close the newer
 [Quotes requirement](requirements/quotes.md). Current quote detail reads can
 return Unpaid after evidence expiry; execution refresh requires a locally saved
 PaymentId and cannot recover a lost acceptance response through that path.
-Cancellation/requote coordination and fresh bill verification remain pending;
+Five-minute expiry, cancellation/submission coordination, Strategy-defined bill
+keys, and fresh bill verification remain pending. Current execution also calls
+the company before charging; the revised target charges first and then either
+confirms on company OK or refunds the full charge on definitive NOT OK. Unknown
+company/charge/refund outcomes need durable recovery and exclusive refund
+ownership across Processor and Worker. No company settlement is in scope;
 see the [accepted target flow](flows/quote-review-and-payment.md).
 
 The following items were rechecked against the working tree on 2026-09-13:

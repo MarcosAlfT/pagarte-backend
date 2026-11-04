@@ -39,11 +39,14 @@ currency rules determine whether it can be used.
 ## Company-First Quote Execution
 
 The flow below is current implementation. The accepted
-[quote revalidation flow](quote-review-and-payment.md) proposes fresh evidence
-before new submission and conditional company acceptance before card charging.
-Its technical freshness deadline will not expire an already accepted payment.
+[quote/payment flow](quote-review-and-payment.md) now proposes five-minute quotes
+and fresh bill verification followed by card charge, company notification, and
+success on OK or full card refund on definitive NOT OK. Notification transfers
+no funds; later settlement is outside this app. Unknown outcomes require
+reconciliation, not guessed failure. Quote expiry does not stop accepted work.
 Implement the related [Quotes requirement](../requirements/quotes.md) across
-both contexts before changing the execution expiry contract.
+the affected contexts and coordinate Worker refunds before switching execution
+order; the company-first diagram below remains the implemented baseline.
 
 ```text
 Authenticated client

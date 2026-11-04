@@ -85,10 +85,13 @@ outside Development. Card-operator mock use is also restricted to Development.
 ## Change Guidance
 
 The accepted [Quotes requirement](../requirements/quotes.md) proposes fresh
-bill identity/status/version evidence and conditional company payment to prevent
-stale or duplicate bill acceptance. These capabilities are not proven by current
-inquiry/payment adapters; implement them behind application-owned contracts and
-report unsupported providers explicitly. Quote price rules remain in PayableServices.
+bill-key/status/amount evidence and post-charge company notification with stable
+idempotency and status lookup. Keep service amount separate from full card total:
+USD 100 bill plus USD 2 fee means a USD 102 charge and a USD 100 bill confirmation.
+Notification transfers no funds. Normalize matching OK, definitive NOT OK, and
+unknown/transient outcomes so Processor can complete, refund, or reconcile.
+Refund/status contracts must support full-charge recovery without duplicate
+refunds. These capabilities are pending; price/key Strategies stay in PayableServices.
 
 Use the existing factory/resolver and central integration registry. Processor pins
 provider/account/environment/version/credential identity; Worker loads it read-only.

@@ -3,10 +3,12 @@
 ## Purpose
 
 This document describes current implementation. The accepted
-[review/resume/payment flow](quote-review-and-payment.md) and
+[review/expiry/payment flow](quote-review-and-payment.md) and
 [Quotes requirement](../requirements/quotes.md) define pending changes:
-freshness replaces hard quote expiry, Pay revalidates the bill and pricing,
-and changed summaries require approval of a linked replacement.
+five-minute quote expiry, Composite/Strategy pricing and business-key selection,
+and bill verification before Pay without repricing. Expired/changed quotes
+require a new consultation. Execution will charge first, then notify the company
+and complete on OK or fully refund on definitive NOT OK.
 
 PayableServices is the sole customer-visible quote owner. One quote represents
 one payable service and one payment attempt.
