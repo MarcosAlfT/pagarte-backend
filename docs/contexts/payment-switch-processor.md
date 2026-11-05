@@ -14,6 +14,7 @@ quote execution.
 - Payment-operator configuration and selection.
 - One payment and immutable execution snapshot per source quote.
 - Durable quote-submission acceptance/rejection outcomes.
+- The stalled charge-first queue and append-only recovery scheduling audits.
 - Card readiness, charge, company acknowledgment, compensation, reconciliation,
   and company-first payment and rollback state transitions.
 - Persisted retry policy, attempt counters, next-attempt times, external
@@ -169,6 +170,12 @@ validates freshness before charging and commits charge evidence before notifying
 the company. It completes on matching acknowledgment or refunds the full charge
 on definitive rejection. An unknown result holds the bill reservation. Worker
 admits only matching legacy refunds. See the [Quotes requirement](../requirements/quotes.md).
+Execution status lookup returns the owned payment or durable rejection by
+source quote ID. A missing outcome keeps an already submitted quote pending.
+For stalled charge-first work, a scoped recovery request records actor, reason,
+request key, payment version, and operation stage in the transaction that
+schedules one attempt. The normal dispatcher recovers the original operation.
+
 Deploy the Processor RPC and migration before PayableServices. Existing accepted
 work remains recoverable with its original evidence and execution order.
 Explicit quote cancellation is out of scope; navigating away does not stop

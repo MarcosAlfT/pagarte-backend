@@ -15,8 +15,10 @@ namespace Payments.Api
 
 			builder.Services.AddControllers(options => options.Filters.Add<Payments.Api.Controllers.CardRpcExceptionFilter>())
                 .AddApplicationPart(typeof(Payments.Api.Controllers.CreditCardController).Assembly)
-                .ConfigureApiBehaviorOptions(options => options.InvalidModelStateResponseFactory = _ =>
-                    new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(Utilities.Responses.ApiResponse.CreateFailure("INVALID_CARD_REQUEST")));
+                .ConfigureApiBehaviorOptions(options => options.InvalidModelStateResponseFactory = context =>
+                    new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(Utilities.Responses.ApiResponse.CreateFailure(
+                        context.ActionDescriptor is Microsoft.AspNetCore.Mvc.Controllers.ControllerActionDescriptor { ControllerName: "PaymentRecovery" }
+                            ? "INVALID_RECOVERY_REQUEST" : "INVALID_CARD_REQUEST")));
 
 			// gRPC clients call PaymentSwitch.Processor.
 			var workerUrl = configuration["PaymentSwitchProcessor:GrpcUrl"];
@@ -37,6 +39,9 @@ namespace Payments.Api
 			builder.Services.AddGrpcClient<CardOperationsService.CardOperationsServiceClient>(o => o.Address = new Uri(workerUrl))
 				.ConfigurePrimaryHttpMessageHandler(() => CreateGrpcHttpHandler(allowUntrustedWorkerCertificate));
 			builder.Services.AddScoped<CardOperationsGrpcClient>();
+			builder.Services.AddGrpcClient<PaymentRecoveryService.PaymentRecoveryServiceClient>(o => o.Address = new Uri(workerUrl))
+				.ConfigurePrimaryHttpMessageHandler(() => CreateGrpcHttpHandler(allowUntrustedWorkerCertificate));
+			builder.Services.AddScoped<PaymentRecoveryGrpcClient>();
 
 			builder.Services.AddPagarteJwtSecurity(configuration, builder.Environment);
 			builder.Services.AddClientIdentityResolution(configuration, builder.Environment);

@@ -22,10 +22,17 @@ public sealed class WorkloadApiKeyAuthenticationHandler(
 		var suppliedKey = Request.Headers[HeaderName].Count == 1 ? Request.Headers[HeaderName].ToString() : "";
 		var generalKey = configuration["WorkloadAuth:ApiKey"];
 		var operationsKey = configuration["CardOperationsAuth:ApiKey"];
+		var recoveryKey = configuration["PaymentRecoveryAuth:ApiKey"];
 		var operations = !string.Equals(generalKey, operationsKey, StringComparison.Ordinal) && Matches(operationsKey, suppliedKey);
-		if (!operations && !Matches(generalKey, suppliedKey)) return Task.FromResult(AuthenticateResult.Fail("Invalid workload credentials."));
-		var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, operations ? "pagarte-card-operations" : "pagarte-workload") };
+		var recovery = recoveryKey != generalKey && recoveryKey != operationsKey && Matches(recoveryKey, suppliedKey);
+		if (!operations && !recovery && !Matches(generalKey, suppliedKey))
+			return Task.FromResult(AuthenticateResult.Fail("Invalid workload credentials."));
+		var claims = new List<Claim>
+		{
+			new(ClaimTypes.NameIdentifier, recovery ? "pagarte-payment-recovery" : operations ? "pagarte-card-operations" : "pagarte-workload")
+		};
 		if (operations) claims.Add(new("card-operations", "true"));
+		if (recovery) claims.Add(new("payment-recovery", "true"));
 		var identity = new ClaimsIdentity(claims, SchemeName);
 		return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));
 	}

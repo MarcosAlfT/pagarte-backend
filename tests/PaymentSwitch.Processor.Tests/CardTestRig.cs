@@ -88,6 +88,7 @@ public sealed class CardTestRig : IAsyncDisposable
 	public const string Foreign = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 	public const string CallbackKey = "synthetic-callback-signing-key-at-least-32-bytes";
 	public const string OperationsKey = "synthetic-separate-operations-key";
+	public const string RecoveryKey = "synthetic-payment-recovery-workload-key";
 	public const string WorkloadKey = "synthetic-card-test-workload-key";
 	private const string Issuer = "https://card-issuer.test/realms/pagarte";
 	private static readonly SymmetricSecurityKey SigningKey = new(Encoding.UTF8.GetBytes("synthetic-card-test-signing-key-32-bytes"));
@@ -120,6 +121,7 @@ public sealed class CardTestRig : IAsyncDisposable
 		var values = new Dictionary<string, string?>
 		{
 			["CardOperationsAuth:ApiKey"] = OperationsKey, ["ConnectionStrings:PaymentDb"] = rig.Connection, ["PaymentOperator:Provider"] = "Mock",
+			["PaymentRecoveryAuth:ApiKey"] = RecoveryKey,
 			["PaymentOperatorCallbackSecrets:synthetic-callback"] = CallbackKey,
 			["PaymentMethods:TokenDigestKey"] = "synthetic-card-digest-key-with-at-least-32-bytes",
 			["PaymentOperators:MockStateDirectory"] = rig.journalDirectory,
@@ -194,6 +196,8 @@ public sealed class CardTestRig : IAsyncDisposable
 			builder.Services.AddGrpcClient<CreditCardService.CreditCardServiceClient>()
 				.ConfigurePrimaryHttpMessageHandler(() => processor.GetTestServer().CreateHandler());
 			builder.Services.AddGrpcClient<CardOperationsService.CardOperationsServiceClient>()
+				.ConfigurePrimaryHttpMessageHandler(() => processor.GetTestServer().CreateHandler());
+			builder.Services.AddGrpcClient<PaymentRecoveryService.PaymentRecoveryServiceClient>()
 				.ConfigurePrimaryHttpMessageHandler(() => processor.GetTestServer().CreateHandler());
 			builder.Services.AddHttpClient<Pagarte.Security.ClientIdentityResolver>()
 				.ConfigurePrimaryHttpMessageHandler(() => new ResolverHandler(this));

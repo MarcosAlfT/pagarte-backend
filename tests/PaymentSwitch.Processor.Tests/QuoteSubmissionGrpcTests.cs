@@ -55,6 +55,13 @@ public sealed class QuoteSubmissionGrpcTests
         Assert.False(rejected.Accepted);
         Assert.True(rejected.SubmissionRecorded);
         Assert.Equal("CARD_UNAVAILABLE", rejected.ErrorCode);
+        var recovered = await handoff.GetStatusAsync(package.ClientId, package.SourceQuoteId);
+        Assert.True(recovered.Final);
+        Assert.True(recovered.SubmissionRecorded);
+        Assert.Equal(rejected.ErrorCode, recovered.ErrorCode);
+        var hidden = await handoff.GetStatusAsync(CardTestRig.Foreign, package.SourceQuoteId);
+        Assert.Equal("EXECUTION_NOT_FOUND", hidden.ErrorCode);
+        Assert.False(hidden.SubmissionRecorded);
         await rig.InDb(async db => { (await db.CreditCards.SingleAsync(x => x.Id == card)).SetupVerified = true; await db.SaveChangesAsync(); });
         var replay = await handoff.ConfirmQuoteAsync(package);
         Assert.False(replay.Accepted);

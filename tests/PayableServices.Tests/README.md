@@ -6,6 +6,11 @@ real authorization policies, and SQL Server. It applies the actual EF migrations
 and creates a unique `PagarteInquiryTests_` database for each test, then removes
 only that test database.
 
+`PaymentRecoveryEndToEndTests` uses real PayableServices HTTP and Processor gRPC
+hosts with isolated databases. It drops the submission response after Processor
+commits acceptance, rejection, or a completed refund, restarts both hosts, and
+verifies owner-only status recovery and duplicate Pay delivery.
+
 Windows SQL Server LocalDB is the default. Other SQL Server installations can
 be selected with the `PAGARTE_TEST_SQL` environment variable; the test rig replaces
 its database name with a unique test name. The account needs permission to create
