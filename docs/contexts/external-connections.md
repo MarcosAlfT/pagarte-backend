@@ -87,14 +87,16 @@ outside Development. Card-operator mock use is also restricted to Development.
 ## Change Guidance
 
 Fresh bill verification uses the existing inquiry adapter with a new operation
-key. The accepted [Quotes requirement](../requirements/quotes.md) also calls for
-post-charge company notification with stable idempotency and status lookup.
+key. The Development notification adapter validates the entire acknowledgment
+against the pinned request and looks up the original operation on recovery.
 Keep service amount separate from full card total:
 USD 100 bill plus USD 2 fee means a USD 102 charge and a USD 100 bill confirmation.
 Notification transfers no funds. Normalize matching OK, definitive NOT OK, and
 unknown/transient outcomes so Processor can complete, refund, or reconcile.
 Refund/status contracts must support full-charge recovery without duplicate
-refunds. Post-charge notification and compensation contracts are pending.
+refunds. The Development operator journals the original charge and compensation
+operation, and confirms a refund only when it matches the full charge.
+Live notification and refund recovery contracts require acceptance.
 Price and key strategies belong to PayableServices.
 
 Use the existing factory/resolver and central integration registry. Processor pins

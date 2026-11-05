@@ -21,7 +21,10 @@ concurrent delivery, unchanged rejection after card eligibility changes, and
 blocking new execution through legacy ConfirmQuote. Bill tests cover cross-client
 reservation while in flight and after success, stale evidence at acceptance and
 before company payment, and fresh verification following reservation release.
-Charge-first execution acceptance remains pending.
+`ChargeFirstGrpcTests` covers fresh evidence before charge, lost charge and
+refund commits, company acknowledgment recovery across provider restart, retry
+exhaustion, late external settlement, Worker isolation, and original-mode recovery.
+Live company and operator acceptance remains pending.
 
 ## Local Runtime Configuration
 

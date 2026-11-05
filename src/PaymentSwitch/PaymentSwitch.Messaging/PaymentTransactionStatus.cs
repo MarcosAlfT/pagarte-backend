@@ -19,6 +19,11 @@ public enum PaymentTransactionStatus
 	Completed = 34,
 	Failed = 35,
 	ManualIntervention = 36,
+	ChargedAwaitingCompany = 37,
+	NotifyingCompany = 38,
+	CompensationPending = 39,
+	RefundingCompensation = 40,
+	Compensated = 41,
 
 	// Legacy values remain readable during migration but are not used by the
 	// confirmed-quote execution saga.

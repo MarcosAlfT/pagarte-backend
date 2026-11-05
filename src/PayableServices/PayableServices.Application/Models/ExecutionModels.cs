@@ -12,7 +12,9 @@ public enum QuoteExecutionStatus
 	Declined,
 	RollbackPending,
 	Failed,
-	ManualIntervention
+	ManualIntervention,
+	RefundPending,
+	Refunded
 }
 
 public sealed record ExecutionAmountComponent(
@@ -28,7 +30,7 @@ public sealed record ExecutionReferenceValue(string Key, string Value);
 
 public sealed record BillVerification(string? ErrorCode, string? OperationKey = null,
     string? ProviderInquiryId = null, string? ObservedBillKey = null, long? AmountMinorUnits = null,
-    string? Currency = null, DateTime? CheckedAt = null, DateTime? ExpiresAt = null);
+    string? Currency = null, DateTime? CheckedAt = null, DateTime? ExpiresAt = null, string? BillingPeriod = null);
 
 public sealed record QuoteExecutionPackage(
 	string ClientId,

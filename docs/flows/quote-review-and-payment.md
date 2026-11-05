@@ -2,10 +2,9 @@
 
 ## Status
 
-Accepted revised target. The current quote and payment flows document the
-implemented single-use submission, Development bill verification and reservation,
-and company-first execution. Composite pricing and the charge-first flow below
-remain pending. See the [Quotes requirement](../requirements/quotes.md),
+Accepted revised target. The current flows document single-use submission,
+Development bill verification, reservation, and charge-first compensation.
+Composite pricing and live provider enablement remain pending. See the [Quotes requirement](../requirements/quotes.md),
 [current quote flow](quote-lifecycle.md), and [current payment flow](payment-lifecycle.md).
 
 ## Customer Flow

@@ -12,7 +12,7 @@ public sealed record ConfirmedQuoteComponent(
 public sealed record ConfirmedQuoteReference(string Key, string Value);
 
 public sealed record VerifiedBill(string? ErrorCode, string ProviderInquiryId, string ObservedBillKey,
-	long AmountMinorUnits, string Currency, DateTime? CheckedAt, DateTime? ExpiresAt);
+	long AmountMinorUnits, string Currency, DateTime? CheckedAt, DateTime? ExpiresAt, string? BillingPeriod = null);
 
 public sealed record ConfirmedQuoteExecution(
 	string ClientId,
@@ -55,7 +55,9 @@ public enum PaymentExecutionResultStatus
 	Declined,
 	RollbackPending,
 	Failed,
-	ManualIntervention
+	ManualIntervention,
+	RefundPending,
+	Refunded
 }
 
 public sealed record PaymentExecutionResult(
@@ -78,6 +80,7 @@ public sealed class PaymentExecutionOptions
 	public int MaxCompanyPaymentAttempts { get; init; } = 3;
 	public int MaxChargeAttempts { get; init; } = 3;
 	public int MaxRollbackAttempts { get; init; } = 10;
+	public int MaxCompensationAttempts { get; init; } = 5;
 	public int DispatcherIntervalSeconds { get; init; } = 10;
 	public int DispatcherBatchSize { get; init; } = 25;
 }

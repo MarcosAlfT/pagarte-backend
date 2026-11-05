@@ -25,6 +25,9 @@ namespace PaymentSwitch.Worker.Application.UseCases
 			RefundRequestMessage message,
 			CancellationToken cancellationToken = default)
 		{
+			if (!await _paymentStatus.IsCurrentLegacyRefundAsync(message, cancellationToken))
+				return;
+
 			_logger.LogInformation(
 				"Processing refund for payment {PaymentId}, attempt {Retry}",
 				message.PaymentId,

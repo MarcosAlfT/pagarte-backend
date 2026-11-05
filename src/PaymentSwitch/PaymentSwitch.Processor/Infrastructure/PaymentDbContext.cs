@@ -128,6 +128,10 @@ namespace PaymentSwitch.Processor.Infrastructure
 				entity.Property(e => e.ClientId).IsRequired();
 				entity.Property(e => e.PackageFingerprint).IsRequired().HasMaxLength(64);
 				entity.Property(e => e.BillKey).HasMaxLength(64);
+				entity.Property(e => e.BillingPeriod).HasMaxLength(7);
+				entity.Property(e => e.CompanyNotificationEndpoint).HasMaxLength(500);
+				entity.Property(e => e.CompensationKey).HasMaxLength(42);
+				entity.Property(e => e.OperatorRefundId).HasMaxLength(200);
 				entity.HasIndex(e => e.BillKey).IsUnique()
 					.HasFilter("[BillKey] IS NOT NULL AND [BillReservationReleased] = 0");
 				entity.HasIndex(e => new { e.BillKey, e.ProcessedAt })

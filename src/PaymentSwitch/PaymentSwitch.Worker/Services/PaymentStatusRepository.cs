@@ -20,6 +20,26 @@ namespace PaymentSwitch.Worker.Services
             ?? throw new InvalidOperationException("PaymentDb not configured.");
         private readonly IClock _clock = clock;
 
+        public async Task<bool> IsCurrentLegacyRefundAsync(RefundRequestMessage message, CancellationToken cancellationToken)
+        {
+            using var connection = new SqlConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken);
+            using var command = new SqlCommand("""
+                SELECT COUNT(*) FROM Payments
+                WHERE Id = @Id AND ChargeFirst = 0 AND Status = @Refunding
+                    AND OperatorProvider = @Operator AND OperatorPaymentId = @Charge
+                    AND TotalMinorUnits = @Amount AND Currency = @Currency AND RefundRetryCount = @Retry
+                """, connection);
+            command.Parameters.AddWithValue("@Id", message.PaymentId);
+            command.Parameters.AddWithValue("@Refunding", (int)PaymentTransactionStatus.Refunding);
+            command.Parameters.AddWithValue("@Operator", (object?)message.OperatorProvider ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Charge", (object?)message.OperatorPaymentId ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Amount", message.MinorUnits);
+            command.Parameters.AddWithValue("@Currency", (object?)message.Currency ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Retry", message.RetryCount);
+            return (int)(await command.ExecuteScalarAsync(cancellationToken))! == 1;
+        }
+
         public async Task UpdateStatusAsync(
             PaymentTransactionStatus status,
             Guid paymentId,
@@ -37,10 +57,11 @@ namespace PaymentSwitch.Worker.Services
                     ProcessedAt = CASE
                         WHEN @IsTerminal = 1
                         THEN @UpdatedAt ELSE ProcessedAt END
-                WHERE Id = @PaymentId";
+                WHERE Id = @PaymentId AND ChargeFirst = 0 AND Status = @Refunding";
 
             using var cmd = new SqlCommand(sql, connection);
             cmd.Parameters.AddWithValue("@Status", (int)status);
+            cmd.Parameters.AddWithValue("@Refunding", (int)PaymentTransactionStatus.Refunding);
             cmd.Parameters.AddWithValue("@IsTerminal", IsTerminal(status));
             cmd.Parameters.AddWithValue("@CompanyReference",
                 (object?)companyReference ?? DBNull.Value);
@@ -73,10 +94,11 @@ namespace PaymentSwitch.Worker.Services
 				SET RefundRetryCount = RefundRetryCount + 1,
 					NextRefundRetryAt = @NextRetryAt,
                     LastUpdatedAt = @UpdatedAt
-                WHERE Id = @PaymentId";
+                WHERE Id = @PaymentId AND ChargeFirst = 0 AND Status = @Refunding";
 
             using var cmd = new SqlCommand(sql, connection);
             cmd.Parameters.AddWithValue("@NextRetryAt", nextRetryAt);
+            cmd.Parameters.AddWithValue("@Refunding", (int)PaymentTransactionStatus.Refunding);
             cmd.Parameters.AddWithValue("@UpdatedAt", _clock.UtcNow);
             cmd.Parameters.AddWithValue("@PaymentId", paymentId);
 
@@ -102,6 +124,7 @@ namespace PaymentSwitch.Worker.Services
 					p.RefundRetryCount
                 FROM Payments p
                 WHERE p.Status = @RefundingStatus
+                    AND p.ChargeFirst = 0
 					AND p.NextRefundRetryAt IS NOT NULL
 					AND p.NextRefundRetryAt <= @UtcNow
 					AND p.RefundRetryCount < @MaxRetries
@@ -145,10 +168,11 @@ namespace PaymentSwitch.Worker.Services
                 UPDATE Payments
 				SET NextRefundRetryAt = NULL,
                     LastUpdatedAt = @UpdatedAt
-                WHERE Id = @PaymentId";
+                WHERE Id = @PaymentId AND ChargeFirst = 0 AND Status = @Refunding";
 
             using var cmd = new SqlCommand(sql, connection);
             cmd.Parameters.AddWithValue("@UpdatedAt", _clock.UtcNow);
+            cmd.Parameters.AddWithValue("@Refunding", (int)PaymentTransactionStatus.Refunding);
             cmd.Parameters.AddWithValue("@PaymentId", paymentId);
 
             await cmd.ExecuteNonQueryAsync();

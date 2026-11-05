@@ -13,6 +13,10 @@ public static class PaymentExecutionResultMapper
 			PaymentTransactionStatus.Completed => PaymentExecutionResultStatus.Completed,
 			PaymentTransactionStatus.Failed => PaymentExecutionResultStatus.Declined,
 			PaymentTransactionStatus.CompanyRolledBack => PaymentExecutionResultStatus.Failed,
+			PaymentTransactionStatus.Compensated => PaymentExecutionResultStatus.Refunded,
+			PaymentTransactionStatus.CompensationPending or PaymentTransactionStatus.RefundingCompensation =>
+				PaymentExecutionResultStatus.RefundPending,
+			PaymentTransactionStatus.ManualIntervention when payment.ChargeFirst => PaymentExecutionResultStatus.Processing,
 			PaymentTransactionStatus.ManualIntervention =>
 				PaymentExecutionResultStatus.ManualIntervention,
 			PaymentTransactionStatus.RollingBackCompany
@@ -29,6 +33,6 @@ public static class PaymentExecutionResultMapper
 			payment.ErrorCode,
 			payment.ErrorMessage,
 			replayed,
-			payment.IsFinal);
+			payment.IsFinal && !(payment.ChargeFirst && payment.Status == PaymentTransactionStatus.ManualIntervention));
 	}
 }

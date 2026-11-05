@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using ExternalConnections.CompanyPayments;
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
@@ -45,11 +46,18 @@ public sealed class CardTestFaults : SaveChangesInterceptor
 	public bool FailReviewCommit;
 	public bool FailDefaultCommit;
 	public Action? BeforePaymentInsert;
+	public PaymentTransactionStatus? LosePaymentTransition;
 	public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
 		InterceptionResult<int> result, CancellationToken cancellationToken = default)
 	{
 		if (eventData.Context!.ChangeTracker.Entries<Payment>().Any(e => e.State == EntityState.Added))
 			BeforePaymentInsert?.Invoke();
+		if (LosePaymentTransition is { } transition && eventData.Context.ChangeTracker.Entries<Payment>()
+			.Any(e => e.State == EntityState.Modified && e.Entity.Status == transition))
+		{
+			LosePaymentTransition = null;
+			throw new DbUpdateException("Synthetic payment result commit failure.");
+		}
 		if (FailReviewCommit && eventData.Context!.ChangeTracker.Entries<CardReviewOperation>().Any(e => e.State == EntityState.Modified && e.Entity.CompletedAt != null))
 		{
 			FailReviewCommit = false;
@@ -88,6 +96,14 @@ public sealed class CardTestRig : IAsyncDisposable
 	private readonly IDataProtectionProvider protection = new EphemeralDataProtectionProvider();
 	private WebApplication processor = null!;
 	private WebApplication api = null!;
+	private WebApplication? mockCompany;
+	private const string CompanyKey = "synthetic-test-company";
+	public int NotificationPosts;
+	public int NotificationLookups;
+	public bool DropNotificationResponse;
+	public bool BlockNotificationResponse;
+	public MockCompany.Api.MockResponses MockCompanyResponses =>
+		mockCompany!.Services.GetRequiredService<MockCompany.Api.MockResponses>();
 	public readonly CardTestClock Clock = new();
 	public readonly CardTestFaults Faults = new();
 	public readonly CardTestCompany Company = new();
@@ -98,7 +114,7 @@ public sealed class CardTestRig : IAsyncDisposable
 		Environment.GetEnvironmentVariable("PAGARTE_TEST_SQL") ?? @"Server=(localdb)\MSSQLLocalDB;Integrated Security=true;TrustServerCertificate=true")
 		{ InitialCatalog = databaseName }.ConnectionString;
 
-	public static async Task<CardTestRig> CreateAsync(bool legacyCard = false, bool duplicateLegacyDefaults = false)
+	public static async Task<CardTestRig> CreateAsync(bool legacyCard = false, bool duplicateLegacyDefaults = false, bool chargeFirst = false)
 	{
 		var rig = new CardTestRig();
 		var values = new Dictionary<string, string?>
@@ -125,9 +141,16 @@ public sealed class CardTestRig : IAsyncDisposable
 			values[$"PaymentOperators:Integrations:{id}:SupportedCountries:0"] = "EC";
 			values[$"PaymentOperators:Integrations:{id}:SupportedCurrencies:0"] = "USD";
 		}
+		if (chargeFirst)
+		{
+			values["ChargeFirst:Enabled"] = "true";
+			values["ChargeFirst:MockCompanyBaseUrl"] = "http://localhost/";
+			values["CompanyCredentials:MockCompany:ApiKey"] = CompanyKey;
+		}
 		rig.Settings = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
 		try
 		{
+			if (chargeFirst) await rig.RestartMockCompanyAsync();
 			if (legacyCard || duplicateLegacyDefaults)
 			{
 				await using var db = new PaymentDbContext(new DbContextOptionsBuilder<PaymentDbContext>().UseSqlServer(rig.Connection).Options);
@@ -157,6 +180,9 @@ public sealed class CardTestRig : IAsyncDisposable
 			builder.Services.RemoveAll<IHostedService>();
 			builder.Services.AddSingleton<IClock>(Clock);
 			builder.Services.AddSingleton<ICompanyPaymentGateway>(Company);
+			if (mockCompany is not null)
+				builder.Services.AddHttpClient(CompanyNotificationAdapter.ClientName)
+					.ConfigurePrimaryHttpMessageHandler(() => new CompanyHandler(mockCompany.GetTestServer().CreateHandler(), this));
 			builder.Services.AddSingleton(protection);
 			builder.Services.AddDbContext<PaymentDbContext>(options => options.UseSqlServer(Connection).AddInterceptors(Faults));
 		});
@@ -178,6 +204,33 @@ public sealed class CardTestRig : IAsyncDisposable
 			});
 		});
 		await api.StartAsync();
+	}
+
+	public async Task RestartMockCompanyAsync()
+	{
+		if (mockCompany is not null) await mockCompany.DisposeAsync();
+		mockCompany = MockCompany.Api.Program.Build(["--environment", "Development", "--MockCompany:ApiKey", CompanyKey,
+			"--MockCompany:NotificationStatePath", Path.Combine(journalDirectory, "company-notifications.json")],
+			builder => builder.WebHost.UseTestServer());
+		await mockCompany.StartAsync();
+	}
+
+	public int JournalEntries => Directory.Exists(journalDirectory)
+		? Directory.EnumerateFiles(journalDirectory, "*.payment.json").Count() : 0;
+
+	private sealed class CompanyHandler(HttpMessageHandler inner, CardTestRig rig) : DelegatingHandler(inner)
+	{
+		protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+		{
+			if (request.Method == HttpMethod.Post) Interlocked.Increment(ref rig.NotificationPosts);
+			else Interlocked.Increment(ref rig.NotificationLookups);
+			if (rig.BlockNotificationResponse) return new(HttpStatusCode.ServiceUnavailable);
+			var response = await base.SendAsync(request, ct);
+			if (!rig.DropNotificationResponse) return response;
+			rig.DropNotificationResponse = false;
+			response.Dispose();
+			throw new HttpRequestException("Synthetic lost company acknowledgment.");
+		}
 	}
 
 	public async Task RestartAsync()
@@ -268,6 +321,7 @@ public sealed class CardTestRig : IAsyncDisposable
 	{
 		if (api is not null) await api.DisposeAsync();
 		if (processor is not null) await processor.DisposeAsync();
+		if (mockCompany is not null) await mockCompany.DisposeAsync();
 		if (!databaseName.StartsWith("PagarteCardTests_", StringComparison.Ordinal)) throw new InvalidOperationException();
 		await using var db = new PaymentDbContext(new DbContextOptionsBuilder<PaymentDbContext>().UseSqlServer(Connection).Options);
 		await db.Database.EnsureDeletedAsync();

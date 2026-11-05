@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ExternalConnections.CompanyPayments;
 using ExternalConnections.PaymentOperators.Config;
 using PaymentSwitch.Messaging;
 using PaymentSwitch.Processor.Application.Abstractions;
@@ -75,6 +76,10 @@ namespace PaymentSwitch.Processor
 			builder.Services.AddScoped<IPaymentOperatorResolver, PaymentOperatorResolver>();
 			builder.Services.AddScoped<ICardPaymentGateway, PaymentOperatorCardPaymentGateway>();
 			builder.Services.AddScoped<ICompanyPaymentGateway, CompanyPaymentGateway>();
+			builder.Services.AddHttpClient(CompanyNotificationAdapter.ClientName, client => client.Timeout = TimeSpan.FromSeconds(5))
+				.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+			builder.Services.AddScoped<CompanyNotificationAdapter>();
+			builder.Services.AddScoped<IChargeFirstPaymentGateway, ChargeFirstPaymentGateway>();
 			builder.Services.AddScoped<
 				ICreditCardRegistrationGateway,
 				PaymentOperatorCreditCardRegistrationGateway>();

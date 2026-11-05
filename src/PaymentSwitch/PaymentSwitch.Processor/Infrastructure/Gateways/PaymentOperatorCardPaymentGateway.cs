@@ -87,8 +87,10 @@ public sealed class PaymentOperatorCardPaymentGateway(
 				"The charge has no operator reference; the idempotent charge request must be replayed.");
 		}
 
-		var result = await paymentOperatorResolver.GetAdapter(payment.OperatorProvider)
-			.GetChargeStatusAsync(payment.OperatorPaymentId, cancellationToken);
+		var adapter = paymentOperatorResolver.GetAdapter(payment.OperatorProvider);
+		var result = payment.ChargeFirst && adapter is MockPaymentOperatorAdapter mock
+			? await mock.GetRecordedChargeStatusAsync(payment.OperatorPaymentId, cancellationToken)
+			: await adapter.GetChargeStatusAsync(payment.OperatorPaymentId, cancellationToken);
 		return Map(
 			result.Outcome,
 			result.OperatorPaymentId,

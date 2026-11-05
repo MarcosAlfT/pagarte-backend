@@ -235,6 +235,8 @@ public sealed class ConfirmQuoteUseCase(
         quote.Status = result.Status switch
         {
             QuoteExecutionStatus.Completed => QuoteStatus.Paid,
+            QuoteExecutionStatus.RefundPending => QuoteStatus.RefundPending,
+            QuoteExecutionStatus.Refunded => QuoteStatus.Refunded,
             QuoteExecutionStatus.Declined or QuoteExecutionStatus.Failed
                 when result.Final => QuoteStatus.PaymentFailed,
             _ => QuoteStatus.Processing

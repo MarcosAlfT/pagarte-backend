@@ -4,9 +4,9 @@
 
 This document describes current implementation. The accepted
 [review/expiry/payment flow](quote-review-and-payment.md) and
-[Quotes requirement](../requirements/quotes.md) retain pending Composite pricing
-and charge-first company acknowledgment/full refund. Current execution is
-company-first with bill verification for the Development company.
+[Quotes requirement](../requirements/quotes.md) describe the target. Supported
+Development bills use charge-first execution and compensation. Composite pricing
+and live provider enablement remain pending.
 The five-minute Unpaid window, permanent Submitted claim, customer-list exclusion,
 and durable submission recovery are implemented. The accepted server claim must
 precede expiry; Processor acceptance and recovery may continue afterward.
@@ -151,7 +151,12 @@ Processing
   -> PaymentFailed    definitive decline or completed company rollback
   -> Invalidated      refreshed evidence found a changed bill before company payment
   -> NoLongerDue       refreshed evidence found zero remaining balance before company payment
+  -> RefundPending     company definitively rejected confirmation after the charge
   -> Processing       retry, reconciliation, rollback pending, or manual review
+
+RefundPending
+  -> Refunded          operator confirmed the full compensation refund
+  -> RefundPending     refund outcome is unresolved or requires review
 ```
 
 Manual-intervention details remain visible in the execution response; the quote

@@ -32,7 +32,8 @@ Creation still requires fresh inquiry evidence. A timely server-side Submitted
 claim permanently consumes the quote; Processor acceptance/recovery can continue
 after its original deadline. The Development provider supplies a billing period
 for the company/service/account/period key and supports a fresh inquiry within
-Pay. Post-charge acknowledgment is pending. Current execution is company-first.
+Pay. On a supported charge-first route the mock company records a matching
+post-charge acknowledgment and exposes lookup by the notification operation key.
 
 Pagarte shall complete the Service Catalogue and Amount Inquiry section of
 the transaction inventory. Because external companies are not available yet,

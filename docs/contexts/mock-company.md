@@ -60,10 +60,12 @@ See [PayableServices](payable-services.md) and
 
 ## Change Guidance
 
-The accepted [Quotes requirement](../requirements/quotes.md) still needs
-post-charge acknowledgment and rejection fixtures with idempotent status lookup.
-Add a different-channel payment between verification and notification and lost
-responses to exercise compensation and recovery.
+The notification endpoint checks the bill's account, period, amount and currency
+and records a matching acknowledgment or definitive rejection. Acknowledgment
+records the bill as paid. Lookup and same-key replay return the original result.
+Development AppHost supplies a file for atomic notification and bill-state
+persistence. Tests set a zero balance before notification to simulate payment
+through another channel.
 
 Keep all fixtures synthetic. A real company replaces the adapter/configuration;
 it must not replace inquiry ownership, idempotency, or quote domain rules.

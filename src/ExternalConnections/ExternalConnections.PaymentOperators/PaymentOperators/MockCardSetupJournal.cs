@@ -58,6 +58,40 @@ public sealed class MockCardSetupJournal(IConfiguration configuration, IHostEnvi
 
 	public bool IsRemoved(OperatorCardIdentity identity, string reference) => File.Exists(RemovalPath(identity, reference));
 
+	internal async Task<T?> ReadPaymentOperationAsync<T>(OperatorCardIdentity identity, string kind, string key, CancellationToken ct)
+		where T : class
+	{
+		var path = PaymentOperationPath(identity, kind, key);
+		if (!File.Exists(path)) return null;
+		return JsonSerializer.Deserialize<T>(await File.ReadAllTextAsync(path, ct));
+	}
+
+	internal async Task<bool> RecordPaymentOperationAsync<T>(OperatorCardIdentity identity, string kind, string key, T evidence,
+		CancellationToken ct) where T : class
+	{
+		var path = PaymentOperationPath(identity, kind, key);
+		var temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+		Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+		try
+		{
+			await File.WriteAllTextAsync(temporaryPath, JsonSerializer.Serialize(evidence), ct);
+			try { File.Move(temporaryPath, path, overwrite: false); }
+			catch (IOException) when (File.Exists(path)) { }
+		}
+		finally
+		{
+			if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
+		}
+		return Equals(evidence, await ReadPaymentOperationAsync<T>(identity, kind, key, ct));
+	}
+
+	private string PaymentOperationPath(OperatorCardIdentity identity, string kind, string key)
+	{
+		var scope = JsonSerializer.SerializeToUtf8Bytes(new[] { identity.IntegrationId, identity.Account, identity.Environment,
+			identity.Version, kind, key });
+		return Path.Combine(DirectoryPath, Convert.ToHexString(SHA256.HashData(scope)) + ".payment.json");
+	}
+
 	public async Task<OperatorCardRemovalOutcome> RemoveCardAsync(OperatorCardIdentity identity, string reference, string operationKey, CancellationToken ct)
 	{
 		if (!GetRemovalCapabilities(identity).Supported) return OperatorCardRemovalOutcome.Unsupported;

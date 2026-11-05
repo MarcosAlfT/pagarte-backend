@@ -67,12 +67,11 @@ accepted execution/refunds. Live provider acceptance remains in
 
 ## Change Guidance
 
-The revised [Quotes requirement](../requirements/quotes.md) assigns post-charge
-company notification and rejection compensation to Processor. Worker does not
-become the company-notification owner. Coordinate the existing later-refund
-path with Processor's compensation so both cannot independently refund one
-charge; share the durable refund operation identity and prevent stale status
-updates. This is pending work, not a change to the current runtime above.
+Processor owns company notification and rejection compensation. Before calling
+the operator, Worker checks that the persisted payment is in legacy Refunding
+with a matching operator, original charge, amount, currency, and retry count.
+Worker retry polling and writes use the same execution-mode guard. Deploy that
+guard before enabling charge-first acceptance. See the [Quotes requirement](../requirements/quotes.md).
 
 Keep consumers and polling services thin. Never place card tokens, API keys,
 or credentials in messages.
