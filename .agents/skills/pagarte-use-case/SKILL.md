@@ -5,23 +5,30 @@ description: Add or change a Pagarte backend API, gRPC, consumer, or business wo
 
 # Pagarte Use Case
 
-Read `AGENTS.md` and `docs/architecture.md`, then read the context document
-matching the requested project. Read the relevant file under `docs/flows/`
-when the workflow crosses a runtime boundary.
+Read `AGENTS.md` and `docs/architecture.md`, then the matching context document
+and [Application Design](../../../docs/standards/application-design.md).
+Read the relevant flow when the workflow crosses a runtime boundary.
 
-Before changing catalogue, quote, or payment execution behavior, read
-`docs/current-problems.md`. Preserve the documented current behavior unless
-the user explicitly chooses a resolution for an open ownership question.
+Use the context for specialized design and requirements for product behavior.
+For quote composition, pricing, or bill identity, read
+[PayableServices: Quote Design](../../../docs/contexts/payable-services.md#quote-design-composite-and-strategy).
+For monetary changes, read [Money Handling](../../../docs/standards/money-handling.md).
+Follow AGENTS.md routing for quote/payment, card, and authentication rules.
 
-Implement workflows as focused Application use cases. Keep HTTP controllers,
-gRPC services, RabbitMQ consumers, and hosted-service loops limited to
-transport, mapping, and scheduling. Put state invariants on Domain entities and
-external or persistence mechanics behind Application abstractions.
+Before changing catalogue, quote, or payment execution, inspect
+`docs/current-problems.md`. Distinguish an unresolved ownership question from an
+accepted decision awaiting implementation. Carry out accepted changes within the
+request; do not silently settle unrelated open ownership questions.
 
-Identify every bounded context affected by the change. Update the relevant
-context and flow documents when ownership, integration, persistence, or
-observable behavior changes. Record a new accepted architectural decision only
-when the user or team has actually made that decision.
+Locate the existing use case and its transport adapter. Follow the standard's
+layer and commit responsibilities. For durable work, trace intent persistence,
+external calls, result commits, idempotency, concurrency, and recovery before
+changing a transition. Reuse the context's existing mechanisms.
 
-Run verification proportional to the change and report any unresolved
-cross-context dependency or data-ownership conflict.
+Identify affected contexts and update their context/flow documents when
+ownership, integration, persistence, or observable behavior changes. Record a
+new ADR only when the user or team has actually accepted the decision.
+
+Select verification with [Testing](../../../docs/standards/testing.md) and the
+relevant suite guide. Report results, verification limits, and unresolved
+cross-context dependencies or ownership conflicts.

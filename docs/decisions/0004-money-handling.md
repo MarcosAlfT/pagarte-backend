@@ -6,56 +6,33 @@ Accepted; implemented for quote and payment execution.
 
 ## Context
 
-The backend currently uses a mixture of .NET `decimal`, SQL decimal columns,
-and protobuf `double`. Binary floating-point transport can change an exact
+At the time of the decision, the backend mixed .NET `decimal`, SQL decimal
+columns, and protobuf `double`. Binary floating-point transport can change an exact
 monetary value, and the existing contracts do not define currency scale,
 rounding, range, or total-validation rules.
 
 ## Decision
 
-The following rules apply to every Pagarte component that creates, calculates,
-transports, persists, charges, refunds, rolls back, or displays money:
+Use one shared exact-money model across components: decimal calculations,
+centrally defined ISO currency scales, component rounding, and checked signed
+64-bit minor units plus currency for finalized service/message amounts. Reject
+invalid or inconsistent money before external operations. Quotes finalize their
+approved amounts once; downstream execution validates and preserves them.
 
-- Currency is an uppercase ISO 4217 code.
-- A centrally maintained currency definition supplies the permitted minor-unit
-  scale. A caller cannot choose an arbitrary scale.
-- Protobuf and asynchronous message contracts transport finalized monetary
-  values as signed 64-bit integer minor units plus the currency code. They do
-  not use `double` or `float`.
-- .NET calculations use `decimal` and checked arithmetic. Binary floating-point
-  values are not used for business calculations or converted directly into
-  money.
-- Intermediate percentage calculations retain sufficient decimal precision.
-  Each legally or contractually distinct amount component is rounded to the
-  currency scale before the quote total is calculated.
-- The default midpoint rule is `MidpointRounding.ToEven`. A jurisdiction or
-  external-provider rule may override it only through explicit configuration;
-  the effective rule is snapshotted with the quote.
-- A quote total equals the checked sum of its finalized components. Discounts
-  and other subtractive components are represented explicitly. The final total
-  must be greater than zero unless a separate business requirement permits a
-  zero-value transaction.
-- Conversion to minor units must be exact after required rounding. Overflow,
-  unsupported currency, excess scale, non-positive disallowed totals, and
-  inconsistent component currencies are rejected before an external call.
-- Business minimum and maximum transaction amounts are configurable by
-  currency. The effective limits used to validate a quote are auditable.
-- A charge, refund, rollback, payment record, quote, outbox message, and
-  external request for the same operation use the same finalized minor-unit
-  amount and currency.
+The default midpoint rule is ToEven. The accepted direction allows an explicit
+jurisdiction/provider policy and configurable business transaction limits,
+with effective policies retained for audit. Those extensions require explicit
+implementation; their current limits are stated below.
 
-Examples:
-
-```text
-USD 10.25  -> currency = USD, minor units = 1025
-JPY 10     -> currency = JPY, minor units = 10
-KWD 10.123 -> currency = KWD, minor units = 10123
-```
+The maintained [Money Handling Standard](../standards/money-handling.md) contains
+implementation conventions, operation-amount distinctions, and verification
+entry points. This ADR retains the architectural choice and consequences.
 
 ## Consequences
 
 - Shared contracts need a reusable money message or equivalent value type.
-- Existing protobuf `double` monetary fields must be migrated or versioned.
+- Migrating the former protobuf `double` monetary fields required coordinated
+  producer/consumer changes; finalized quote/payment contracts now use minor units.
 - Persistence mappings and tests must verify precision, limits, rounding,
   negative components, overflow, and cross-service round trips.
 - Quote construction is the boundary where component values become a final,
@@ -65,6 +42,8 @@ KWD 10.123 -> currency = KWD, minor units = 10123
   ToEven rounding, and checked sum. Quote/payment persistence uses minor units
   for finalized amounts and expanded decimal precision for source catalogue
   values.
+- Quote boundaries currently support ToEven only; the shared utility accepting
+  other rounding modes does not enable them for quotes.
 - Configurable business minimum and maximum amounts remain a separate policy
   extension; the representable range is currently enforced by checked signed
   64-bit minor units.

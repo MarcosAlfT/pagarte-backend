@@ -8,7 +8,6 @@
 | Transactions | QUOTE-01 through QUOTE-08; QUOTE-06 is out of scope; required payment-execution changes remain in scope |
 | Primary owner | PayableServices |
 | Integration owners | PaymentSwitch.Processor and ExternalConnections; coordinate refund compatibility with Worker |
-| Patterns | Composite for quote items; Strategies for pricing and business-key selection |
 | Quote lifetime | Five minutes from server-side creation while Unpaid; Submitted work continues independently of that deadline |
 | Customer flow | Consult, review, Pay; consult again after expiry or invalidation |
 
@@ -41,6 +40,15 @@ QUOTE-06 remains out of scope.
 Live-provider acceptance is tracked in
 [Current Problems](../current-problems.md#7-quote-acceptance-boundaries).
 
+## Design References
+
+This document defines product behavior and acceptance criteria. Implementation
+responsibilities, extension guidance, and pricing configuration belong in
+[PayableServices: Quote Design](../contexts/payable-services.md#quote-design-composite-and-strategy).
+[ADR 0005](../decisions/0005-resumable-quotes-and-payment-revalidation.md) records
+why Composite and Strategy were selected; [Money Handling](../standards/money-handling.md)
+and [Testing](../standards/testing.md) maintain reusable coding conventions.
+
 ## Ownership
 
 - PayableServices owns quote items, pricing and key Strategies, business-key
@@ -67,8 +75,8 @@ Live-provider acceptance is tracked in
 - Inquiry-backed creation consumes an owned, unexpired, positive inquiry exactly
   once in the same transaction as quote creation. Identical retries return the
   same quote; conflicting reuse fails. Client overrides are rejected.
-- Use a Composite to organize quote items and a service-specific key Strategy
-  to select the items that identify the obligation. Mandatory identity evidence
+- Organize quote items into an itemized breakdown and identify the obligation
+  using the service's authoritative identity fields. Mandatory identity evidence
   comes from validated references and company evidence, not client-selected flags.
 - Snapshot the key Strategy ID/version, selected item names and canonical values,
   and derived business key. Scope the identity to the company/service. A bill
@@ -80,10 +88,10 @@ Live-provider acceptance is tracked in
   bills are USD 100. Changing any selected key value means a different obligation
   and requires a new inquiry/quote. Changing a non-key item does not change the
   business key, but changed bill amount/currency still invalidates payment.
-- Canonicalization must be deterministic, preserve significant leading zeroes,
-  and avoid ambiguous concatenation. Strategy-version changes alone must not
-  permit paying the same obligation twice; activation requires compatibility
-  mapping or blocking affected outstanding obligations.
+- Equivalent bill identity must remain stable, including significant leading
+  zeroes. A new identity-rule version alone must not permit paying the same
+  obligation twice. Implementation and compatibility rules are in the context's
+  [quote design](../contexts/payable-services.md#quote-design-composite-and-strategy).
 - Technical QuoteId, request idempotency key, and bill business key are distinct.
   Several inquiries may observe one bill; new QuoteIds cannot bypass bill-level
   duplicate protection. A key is not an authorization credential.
@@ -93,30 +101,27 @@ Live-provider acceptance is tracked in
 
 ### QR-002: Composite and Strategy Pricing (QUOTE-01, QUOTE-02)
 
-- Monetary leaves represent service amount, fees, taxes, penalties, and discounts.
-  Groups aggregate leaves or groups without contributing a second charge.
-  Identity/reference items contribute no money merely because they are in the
-  Composite. Reject cycles, duplicate membership, and mixed currencies.
-- Pricing Strategies cover provider base, fixed amounts, percentage fee/tax,
-  and fixed/percentage discounts. Configure calculation bases/dependencies
-  explicitly; reject missing bases and dependency cycles.
-- Select pricing and key Strategies through trusted registries. Use distinct
-  responsibilities; do not hardcode service/operator branches in use cases.
-- Use decimal calculation, ISO currency scale, checked minor-unit arithmetic,
-  and per-leaf ToEven rounding before summation. ToEven is the only supported
-  rounding mode in this scope; reject overrides consistently at both boundaries.
-- A positive total equals the sum of finalized leaves exactly. Discounts are
-  negative leaves. Groups are display subtotals, never independent charges.
-  Quote creation checks the same display-ordered minor-unit sum as Processor.
-- Snapshot leaves, grouping, rates/bases, Strategy IDs/versions, currency, route,
-  and total once. Reads and payment submission do not reprice this snapshot.
-- All client-relevant charges are visible; internal metadata and credentials
-  remain private. USD is the initial company fixture currency; use shared money
-  scale logic rather than assuming every currency has two decimals.
-- Before submission and throughout execution, a configuration change with the
-  same total but different fee/tax allocation does not rewrite the quote. Neither a
-  new Strategy version nor new rounding configuration changes its amounts.
-  A disabled/invalid route blocks payment; never silently substitute a route.
+The title retains the accepted design name for traceability. Its implementation
+is documented in [PayableServices](../contexts/payable-services.md#quote-design-composite-and-strategy).
+The required product outcomes are:
+
+- Show service amount, fees, taxes, penalties, and discounts in an itemized,
+  optionally grouped breakdown. Count each monetary line once. Group subtotals
+  and reference/identity items never add another charge.
+- Support provider base amounts, fixed amounts, percentage fees/taxes, and
+  fixed/percentage discounts with explicit calculation bases. Invalid or
+  ambiguous compositions cannot produce a payable quote.
+- Finalize amounts at the currency's scale using ToEven rounding. The positive
+  total equals the finalized lines exactly, with discounts subtracting value.
+  Reject unsupported rounding, mixed currencies, and unrepresentable amounts.
+- Retain the approved grouping, amounts, calculation evidence, currency, route,
+  and total. Quote reads and payment submission never reprice that snapshot.
+- Show all client-relevant charges while keeping internal rules and credentials
+  private. USD is the initial company fixture currency; supported currencies
+  retain their own minor-unit scales.
+- Configuration changes cannot rewrite fees/taxes or the total of an existing
+  quote, even if a new allocation would yield the same total. A disabled or
+  invalid route blocks payment; never silently substitute a route.
 
 ### QR-003: Retrieve and Expire (QUOTE-03, QUOTE-04)
 
@@ -356,11 +361,11 @@ schemas in their API/gRPC sources during implementation.
     or cancel a valid Submitted intent; independent operation failures still use
     their normal failure/recovery rules.
 
-Use deterministic clocks and isolated mutable company fixtures. The mock must
-support stable bill-key evidence, external payment, notification OK/NOT OK,
-idempotent acknowledgment/status lookup, and lost responses. Operator fixtures
-must support charge/refund failures and unknown outcomes. Exercise HTTP/gRPC,
-SQL concurrency, restart recovery, and failure injection as well as unit tests.
+Use the [Testing Standard](../standards/testing.md) and
+[quote acceptance guide](../../tests/PayableServices.Tests/README.md) for fixture
+setup and verification methods. Acceptance must demonstrate the outcomes above,
+including external settlement and uncertain charge, acknowledgment, and refund
+results; synthetic evidence does not establish live-provider acceptance.
 
 ## Delivery and Compatibility
 
@@ -398,5 +403,5 @@ rejection is explicitly in scope.
 - [Current quote implementation](../flows/quote-lifecycle.md)
 - [Current payment lifecycle](../flows/payment-lifecycle.md)
 - [Amount inquiry](mock-amount-inquiry.md)
-- [Money rules](../decisions/0004-money-handling.md)
+- [Money standard](../standards/money-handling.md) and [accepted decision](../decisions/0004-money-handling.md)
 - [Transaction inventory](../transactions.md)

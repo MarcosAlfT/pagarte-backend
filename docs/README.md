@@ -13,6 +13,33 @@ is explicitly marked as proposed.
 - [Current Problems](current-problems.md) - unresolved duplication and
   integration problems found in the current code.
 
+## Where Guidance Belongs
+
+| Location | Purpose |
+| --- | --- |
+| `requirements/` | Product behavior, scope, and acceptance criteria. |
+| `standards/` | Maintained implementation and verification conventions. |
+| `decisions/` | Accepted architectural choices, rationale, and consequences. |
+| `contexts/` | Context ownership, current implementation, and domain-specific design. |
+| `flows/` | Behavior and integration across runtime boundaries. |
+| `../AGENTS.md` and repository skills | Concise routing and task workflows that reference these documents. |
+
+Keep one authoritative home for detailed guidance. Requirements link to design
+and standards rather than acting as the coding handbook. ADRs retain decision
+history; contexts explicitly distinguish implemented design from planned work.
+
+## Implementation Standards
+
+- [Application Design](standards/application-design.md) - layers, use cases,
+  transaction boundaries, and specialized-design routing.
+- [Money Handling](standards/money-handling.md) - exact amounts, rounding,
+  snapshots, and current implementation limits.
+- [Testing](standards/testing.md) - suite selection, isolated fixtures, recovery
+  scenarios, and verification evidence.
+
+Quote-specific Composite and Strategy guidance is in
+[PayableServices: Quote Design](contexts/payable-services.md#quote-design-composite-and-strategy).
+
 ## Bounded Contexts and Adapter Areas
 
 - [Retired Identity.Client source](contexts/identity-client.md)
@@ -57,6 +84,11 @@ is explicitly marked as proposed.
 - [Five-Minute Quotes and Charge-First Confirmation](decisions/0005-resumable-quotes-and-payment-revalidation.md) - accepted direction with Development execution implemented.
 
 ## Maintenance Rules
+
+- Update a standard when an accepted implementation convention changes; retain
+  the decision's rationale in its ADR and link between them.
+- Keep pattern responsibilities and extension guidance in the owning context,
+  with product behavior and acceptance criteria in requirements.
 
 - Update a context document when ownership, persistence, use cases, or
   integrations change in that context.
