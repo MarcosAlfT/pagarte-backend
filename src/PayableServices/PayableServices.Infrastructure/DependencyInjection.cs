@@ -43,6 +43,7 @@ public static class DependencyInjection
         services.AddScoped<GetServiceDetailsUseCase>();
         services.AddScoped<CreateInquiryUseCase>();
         services.AddScoped<GetInquiryUseCase>();
+        services.AddScoped<PayableServices.Application.Services.QuotePricingService>();
         services.AddScoped<CreateQuoteUseCase>();
         services.AddScoped<ConfirmQuoteUseCase>();
         services.AddScoped<VerifySubmittedBillUseCase>();

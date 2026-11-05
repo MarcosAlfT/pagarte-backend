@@ -32,7 +32,7 @@ public sealed class VerifySubmittedBillUseCase(IInquiryRepository inquiries,
             !ProviderBalanceValidation.Matches(result, quote.ExternalServiceCode, references, requestedAt, now))
             return new("BILL_VERIFICATION_UNAVAILABLE", operationKey);
 
-        var observed = BillIdentityStrategy.Select(inquiry.Provider, quote.ExternalServiceCode, references, result.BillingPeriod);
+        var observed = BillIdentityStrategyRegistry.Select(inquiry.Provider, quote.ExternalServiceCode, references, result.BillingPeriod);
         if (observed is null)
             return new("BILL_VERIFICATION_UNAVAILABLE", operationKey, result.ProviderInquiryId);
 

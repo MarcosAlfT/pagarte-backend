@@ -15,7 +15,7 @@ Last reviewed for card-lifecycle implementation: 2026-11-03.
 | Remaining integration coverage | Partially resolved | Keep the current unit coverage and add the database-backed and transport-level scenarios listed below. |
 | Execution package carries connection data | Open | Resolve company endpoints and credentials server-side from stable route identifiers. |
 | Payment-method acceptance and recovery gaps | Open | Confirm bound dLocal setup/recovery/challenge contracts and complete live-provider/mobile acceptance. |
-| Revised quote pricing and payment execution | Open | Implement Composite pricing and verify live bill, acknowledgment, and compensation contracts before enabling charge-first execution beyond Development. |
+| Live bill verification and payment execution | Open | Verify live bill, acknowledgment, and compensation contracts before enabling charge-first execution beyond Development. |
 
 Seven quote-execution items have been verified as resolved and are listed at
 the end of this document.

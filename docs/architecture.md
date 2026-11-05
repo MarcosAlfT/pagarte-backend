@@ -25,6 +25,7 @@ PayableServices.Api
   -> validates client access tokens for quote operations
   -> resolves the internal Client.Id through ClientProfiles
   -> owns PayableServicesDb, catalogue, routes, persisted inquiries, and customer-visible quotes
+  -> calculates versioned quote pricing and stores finalized leaves and grouped breakdowns
   -> atomically consumes one five-minute quote and persists immutable submission intent
   -> sends authenticated claimed execution packages to Processor; recovers leased work
 
@@ -196,7 +197,7 @@ their original evidence and execution order.
 
 Charge-first execution is enabled for supported Development inquiry routes.
 Processor owns the compensation refund. Worker guards legacy refunds by persisted
-execution mode. Composite pricing and live-provider acceptance remain pending.
+execution mode. Live-provider acceptance remains pending.
 See the [Quotes requirement](requirements/quotes.md) and
 [target flow](flows/quote-review-and-payment.md).
 

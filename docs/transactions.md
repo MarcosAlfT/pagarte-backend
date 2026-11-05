@@ -146,7 +146,8 @@ quote transactions with [new lifecycle definitions](flows/quote-review-and-payme
 QUOTE-06 is retained as out of scope following the 2026-11-05 decision to use
 expiry rather than an explicit quote-cancellation transaction.
 Inquiry-backed quotes use the Development company's bill identity and fresh
-unpaid-bill verification. Composite pricing remains pending. Expired/changed quotes require
+unpaid-bill verification. Explicit pricing definitions support nested
+breakdowns and versioned calculation. Expired or changed quotes require
 a new consultation; there is no automatic refresh or replacement approval.
 Payment charges the card first, then notifies the company: OK completes payment;
 definitive NOT OK requires a full refund. Company settlement is outside this app.
@@ -155,8 +156,8 @@ acceptance criteria.
 
 | ID | Transaction | Status | Current implementation or missing work | Owner |
 | --- | --- | --- | --- | --- |
-| `QUOTE-01` | Create an itemized quote | Complete | `CreateQuoteUseCase` validates the service, route, references, currency, and flat amount composition. Development inquiry-backed quotes also snapshot the bill key. Composite pricing remains pending. | `PayableServices` |
-| `QUOTE-02` | Display base value, taxes, fees, discounts, and total | Complete | The immutable quote stores and returns ordered flat amount components and the complete total. Composite grouping and versioned pricing-Strategy evidence remain pending. | `PayableServices` |
+| `QUOTE-01` | Create an itemized quote | Complete | Quote creation validates the service, route, references, and currency. It calculates explicit versioned pricing definitions and snapshots the Development bill key for inquiry-backed quotes. | `PayableServices` |
+| `QUOTE-02` | Display base value, taxes, fees, discounts, and total | Complete | Explicit definitions produce an immutable grouped breakdown and ordered finalized monetary leaves. Rule versions, rates, and bases remain available for audit. Historical flat quotes keep their original amounts. | `PayableServices` |
 | `QUOTE-03` | Retrieve a quote by ID | Complete | `GetQuoteUseCase` returns the owner's snapshot and effective lifecycle at the stored deadline without writes or provider/execution calls; foreign and unknown IDs return not found. | `PayableServices` |
 | `QUOTE-04` | Expire unsubmitted quotes after five minutes | Complete | New quotes have an exact five-minute Unpaid window. The atomic Submitted claim binds server time, card, and immutable intent. Processor validates that timely claim even after expiry. SQL/HTTP/gRPC tests cover the deadline, late acceptance, fencing, restart, and legacy migration. | `PayableServices` and `PaymentSwitch.Processor` |
 | `QUOTE-05` | List a client's quotes | Complete | Owner-only summaries retain filters and bounded stable pages. Customer listing excludes consumed quotes. Reads make no provider/execution calls, and owned detail/status retains backend history. | `PayableServices` |
@@ -172,10 +173,11 @@ records verification and limits. HTTP/SQL tests cover consumption, failed commit
 replay/card conflicts, exact expiry, stale leases, and API restart recovery. The
 Processor suite uses the actual handoff client against authenticated gRPC and SQL
 for late acceptance, concurrency, durable rejection, and workload enforcement.
-A single public quote-HTTP through Processor runtime test remains a later check.
+Public quote HTTP tests exercise the actual Processor gRPC handoff, restart
+recovery, and the original finalized lines after a pricing configuration change.
 
-The revised requirement remains partially implemented. Composite pricing, live
-company verification, acknowledgment, and refund contracts still require
+The revised requirement remains partially implemented. Live company
+verification, acknowledgment, and refund contracts still require
 acceptance. Effective
 expiry and a not-found execution lookup do not prove a delayed submission is
 safe to replace. Leaving the summary after Pay does not cancel accepted or

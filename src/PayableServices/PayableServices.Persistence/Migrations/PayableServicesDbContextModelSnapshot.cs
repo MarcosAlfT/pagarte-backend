@@ -85,6 +85,9 @@ namespace PayableServices.Persistence.Migrations
                     b.Property<Guid>("PayableServiceId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("PricingDefinitionJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("Id");
 
                     b.ToTable("AmountCompositions");
@@ -651,6 +654,9 @@ namespace PayableServices.Persistence.Migrations
 
                     b.Property<Guid?>("PaymentNetworkId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PricingSnapshotJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<Guid?>("ProviderId")
                         .HasColumnType("uniqueidentifier");

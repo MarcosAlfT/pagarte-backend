@@ -10,6 +10,13 @@ only that test database.
 hosts with isolated databases. It drops the submission response after Processor
 commits acceptance, rejection, or a completed refund, restarts both hosts, and
 verifies owner-only status recovery and duplicate Pay delivery.
+The same cases change the pricing configuration after quote creation and verify
+that Processor receives the original approved breakdown and total.
+
+`CompositeQuotePricingTests` configures a synthetic service with provider base,
+fixed charges, percentage fee and tax, and both discount strategies. It checks
+invalid groups and dependencies, immutable snapshot evidence, preserved flat
+quotes, and zero- and three-decimal currencies.
 
 Windows SQL Server LocalDB is the default. Other SQL Server installations can
 be selected with the `PAGARTE_TEST_SQL` environment variable; the test rig replaces

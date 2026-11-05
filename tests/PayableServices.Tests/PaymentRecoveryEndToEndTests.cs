@@ -33,8 +33,11 @@ public sealed class PaymentRecoveryEndToEndTests
         await quotes.RestartApiAsync();
         var card = useOwnedCard ? await processor.SeedCardAsync() : Guid.NewGuid();
         using var customer = quotes.Client();
+        await SyntheticQuotePricing.StoreAsync(quotes, SyntheticQuotePricing.Definition());
         var inquiry = await TestRig.Data(await quotes.Inquire(customer));
         var quote = await TestRig.Data(await quotes.Quote(customer, inquiry.GetProperty("id").GetGuid()));
+        Assert.Equal(SyntheticQuotePricing.Total, quote.GetProperty("totalMinorUnits").GetInt64());
+        await SyntheticQuotePricing.StoreAsync(quotes, SyntheticQuotePricing.ChangedAllocation());
         var id = quote.GetProperty("id").GetGuid();
         var confirm = $"/api/quotes/{id}/confirm";
         Assert.Equal(HttpStatusCode.Accepted,
@@ -127,12 +130,15 @@ public sealed class PaymentRecoveryEndToEndTests
             var outcome = await db.QuoteSubmissionOutcomes.SingleAsync();
             if (charged)
             {
-                var payment = await db.Payments.SingleAsync();
+                var payment = await db.Payments.Include(row => row.Details).SingleAsync();
                 Assert.Equal(payment.Id, outcome.PaymentId);
                 Assert.True(payment.ChargeFirst);
                 Assert.Equal(1, payment.ChargeAttempts);
                 Assert.Equal(1, payment.CompanyPaymentAttempts);
                 Assert.Equal(refunded ? 1 : 0, payment.CompensationAttempts);
+                Assert.Equal(SyntheticQuotePricing.Total, payment.TotalMinorUnits);
+                Assert.Equal(new long[] { 12845, 200, 1284, 716, 6, -25, -148 },
+                    payment.Details.OrderBy(detail => detail.DisplayOrder).Select(detail => detail.MinorUnits).ToArray());
                 Assert.Equal(refunded ? 2 : 1, Directory.EnumerateFiles(journal, "*.payment.json").Count());
             }
             else
