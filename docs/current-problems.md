@@ -15,7 +15,7 @@ Last reviewed for card-lifecycle implementation: 2026-11-03.
 | Remaining integration coverage | Partially resolved | Keep the current unit coverage and add the database-backed and transport-level scenarios listed below. |
 | Execution package carries connection data | Open | Resolve company endpoints and credentials server-side from stable route identifiers. |
 | Payment-method acceptance and recovery gaps | Open | Confirm bound dLocal setup/recovery/challenge contracts and complete live-provider/mobile acceptance. |
-| Quote expiry and revised payment execution | Open | Implement five-minute quotes, Strategy-defined bill keys, missing quote transactions, source-quote recovery, and charge-first company confirmation/full refund. |
+| Revised quote pricing and payment execution | Open | Implement Composite pricing and charge-first company confirmation/full refund. Verify authoritative bill contracts with live companies. |
 
 Seven quote-execution items have been verified as resolved and are listed at
 the end of this document.
@@ -172,7 +172,9 @@ without local PaymentId, including after expiry. Durable single-use submission,
 one-minute lease fencing, ten-second restart recovery scans, five-minute Unpaid
 expiry, and consumed-summary exclusion are now implemented. Processor records
 acceptance or rejection durably; unknown/missing results do not release a consumed
-quote. Strategy-defined bill keys and fresh bill verification remain pending.
+quote. Development inquiry-backed quotes snapshot a Strategy-defined bill key
+and verify the bill before payment. Processor atomically reserves that key
+across quotes and clients.
 Current execution still calls
 the company before charging; the revised target charges first and then either
 confirms on company OK or refunds the full charge on definitive NOT OK. Unknown
@@ -186,8 +188,8 @@ rejection leaves PaymentFailed, never Unpaid. Recovery belongs to the original
 submission; a later eligible customer attempt requires a new quote.
 The accepted expiry boundary is the atomic server-side Unpaid -> Submitted claim,
 not Processor acceptance. Bound submission evidence and coordinated validator
-changes allow acceptance/recovery after the original quote deadline. That does
-not implement the still-missing fresh bill checks or cross-quote duplicate barrier.
+changes allow acceptance/recovery after the original quote deadline. Stale bill
+evidence must be refreshed before Processor starts the first company payment.
 
 The following items were rechecked against the working tree on 2026-09-13:
 

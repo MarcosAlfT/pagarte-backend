@@ -205,6 +205,7 @@ public sealed class InquiryAcceptanceTests
         {
             outcome = "amount_due",
             inquiry_id = "short",
+            billing_period = "2026-10",
             service_code = "ELEC-EC",
             references = new { accountNumber = "10000001" },
             amount_minor = 12845L,
@@ -290,6 +291,7 @@ public sealed class InquiryAcceptanceTests
         {
             outcome = "amount_due",
             inquiry_id = "long",
+            billing_period = "2026-10",
             service_code = "ELEC-EC",
             references = new { accountNumber = "10000001" },
             amount_minor = 12845L,

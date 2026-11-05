@@ -11,6 +11,9 @@ public sealed record ConfirmedQuoteComponent(
 
 public sealed record ConfirmedQuoteReference(string Key, string Value);
 
+public sealed record VerifiedBill(string? ErrorCode, string ProviderInquiryId, string ObservedBillKey,
+	long AmountMinorUnits, string Currency, DateTime? CheckedAt, DateTime? ExpiresAt);
+
 public sealed record ConfirmedQuoteExecution(
 	string ClientId,
 	Guid SourceQuoteId,
@@ -37,7 +40,13 @@ public sealed record ConfirmedQuoteExecution(
 	IReadOnlyCollection<ConfirmedQuoteComponent> Components,
 	IReadOnlyCollection<ConfirmedQuoteReference> ReferenceValues,
 	Guid? SubmissionId = null,
-	DateTime? SubmittedAt = null);
+	DateTime? SubmittedAt = null,
+	string? BillKey = null,
+	VerifiedBill? BillVerification = null)
+{
+	public bool RequiresBillVerification => BillKey is not null || BillVerification is not null ||
+		Components.Any(component => component.Source == "AmountInquiry");
+}
 
 public enum PaymentExecutionResultStatus
 {

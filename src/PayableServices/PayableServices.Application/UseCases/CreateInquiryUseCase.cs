@@ -98,7 +98,9 @@ public sealed class CreateInquiryUseCase(
         var inquiry = (await inquiries.GetAsync(reserved.Id, cancellationToken))!;
         if (inquiry.Outcome != InquiryOutcome.Pending || inquiry.LeaseToken != token) return inquiry;
         var balance = result.Outcome is InquiryOutcome.AmountDue or InquiryOutcome.NothingDue;
-        if (balance && !ValidBalance(result, inquiry)) result = new(InquiryOutcome.InvalidProviderResponse);
+        if (balance && (result.Currency != "USD" || !ProviderBalanceValidation.Matches(result, inquiry.ExternalServiceCode,
+            inquiry.References(), inquiry.CreatedAt, clock.UtcNow)))
+            result = new(InquiryOutcome.InvalidProviderResponse);
         if (result.Outcome == InquiryOutcome.Pending || !Enum.IsDefined(result.Outcome))
             result = new(InquiryOutcome.InvalidProviderResponse);
         inquiry.Outcome = result.Outcome;
@@ -111,6 +113,7 @@ public sealed class CreateInquiryUseCase(
             inquiry.ExpiresAt = result.ExpiresAt < result.ResultAt!.Value.AddMinutes(15)
                 ? result.ExpiresAt : result.ResultAt.Value.AddMinutes(15);
             inquiry.DueDate = result.DueDate;
+            inquiry.BillingPeriod = result.BillingPeriod is { Length: 7 } ? result.BillingPeriod : null;
         }
         else
         {
@@ -128,16 +131,6 @@ public sealed class CreateInquiryUseCase(
             inquiry.Id, inquiry.ClientId, inquiry.ServiceId, inquiry.ProviderInquiryId, Hash(inquiry.IdempotencyKey), inquiry.Outcome);
         return inquiry;
     }
-
-    private bool ValidBalance(ProviderInquiryResult result, AmountInquiry inquiry) =>
-        result.Currency == "USD" && !string.IsNullOrWhiteSpace(result.ProviderInquiryId) && result.ProviderInquiryId.Length <= 200 &&
-        result.ExternalServiceCode == inquiry.ExternalServiceCode && result.References is not null &&
-        result.References.Count == inquiry.References().Count && inquiry.References().All(x => result.References.TryGetValue(x.Key, out var value) && value == x.Value) &&
-        (result.Outcome == InquiryOutcome.AmountDue ? result.AmountMinorUnits > 0 : result.AmountMinorUnits == 0) &&
-        result.ResultAt is { Kind: DateTimeKind.Utc } && result.ExpiresAt is { Kind: DateTimeKind.Utc } &&
-        result.ResultAt <= clock.UtcNow && result.ResultAt.Value <= DateTime.MaxValue.AddMinutes(-15) &&
-        result.ExpiresAt > result.ResultAt && result.ExpiresAt > clock.UtcNow &&
-        result.ResultAt.Value.AddMinutes(15) > clock.UtcNow && (result.DueDate is null || result.DueDate.Value.Kind == DateTimeKind.Utc);
 
     private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 }

@@ -26,6 +26,7 @@ public sealed class AmountInquiry
     public DateTime? ProviderResultAt { get; set; }
     public DateTime? ExpiresAt { get; set; }
     public DateTime? DueDate { get; set; }
+    public string? BillingPeriod { get; set; }
     public string? ErrorCode { get; set; }
     public Guid? QuoteId { get; set; }
 

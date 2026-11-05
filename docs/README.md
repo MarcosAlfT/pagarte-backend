@@ -28,7 +28,7 @@ is explicitly marked as proposed.
 
 - [Authentication](flows/authentication.md)
 - [Quote Lifecycle](flows/quote-lifecycle.md)
-- [Quote Review, Expiry, and Payment Confirmation](flows/quote-review-and-payment.md) - accepted target; submission/expiry implemented, bill verification/charge-first execution pending.
+- [Quote Review, Expiry, and Payment Confirmation](flows/quote-review-and-payment.md) - accepted target with implemented submission, expiry, and Development bill verification. Charge-first execution is pending.
 - [Payment Lifecycle](flows/payment-lifecycle.md)
 - [Card Registration and Removal](flows/card-registration.md)
 

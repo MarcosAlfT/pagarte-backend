@@ -4,6 +4,32 @@ namespace PaymentSwitch.Processor.Domain.Entities;
 
 public sealed class Payment
 {
+	public const string StaleBillVerification = "BILL_VERIFICATION_STALE";
+	public string? BillKey { get; private set; }
+	public string? BillVerificationJson { get; private set; }
+	public DateTime? BillVerificationExpiresAt { get; private set; }
+	public bool BillReservationReleased { get; private set; }
+	public bool NeedsBillVerification => BillKey is not null && Status == PaymentTransactionStatus.CardReady &&
+		CompanyPaymentAttempts == 0 && ErrorCode == StaleBillVerification;
+
+	public void SetBillVerification(string billKey, string json, DateTime expiresAt, DateTime utcNow)
+	{
+		if (BillKey is not null && (!NeedsBillVerification || BillKey != billKey))
+			throw new InvalidOperationException("Bill verification can only be refreshed before company payment.");
+		BillKey = billKey;
+		BillVerificationJson = json;
+		BillVerificationExpiresAt = expiresAt;
+		NextAttemptAt = utcNow;
+		ClearError(utcNow);
+	}
+
+	public void RequestBillVerification(DateTime utcNow)
+	{
+		RequireStatus(PaymentTransactionStatus.CardReady);
+		NextAttemptAt = null;
+		SetError(StaleBillVerification, "The bill must be verified again before payment.", utcNow);
+	}
+
 	public Guid Id { get; set; }
 	public string ClientId { get; set; } = string.Empty;
 	public Guid SourceQuoteId { get; set; }
@@ -295,6 +321,7 @@ public sealed class Payment
 	{
 		RequireStatus(PaymentTransactionStatus.RollingBackCompany);
 		Status = PaymentTransactionStatus.CompanyRolledBack;
+		BillReservationReleased = BillKey is not null;
 		ProcessedAt = utcNow;
 		NextAttemptAt = null;
 		SetError(errorCode ?? "CARD_CHARGE_FAILED", errorMessage, utcNow);
@@ -303,9 +330,19 @@ public sealed class Payment
 	public void MarkFailed(DateTime utcNow, string errorCode, string errorMessage)
 	{
 		Status = PaymentTransactionStatus.Failed;
+		BillReservationReleased = BillKey is not null && CompanyPaymentAttempts == 0;
 		ProcessedAt = utcNow;
 		NextAttemptAt = null;
 		SetError(errorCode, errorMessage, utcNow);
+	}
+
+	public void MarkFirstCompanyPaymentRejected(DateTime utcNow, string errorCode, string errorMessage)
+	{
+		RequireStatus(PaymentTransactionStatus.PayingCompany);
+		if (CompanyPaymentAttempts != 1)
+			throw new InvalidOperationException("The first company payment attempt is required.");
+		MarkFailed(utcNow, errorCode, errorMessage);
+		BillReservationReleased = BillKey is not null;
 	}
 
 	public void MarkManualIntervention(DateTime utcNow, string errorCode, string errorMessage)

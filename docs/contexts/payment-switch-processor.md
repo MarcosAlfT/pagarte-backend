@@ -153,20 +153,23 @@ retained catalogue is no longer the source of PayableServices synchronization.
 
 ## Change Guidance
 
-The [Quotes requirement](../requirements/quotes.md) now has implemented timely,
-single-use submission acceptance and immutable rejection recovery. Remaining
-work includes duplicate protection by the Strategy-selected bill business key,
-fresh bill verification, and its new
-order is card charge, company notification, then success on matching OK or full
-card refund on definitive NOT OK. Unknown outcomes require reconciliation.
-Company notification records payment but transfers no money. Processor owns
-compensation; coordinate with Worker so one charge cannot be refunded twice.
-This is pending implementation and replaces the company-first order above only
-after a coordinated cutover. The current submission protocol does not implement
-those later capabilities or change the company-first saga. Processor's new
-RPC/migration must precede PayableServices deployment; older callers cannot
-authorize a new execution through the legacy RPC. Existing accepted work remains
-recoverable with its original evidence and execution order.
+Processor accepts a single bound submission and durably records rejection or
+acceptance. `SubmitVerifiedBill` validates fresh evidence against the approved
+bill key and service amount. A transaction-owned lock and filtered unique index
+allow one active reservation per bill across clients and quotes. Acceptance and
+reservation commit together. A blocked client receives a generic rejection.
+Successful and uncertain payments keep the reservation. A failure before the
+first company operation, definitive rejection of that first operation, or
+confirmed rollback releases it. Evidence for a new
+payment must be fresh after release. If verification expires during card checks,
+Processor waits for PayableServices to refresh it before the first company payment.
+
+Charge-first execution remains pending. The target charges the card, then
+notifies the company, then completes on matching acknowledgment or refunds
+on definitive rejection. Coordinate the refund with Worker. See the
+[Quotes requirement](../requirements/quotes.md).
+Deploy the Processor RPC and migration before PayableServices. Existing accepted
+work remains recoverable with its original evidence and execution order.
 Explicit quote cancellation is out of scope; navigating away does not stop
 accepted or uncertain execution. Submission fencing remains required.
 PayableServices permanently consumes each quote at Pay. Processor replays or

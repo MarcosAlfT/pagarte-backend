@@ -107,6 +107,18 @@ public sealed class ContinuePaymentExecutionUseCase(
 		Payment payment,
 		CancellationToken cancellationToken)
 	{
+		if (payment.BillKey is not null && payment.CompanyPaymentAttempts == 0 &&
+			(payment.BillVerificationExpiresAt is not { } expiresAt || expiresAt <= clock.UtcNow))
+		{
+			if (!payment.NeedsBillVerification)
+			{
+				payment.RequestBillVerification(clock.UtcNow);
+				await SaveAsync(payment, cancellationToken);
+			}
+			return false;
+		}
+
+		var firstCompanyAttempt = payment.Status == PaymentTransactionStatus.CardReady && payment.CompanyPaymentAttempts == 0;
 		PaymentOperationResult result;
 		if (payment.Status == PaymentTransactionStatus.CompanyPaymentOutcomeUnknown
 			&& !string.IsNullOrWhiteSpace(payment.CompanyReference))
@@ -158,13 +170,24 @@ public sealed class ContinuePaymentExecutionUseCase(
 					result.ErrorMessage ?? "The company payment outcome is unknown.");
 			}
 		}
-		else if (result.Outcome == PaymentOperationOutcome.DefinitiveFailure
-			|| payment.CompanyPaymentAttempts >= payment.MaxCompanyPaymentAttempts)
+		else if (firstCompanyAttempt && result.Outcome == PaymentOperationOutcome.DefinitiveFailure)
 		{
-			payment.MarkFailed(
+			payment.MarkFirstCompanyPaymentRejected(
 				clock.UtcNow,
 				result.ErrorCode ?? "COMPANY_PAYMENT_FAILED",
 				result.ErrorMessage ?? "The company payment failed.");
+		}
+		else if (result.Outcome == PaymentOperationOutcome.DefinitiveFailure
+			|| payment.CompanyPaymentAttempts >= payment.MaxCompanyPaymentAttempts)
+		{
+			if (payment.BillKey is not null)
+				payment.MarkManualIntervention(clock.UtcNow, "COMPANY_PAYMENT_UNKNOWN",
+					"The company payment outcome must be confirmed before releasing this bill.");
+			else
+				payment.MarkFailed(
+					clock.UtcNow,
+					result.ErrorCode ?? "COMPANY_PAYMENT_FAILED",
+					result.ErrorMessage ?? "The company payment failed.");
 		}
 		else
 		{
@@ -246,6 +269,14 @@ public sealed class ContinuePaymentExecutionUseCase(
 				clock.UtcNow,
 				result.ErrorCode,
 				result.ErrorMessage);
+			await SaveAsync(payment, cancellationToken);
+			return false;
+		}
+
+		if (payment.BillKey is not null && result.Outcome == PaymentOperationOutcome.RetryableFailure)
+		{
+			payment.MarkManualIntervention(clock.UtcNow, "CHARGE_OUTCOME_UNKNOWN",
+				"The charge outcome must be confirmed before releasing this bill.");
 			await SaveAsync(payment, cancellationToken);
 			return false;
 		}

@@ -7,6 +7,25 @@ namespace PaymentSwitch.Processor.Infrastructure.Repository;
 
 public sealed class PaymentRepository(PaymentDbContext context) : IPaymentRepository
 {
+	public async Task<BillReservationStatus> CheckBillReservationAsync(
+		string billKey, DateTime checkedAt, CancellationToken cancellationToken)
+	{
+		if (context.Database.CurrentTransaction is null)
+			throw new InvalidOperationException("Bill reservation requires an acceptance transaction.");
+
+		var resource = "bill:" + billKey;
+		await context.Database.ExecuteSqlInterpolatedAsync(
+			$"DECLARE @result int; EXEC @result = sys.sp_getapplock @Resource={resource}, @LockMode='Exclusive', @LockOwner='Transaction', @LockTimeout=10000; IF @result < 0 THROW 51000, 'Bill reservation lock unavailable.', 1;",
+			cancellationToken);
+		var billPayments = context.Payments.Where(payment => payment.BillKey == billKey);
+		if (await billPayments.AnyAsync(payment => !payment.BillReservationReleased, cancellationToken))
+			return BillReservationStatus.Reserved;
+		return await billPayments.AnyAsync(
+			payment => payment.BillReservationReleased && payment.ProcessedAt > checkedAt, cancellationToken)
+			? BillReservationStatus.VerificationPredatesRelease
+			: BillReservationStatus.Available;
+	}
+
 	public Task<Payment?> GetByIdAsync(
 		Guid id,
 		CancellationToken cancellationToken = default) =>

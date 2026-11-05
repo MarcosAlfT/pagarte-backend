@@ -4,6 +4,7 @@ namespace PaymentSwitch.Processor.Interfaces;
 
 public interface IPaymentRepository
 {
+	Task<BillReservationStatus> CheckBillReservationAsync(string billKey, DateTime checkedAt, CancellationToken cancellationToken);
 	Task<Payment?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 	Task<Payment?> GetBySourceQuoteIdAsync(
 		Guid sourceQuoteId,
@@ -29,3 +30,5 @@ public interface IPaymentRepository
 }
 
 public sealed record PaymentInsertResult(bool Inserted, Payment Payment);
+
+public enum BillReservationStatus { Available, Reserved, VerificationPredatesRelease }

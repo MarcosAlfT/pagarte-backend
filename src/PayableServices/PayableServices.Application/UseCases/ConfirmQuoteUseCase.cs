@@ -11,7 +11,7 @@ namespace PayableServices.Application.UseCases;
 public sealed class ConfirmQuoteUseCase(
     IQuoteRepository quoteRepository,
     IPaymentExecutionClient paymentExecutionClient,
-    IClock clock, IUnitOfWork unitOfWork)
+    IClock clock, IUnitOfWork unitOfWork, VerifySubmittedBillUseCase verifyBill)
 {
     public async Task<ConfirmQuoteResult> ExecuteAsync(
         ConfirmQuoteCommand request,
@@ -85,7 +85,19 @@ public sealed class ConfirmQuoteUseCase(
                 ?? throw new InvalidOperationException("Submission snapshot is invalid.");
             // Lookup first; accepted work must not be submitted again just because its local commit was lost.
             result = await paymentExecutionClient.GetStatusAsync(snapshot.ClientId, snapshot.Id, cancellationToken);
-            if (!result.Accepted && result.PaymentId is null && result.ErrorCode == "EXECUTION_NOT_FOUND" && snapshot.PaymentId is null)
+            var awaitingAcceptance = !result.Accepted && result.PaymentId is null &&
+                result.ErrorCode == "EXECUTION_NOT_FOUND" && snapshot.PaymentId is null;
+            if (snapshot.InquiryId is not null && (awaitingAcceptance || result.ErrorCode == "BILL_VERIFICATION_STALE"))
+            {
+                var previous = snapshot.BillVerificationJson is { } evidence
+                    ? JsonSerializer.Deserialize<BillVerification>(evidence) : null;
+                var verification = previous is { ErrorCode: not null }
+                    ? previous : await verifyBill.ExecuteAsync(snapshot, cancellationToken);
+                if (!await RecordVerificationAsync(snapshot.Id, lease, verification, cancellationToken))
+                    return Pending(snapshot);
+                result = await paymentExecutionClient.ConfirmQuoteAsync(package with { BillVerification = verification }, cancellationToken);
+            }
+            else if (awaitingAcceptance)
                 result = await paymentExecutionClient.ConfirmQuoteAsync(package, cancellationToken);
             if (!result.Accepted && result.PaymentId is null && !(result.Final && result.SubmissionRecorded))
                 result = Pending(snapshot);
@@ -105,6 +117,19 @@ public sealed class ConfirmQuoteUseCase(
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return result;
+    }
+
+    private async Task<bool> RecordVerificationAsync(Guid quoteId, Guid lease,
+        BillVerification verification, CancellationToken cancellationToken)
+    {
+        await using var transaction = await unitOfWork.BeginAsync("quote:" + quoteId, cancellationToken);
+        var quote = await quoteRepository.GetByIdAsync(quoteId, cancellationToken);
+        if (quote is null || !quote.OwnsSubmissionLease(lease) || quote.SubmissionLeaseUntil <= clock.UtcNow)
+            return false;
+        quote.RecordBillVerification(lease, JsonSerializer.Serialize(verification));
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return true;
     }
 
     public async Task<ConfirmQuoteResult> RefreshStatusAsync(
@@ -129,7 +154,7 @@ public sealed class ConfirmQuoteUseCase(
         }
         // Processor may have accepted before the response or local commit was lost.
         // A missing execution does not authorize a new submission or cancellation.
-        if (!result.Accepted && result.PaymentId is null)
+        if ((!result.Accepted && result.PaymentId is null) || result.ErrorCode == "BILL_VERIFICATION_STALE")
         {
             return quote.SubmissionId is not null ? StoredResult(quote) : result;
         }
@@ -186,13 +211,19 @@ public sealed class ConfirmQuoteUseCase(
             quote.ReferenceValues
                 .OrderBy(reference => reference.Key, StringComparer.Ordinal)
                 .Select(reference => new ExecutionReferenceValue(reference.Key, reference.Value))
-                .ToArray(), quote.SubmissionId, quote.SubmittedAt);
+                .ToArray(), quote.SubmissionId, quote.SubmittedAt,
+            quote.BillIdentityJson is { } json ? JsonSerializer.Deserialize<BillIdentity>(json)?.Key : null);
 
     private static void ApplyExecutionResult(Quote quote, ConfirmQuoteResult result)
     {
         quote.PaymentId = result.PaymentId ?? quote.PaymentId;
         quote.ExecutionErrorCode = result.ErrorCode;
         quote.ExecutionErrorMessage = result.ErrorMessage;
+        if (result.Final && (result.SubmissionRecorded || result.PaymentId is not null))
+        {
+            if (result.ErrorCode == "BILL_CHANGED") { quote.Status = QuoteStatus.Invalidated; return; }
+            if (result.ErrorCode == "BILL_NO_LONGER_DUE") { quote.Status = QuoteStatus.NoLongerDue; return; }
+        }
         if (!result.Accepted && result.PaymentId is null)
         {
             if (result.Final && result.SubmissionRecorded) quote.Status = QuoteStatus.PaymentFailed;

@@ -35,9 +35,15 @@ public static class Program
 }
 
 public sealed record MockInquiry(string service_code, Dictionary<string, string> references, DateTime requested_at);
+public sealed record MockBill(string BillingPeriod, long AmountMinor, string Currency = "USD");
+
 public sealed class MockResponses(TimeProvider clock)
 {
     private readonly ConcurrentDictionary<string, (string Fingerprint, IResult Result)> results = new();
+    private readonly ConcurrentDictionary<(string Service, string Account), MockBill> bills = new();
+
+    public void SetBill(string service, string account, MockBill bill) => bills[(service, account)] = bill;
+
     public IResult Inquire(string key, MockInquiry request)
     {
         if (string.IsNullOrWhiteSpace(key) || request.references is null || !request.references.TryGetValue("accountNumber", out var account))
@@ -53,18 +59,23 @@ public sealed class MockResponses(TimeProvider clock)
         // A deterministic provider-side timeout response; tests also simulate a transport cancellation.
         if (account == "10000005") return Results.StatusCode(408);
         if (account == "10000006") return Results.Ok(new { outcome = "amount_due", amount_minor = "bad", currency = "EUR" });
-        if (account is not ("10000001" or "10000002")) return Results.NotFound();
+        if (!bills.TryGetValue((request.service_code, account), out var bill))
+        {
+            if (account is not ("10000001" or "10000002")) return Results.NotFound();
+            bill = new("2026-10", account == "10000001" ? 12845L : 0L);
+        }
         var now = request.requested_at;
         if (now.Kind != DateTimeKind.Utc || now > clock.GetUtcNow().UtcDateTime || now > DateTime.MaxValue.AddDays(-8))
             return Results.BadRequest();
         return Results.Ok(new
         {
-            outcome = account == "10000001" ? "amount_due" : "nothing_due",
+            outcome = bill.AmountMinor > 0 ? "amount_due" : "nothing_due",
             inquiry_id = "mock-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key))),
             service_code = request.service_code,
             references = request.references,
-            amount_minor = account == "10000001" ? 12845L : 0L,
-            currency = "USD",
+            billing_period = bill.BillingPeriod,
+            amount_minor = bill.AmountMinor,
+            currency = bill.Currency,
             result_at = now,
             expires_at = now.AddMinutes(15),
             due_date = now.Date.AddDays(7)

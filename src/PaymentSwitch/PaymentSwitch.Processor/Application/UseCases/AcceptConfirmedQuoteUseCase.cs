@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.Options;
 using PaymentSwitch.Messaging;
 using PaymentSwitch.Processor.Application.Abstractions;
@@ -42,6 +43,17 @@ public sealed class AcceptConfirmedQuoteUseCase(
                 {
                     var accepted = await paymentRepository.GetByIdAsync(acceptedId, cancellationToken)
                         ?? throw new InvalidOperationException("Accepted submission payment is missing.");
+                    if (accepted.NeedsBillVerification && execution.BillVerification is { } evidence)
+                    {
+                        var now = clock.UtcNow;
+                        var billError = BillVerificationPolicy.Validate(execution, now);
+                        if (billError is null)
+                            accepted.SetBillVerification(execution.BillKey!, JsonSerializer.Serialize(evidence), evidence.ExpiresAt!.Value, now);
+                        else if (billError.Value.Code != Payment.StaleBillVerification)
+                            accepted.MarkFailed(now, billError.Value.Code, billError.Value.Message);
+                        if (billError?.Code != Payment.StaleBillVerification)
+                            await transaction.CommitAsync(cancellationToken);
+                    }
                     return PaymentExecutionResultMapper.Map(accepted, replayed: true) with { SubmissionRecorded = true };
                 }
                 return Failure(recorded.ErrorCode!, recorded.ErrorMessage!) with { Replayed = true, SubmissionRecorded = true };
@@ -92,6 +104,10 @@ public sealed class AcceptConfirmedQuoteUseCase(
             var validationError = validator.Validate(execution, clock.UtcNow);
             if (validationError is not null)
                 return await RejectAsync("INVALID_EXECUTION_PACKAGE", validationError);
+            if (BillVerificationPolicy.Validate(execution, clock.UtcNow) is { } initialBillError)
+                return initialBillError.Code == Payment.StaleBillVerification
+                    ? Failure(initialBillError.Code, initialBillError.Message) with { Final = false }
+                    : await RejectAsync(initialBillError.Code, initialBillError.Message);
 			if (card is null || card.ClientId != execution.ClientId)
 			{
 				return await RejectAsync(
@@ -110,6 +126,18 @@ public sealed class AcceptConfirmedQuoteUseCase(
 				cancellationToken);
 			var executionOptions = options.Value;
 			var currency = currencyCatalog.GetRequired(execution.Currency);
+			if (execution.BillKey is { } billKey)
+			{
+				var reservation = await paymentRepository.CheckBillReservationAsync(
+					billKey, execution.BillVerification!.CheckedAt!.Value, cancellationToken);
+				if (reservation == BillReservationStatus.Reserved)
+					return await RejectAsync("BILL_PAYMENT_BLOCKED", "A payment cannot be started for this bill.");
+				if (reservation == BillReservationStatus.VerificationPredatesRelease)
+					return Failure(Payment.StaleBillVerification, BillVerificationPolicy.RefreshMessage) with { Final = false };
+				if (BillVerificationPolicy.Validate(execution, clock.UtcNow) is { } billError)
+					return Failure(billError.Code, billError.Message) with { Final = false };
+			}
+
 			payment = Payment.Create(
 				new PaymentCreationData(
 					execution.ClientId,
@@ -143,6 +171,9 @@ public sealed class AcceptConfirmedQuoteUseCase(
 					executionOptions.MaxRollbackAttempts,
 					executionOptions.RetryIntervalSeconds),
 				clock.UtcNow);
+
+			if (execution.BillKey is { } key && execution.BillVerification is { } verification)
+				payment.SetBillVerification(key, JsonSerializer.Serialize(verification), verification.ExpiresAt!.Value, clock.UtcNow);
 
 			foreach (var component in execution.Components)
 			{

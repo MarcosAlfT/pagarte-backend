@@ -145,8 +145,8 @@ The accepted [Quotes requirement](requirements/quotes.md) covers seven active
 quote transactions with [new lifecycle definitions](flows/quote-review-and-payment.md).
 QUOTE-06 is retained as out of scope following the 2026-11-05 decision to use
 expiry rather than an explicit quote-cancellation transaction.
-Composite/Strategy pricing and business-key selection, a five-minute lifetime,
-and unpaid-bill verification define the target. Expired/changed quotes require
+Inquiry-backed quotes use the Development company's bill identity and fresh
+unpaid-bill verification. Composite pricing remains pending. Expired/changed quotes require
 a new consultation; there is no automatic refresh or replacement approval.
 Payment charges the card first, then notifies the company: OK completes payment;
 definitive NOT OK requires a full refund. Company settlement is outside this app.
@@ -155,14 +155,14 @@ acceptance criteria.
 
 | ID | Transaction | Status | Current implementation or missing work | Owner |
 | --- | --- | --- | --- | --- |
-| `QUOTE-01` | Create an itemized quote | Complete | `CreateQuoteUseCase` validates the service, route, references, currency, and configured flat amount composition. Composite/Strategy pricing and bill-key evidence required by the revised requirement remain pending. | `PayableServices` |
+| `QUOTE-01` | Create an itemized quote | Complete | `CreateQuoteUseCase` validates the service, route, references, currency, and flat amount composition. Development inquiry-backed quotes also snapshot the bill key. Composite pricing remains pending. | `PayableServices` |
 | `QUOTE-02` | Display base value, taxes, fees, discounts, and total | Complete | The immutable quote stores and returns ordered flat amount components and the complete total. Composite grouping and versioned pricing-Strategy evidence remain pending. | `PayableServices` |
 | `QUOTE-03` | Retrieve a quote by ID | Complete | `GetQuoteUseCase` returns the owner's snapshot and effective lifecycle at the stored deadline without writes or provider/execution calls; foreign and unknown IDs return not found. | `PayableServices` |
-| `QUOTE-04` | Expire unsubmitted quotes after five minutes | Complete | New quotes have an exact five-minute Unpaid window. The atomic Submitted claim binds server time, card, and immutable intent; Processor validates that timely claim even after expiry. SQL/HTTP/gRPC tests cover exact boundary, late acceptance, lease fencing, restart, and legacy migration. Bill verification and charge-first execution remain separate work. | `PayableServices` and `PaymentSwitch.Processor` |
-| `QUOTE-05` | List a client's quotes | Complete | Owner-only summaries retain filters and bounded stable pages. Customer listing excludes consumed, paid, processing, failed, and legacy Cancelled rows. Reads make no provider/execution calls. Owned detail/status retains backend history; later refund/bill statuses remain execution work. | `PayableServices` |
+| `QUOTE-04` | Expire unsubmitted quotes after five minutes | Complete | New quotes have an exact five-minute Unpaid window. The atomic Submitted claim binds server time, card, and immutable intent. Processor validates that timely claim even after expiry. SQL/HTTP/gRPC tests cover the deadline, late acceptance, fencing, restart, and legacy migration. | `PayableServices` and `PaymentSwitch.Processor` |
+| `QUOTE-05` | List a client's quotes | Complete | Owner-only summaries retain filters and bounded stable pages. Customer listing excludes consumed quotes. Reads make no provider/execution calls, and owned detail/status retains backend history. | `PayableServices` |
 | `QUOTE-06` | Cancel an unpaid quote | Out of scope | Explicit quote cancellation was removed from scope on 2026-11-05. Leaving the summary does not revoke the quote or change its deadline. No cancellation endpoint is required. Existing Cancelled values remain for historical compatibility. | `PayableServices` |
-| `QUOTE-07` | Consult again after expiry or unsuccessful payment | Partial | Manual new inquiry/quote creation and effective-expiry responses exist. Changed-bill invalidation and unresolved-payment/bill-key protections remain pending; no refresh or replacement-chain endpoint is required. | `PayableServices` |
-| `QUOTE-08` | Create a quote from a verified amount inquiry | Complete | Owned positive inquiry evidence supplies the base exactly once through shared currency-scale conversion; quote/consumption commit atomically with unique inquiry binding, concurrent replay, expiry/route/currency rejection, and existing execution-validator acceptance. Authoritative bill identity/key evidence remains pending. | `PayableServices` |
+| `QUOTE-07` | Consult again after expiry or unsuccessful payment | Partial | Manual new inquiry/quote creation, changed-bill invalidation, and protection against unresolved or successful payments are implemented with the Development company. Charge-first refund and live provider acceptance remain pending. | `PayableServices` and `PaymentSwitch.Processor` |
+| `QUOTE-08` | Create a quote from a verified amount inquiry | Complete | Owned positive inquiry evidence supplies the base once through shared currency-scale conversion. Quote creation snapshots the authoritative Development bill key and atomically consumes the inquiry. | `PayableServices` |
 
 One quote currently represents one payable service and one payment attempt.
 
@@ -174,9 +174,9 @@ Processor suite uses the actual handoff client against authenticated gRPC and SQ
 for late acceptance, concurrency, durable rejection, and workload enforcement.
 A single public quote-HTTP through Processor runtime test remains a later check.
 
-The revised requirement remains partially implemented. Composite/pricing/key
-Strategies, fresh bill verification, bill-level duplicate protection, and charge-first company
-notification/full-refund compensation still require development. Effective
+The revised requirement remains partially implemented. Composite pricing, live
+company verification contracts, and charge-first notification and full refund
+still require development. Effective
 expiry and a not-found execution lookup do not prove a delayed submission is
 safe to replace. Leaving the summary after Pay does not cancel accepted or
 uncertain work. PAY-05 concerns payment-execution cancellation and retains its
@@ -202,8 +202,8 @@ claim that the revised execution order has been delivered.
 
 | ID | Transaction | Status | Current implementation or missing work | Owner |
 | --- | --- | --- | --- | --- |
-| `PAY-01` | Confirm and pay a quote with a stored card | Complete | `ConfirmQuoteUseCase` durably consumes the quote/card before dispatch through the claimed-submission RPC; technical replay resumes its original intent/result. The operation order remains company-first. | `PayableServices` and `PaymentSwitch.Processor` |
-| `PAY-02` | Accept a payment idempotently | Complete | SourceQuoteId, SubmissionId, bound fingerprint, and atomic acceptance/rejection outcomes prevent another execution or later acceptance of a rejected request. Bill-level protection across different quotes or clients remains pending. | `PaymentSwitch.Processor` |
+| `PAY-01` | Confirm and pay a quote with a stored card | Complete | `ConfirmQuoteUseCase` durably consumes the quote and binds the card before dispatch. It checks fresh evidence for inquiry-backed bills, and technical replay resumes the original intent. Current execution is company-first. | `PayableServices` and `PaymentSwitch.Processor` |
+| `PAY-02` | Accept a payment idempotently | Complete | SourceQuoteId, SubmissionId, fingerprint, and recorded outcomes bind one execution. Processor reserves a verified bill atomically with acceptance, across different quotes and clients. | `PaymentSwitch.Processor` |
 | `PAY-03` | Execute the company-first payment saga | Complete | The saga checks card readiness, pays the company, charges the full total, reconciles unknown outcomes, and rolls back when required. | `PaymentSwitch.Processor` and `ExternalConnections` |
 | `PAY-04` | Refresh payment execution status | Complete | Explicit status and leased background recovery use source quote ID without local PaymentId, including after expiry. A submitted intent without a found payment stays pending; restart recovery dispatches only its immutable original package. Fenced results/leases prevent stale responses reopening a quote. | `PayableServices` and `PaymentSwitch.Processor` |
 | `PAY-05` | Cancel a payment execution | Decision required | Cancellation is unsafe after an external side effect may have occurred. Valid cancellation states and compensation rules must be defined first. | `PaymentSwitch.Processor` |

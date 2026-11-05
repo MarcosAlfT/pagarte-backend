@@ -4,9 +4,9 @@
 
 This document describes current implementation. The accepted
 [review/expiry/payment flow](quote-review-and-payment.md) and
-[Quotes requirement](../requirements/quotes.md) retain pending Composite/Strategy
-pricing, bill identity/verification, cross-quote protection, and charge-first
-company acknowledgment/full refund. Current execution remains company-first.
+[Quotes requirement](../requirements/quotes.md) retain pending Composite pricing
+and charge-first company acknowledgment/full refund. Current execution is
+company-first with bill verification for the Development company.
 The five-minute Unpaid window, permanent Submitted claim, customer-list exclusion,
 and durable submission recovery are implemented. The accepted server claim must
 precede expiry; Processor acceptance and recovery may continue afterward.
@@ -30,6 +30,7 @@ Authenticated client
      and reference-field definitions
   -> require owned, unexpired AmountDue evidence compatible with the service/route/currency
   -> derive references and ServiceAmount from persisted inquiry
+  -> snapshot strategy version and company/service/account/billing-period key
   -> replace configured base components exactly once
   -> finalize each amount component with ISO scale and ToEven rounding
   -> checked-sum the full positive total
@@ -86,16 +87,19 @@ Authenticated client
   -> commit Submitted + submission ID/time + card + immutable package/fingerprint + lease
   -> release the SQL transaction; quote disappears from customer listing
   -> discover existing payment by ClientId + SourceQuoteId
-  -> when absent, dispatch the same package through authenticated SubmitClaimedQuote
-  -> Processor atomically records accepted payment or immutable rejection
+  -> when absent, verify the bill against a fresh provider inquiry and original route
+  -> persist verification separately from the creation inquiry and original submission
+  -> submit the immutable intent and fresh evidence through authenticated SubmitVerifiedBill
+  -> Processor atomically records rejection or accepts and reserves the bill key
   -> reacquire quote lock; only the current lease may save the result
 ```
 
 The client cannot override amount, currency, route, service code, references,
 or endpoints at confirmation.
 
-A definitive rejection before payment creation closes the consumed quote as
-PaymentFailed. It never returns to Unpaid, even if card eligibility later changes.
+A changed bill closes the quote as Invalidated. A matching bill with zero
+balance closes as NoLongerDue. Other definitive rejections close as PaymentFailed.
+None can return to Unpaid.
 Technical same-card redelivery resumes/returns the original intent/result;
 another card conflicts. Processor validates the timely server claim, including
 the exact five-minute window, and can accept it after the original deadline.
@@ -103,9 +107,9 @@ The legacy ConfirmQuote RPC only replays existing accepted work; it cannot
 authorize a new unclaimed payment. Card lifecycle rules remain in Processor;
 see [Card Registration](card-registration.md).
 
-The current company-first execution order is unchanged by this protocol. Fresh
-bill verification, bill-key protection, and charge-first compensation remain
-pending; this slice does not establish their provider contracts.
+The existing configured-price path uses authenticated SubmitClaimedQuote.
+Bill-backed execution uses SubmitVerifiedBill so an older Processor cannot
+silently accept an inquiry quote without verification and reservation.
 
 ## Status Refresh
 
@@ -122,8 +126,10 @@ an operation error. Lookup cannot release a consumed quote or reset it to Unpaid
 using fresh scopes. One-minute SQL leases and response fencing allow restart
 recovery without repeating a logical payment. Dispatch/status exceptions retain
 Submitted and the immutable package; transient work schedules another attempt.
-Accepted processing payments use status lookup only. Terminal results are cached
-durably, and stale leases/responses cannot overwrite them. No SQL lock spans gRPC.
+Recovery looks up accepted work before verifying. If Processor reports stale
+evidence before the first company operation, recovery verifies again and
+resubmits evidence for the same intent. Terminal results are cached durably,
+and stale leases/responses cannot overwrite them. No SQL lock spans HTTP or gRPC.
 
 The local transitions are:
 
@@ -136,11 +142,15 @@ Submitted
   -> Processing       Processor accepted the payment
   -> Paid             fast completion recovered or returned
   -> PaymentFailed    Processor durably rejected the attempt without a payment
+  -> Invalidated      verification found changed bill evidence
+  -> NoLongerDue       verification found zero remaining balance
   -> Submitted        dispatch/status unknown; recover the same intent
 
 Processing
   -> Paid             company accepted and full card charge succeeded
   -> PaymentFailed    definitive decline or completed company rollback
+  -> Invalidated      refreshed evidence found a changed bill before company payment
+  -> NoLongerDue       refreshed evidence found zero remaining balance before company payment
   -> Processing       retry, reconciliation, rollback pending, or manual review
 ```
 
@@ -167,9 +177,10 @@ unresolved.
   unique SourceQuoteId/SubmissionId. A retry of a rejected request cannot later
   become accepted. The RPC reports whether that outcome is durably recorded;
   otherwise PayableServices retains pending state.
-- Unexecuted legacy unpaid quotes become Expired during migration; existing
-  snapshots/inquiry links are preserved and accepted work remains recoverable.
-  Both migrations block downgrade once submission evidence/outcomes exist.
+- Legacy unpaid quotes without a valid claim lifecycle became Expired. The
+  bill-evidence migration invalidates still-unsubmitted inquiry-backed quotes
+  without a bill identity. Existing snapshots/inquiry links are preserved and
+  accepted work remains recoverable. Migration guards protect retained evidence.
 - Deploy Processor's new RPC and migration first, then cut over all older
   PayableServices instances before exposing the new public Pay flow. An older
   Processor cannot silently ignore metadata because the submission RPC is new.

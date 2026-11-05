@@ -3,8 +3,9 @@
 ## Status
 
 Accepted revised product/architecture direction. Single-use submission, Unpaid
-expiry, filtering, and durable acceptance/rejection recovery are implemented;
-pricing/bill verification and charge-first execution remain pending.
+expiry, filtering, durable acceptance/rejection recovery, Development bill
+verification, and cross-quote reservation are implemented. Composite pricing
+and charge-first execution remain pending.
 This revision supersedes this ADR's original resumable-freshness proposal and
 the company-first execution/compensation direction of [ADR 0003](0003-quote-execution-saga.md)
 for future implementation. The file path is retained to preserve existing links.

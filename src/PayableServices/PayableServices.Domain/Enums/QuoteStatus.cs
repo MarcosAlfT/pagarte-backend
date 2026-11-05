@@ -8,5 +8,7 @@ public enum QuoteStatus
 	Cancelled = 3,
 	PaymentFailed = 4,
 	Processing = 5,
-	Submitted = 6
+	Submitted = 6,
+	Invalidated = 7,
+	NoLongerDue = 8
 }

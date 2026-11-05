@@ -19,16 +19,38 @@ public sealed class PaymentExecutionGrpcService(
     {
         try
         {
-            if (request.Quote is null) return InvalidRequest("Execution snapshot is required.");
-            var execution = MapExecution(request.Quote) with
+            return MapResult(await acceptConfirmedQuoteUseCase.ExecuteAsync(MapSubmission(request), context.CancellationToken));
+        }
+        catch (FormatException exception) { return InvalidRequest(exception.Message); }
+    }
+
+    public override async Task<ConfirmQuoteResponse> SubmitVerifiedBill(
+        SubmitVerifiedBillRequest request, ServerCallContext context)
+    {
+        try
+        {
+            if (request.Submission is null || request.Verification is not { } evidence)
+                return InvalidRequest("Submission and bill verification are required.");
+            var execution = MapSubmission(request.Submission) with
             {
-                SubmissionId = ParseGuid(request.SubmissionId, "submission"),
-                SubmittedAt = ParseDate(request.SubmittedAt, "submission")
+                BillKey = EmptyToNull(request.BillKey),
+                BillVerification = new(EmptyToNull(evidence.ErrorCode), evidence.ProviderInquiryId,
+                    evidence.ObservedBillKey, evidence.ServiceAmount?.MinorUnits ?? 0,
+                    evidence.ServiceAmount?.CurrencyCode ?? string.Empty,
+                    string.IsNullOrEmpty(evidence.CheckedAt) ? null : ParseDate(evidence.CheckedAt, "bill verification"),
+                    string.IsNullOrEmpty(evidence.ExpiresAt) ? null : ParseDate(evidence.ExpiresAt, "bill verification expiry"))
             };
             return MapResult(await acceptConfirmedQuoteUseCase.ExecuteAsync(execution, context.CancellationToken));
         }
         catch (FormatException exception) { return InvalidRequest(exception.Message); }
     }
+
+    private static ConfirmedQuoteExecution MapSubmission(SubmitClaimedQuoteRequest request) =>
+        MapExecution(request.Quote ?? throw new FormatException("Execution snapshot is required.")) with
+        {
+            SubmissionId = ParseGuid(request.SubmissionId, "submission"),
+            SubmittedAt = ParseDate(request.SubmittedAt, "submission")
+        };
 
 	public override async Task<ConfirmQuoteResponse> ConfirmQuote(
 		ConfirmQuoteRequest request,

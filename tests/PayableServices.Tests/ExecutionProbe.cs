@@ -39,7 +39,9 @@ public sealed class ExecutionProbe : IPaymentExecutionClient
         Assert.Null(new ConfirmedQuoteValidator(new CurrencyCatalog()).Validate(execution, Now?.Invoke() ?? package.SubmittedAt ?? package.CreatedAt));
         if (ConfirmOverride is not null) return await ConfirmOverride(package, cancellationToken);
         var result = Results.GetOrAdd((package.ClientId, package.SourceQuoteId),
-            _ => new ConfirmQuoteResult(true, Guid.NewGuid(), "execution-reference", QuoteExecutionStatus.Completed, null, null, false, true, true));
+            _ => package.BillVerification?.ErrorCode is { } code
+                ? new(false, null, null, QuoteExecutionStatus.Failed, code, "Bill cannot be paid.", false, true, true)
+                : new(true, Guid.NewGuid(), "execution-reference", QuoteExecutionStatus.Completed, null, null, false, true, true));
         return result;
     }
     public Task<ConfirmQuoteResult> GetStatusAsync(string clientId, Guid sourceQuoteId, CancellationToken cancellationToken = default)

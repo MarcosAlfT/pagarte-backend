@@ -125,6 +125,8 @@ service PaymentExecutionService {
   rpc ConfirmQuote (ConfirmQuoteRequest) returns (ConfirmQuoteResponse);
   // A distinct method prevents an older server from ignoring submission evidence.
   rpc SubmitClaimedQuote (SubmitClaimedQuoteRequest) returns (ConfirmQuoteResponse);
+  // Bill-backed submissions require a server that enforces verification and the bill reservation.
+  rpc SubmitVerifiedBill (SubmitVerifiedBillRequest) returns (ConfirmQuoteResponse);
   rpc GetExecutionStatus (GetExecutionStatusRequest) returns (ConfirmQuoteResponse);
 }
 
@@ -132,6 +134,21 @@ message SubmitClaimedQuoteRequest {
   ConfirmQuoteRequest quote = 1;
   string submission_id = 2;
   string submitted_at = 3;
+}
+
+message SubmitVerifiedBillRequest {
+  SubmitClaimedQuoteRequest submission = 1;
+  string bill_key = 2;
+  BillVerificationEvidence verification = 3;
+}
+
+message BillVerificationEvidence {
+  string error_code = 1;
+  string provider_inquiry_id = 2;
+  string observed_bill_key = 3;
+  Money service_amount = 4;
+  string checked_at = 5;
+  string expires_at = 6;
 }
 
 message ConfirmQuoteRequest {

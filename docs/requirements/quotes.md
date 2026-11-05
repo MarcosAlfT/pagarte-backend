@@ -4,7 +4,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Single-use submission, five-minute Unpaid expiry, filtering, and bound recovery implemented; pricing/bill verification/charge-first work pending |
+| Status | Single-use submission, five-minute Unpaid expiry, mock bill identity and verification, cross-quote protection, and bound recovery implemented. Composite pricing and charge-first execution remain pending. |
 | Transactions | QUOTE-01 through QUOTE-08; QUOTE-06 is out of scope; required payment-execution changes remain in scope |
 | Primary owner | PayableServices |
 | Integration owners | PaymentSwitch.Processor and ExternalConnections; coordinate refund compatibility with Worker |
@@ -39,6 +39,11 @@ with the company are outside this application.
   non-payable without fabricating submission or bill evidence.
 - Current Processor execution calls the company before charging the card and
   rolls back the company on charge failure. The new order is not implemented.
+- The Development company supplies an authoritative billing period. PayableServices
+  snapshots the company, service, account, and period and freshly verifies that
+  bill and its service amount after Pay. Processor atomically reserves the bill
+  key on acceptance across clients and quotes. Configured-price services have no
+  bill verification. Live company bill contracts remain pending.
 - Explicit refresh and leased background submission recovery find accepted
   execution by source quote ID without local PaymentId. Original intents resume
   after restart/expiry with the same package and card; missing or unavailable
@@ -184,7 +189,7 @@ The target quote statuses are distinct from payment-execution status:
 
 Submitted and the existing Unpaid/Processing/Paid/PaymentFailed/Expired states
 are implemented by this slice. Invalidated, NoLongerDue, RefundPending, and
-Refunded quote transitions depend on later bill-verification/charge-first work.
+Refunded quote transitions depend on the later charge-first work.
 Legacy Cancelled history remains non-payable. An uncertain dispatched
 submission stays unresolved until safely reconciled, rather than being declared
 Expired or reusable from the local clock alone. Freshness/operation policy can

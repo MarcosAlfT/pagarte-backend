@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using System.Text.Json;
 using PayableServices.Application.Abstractions;
 using PayableServices.Application.Models;
 using PayableServices.Domain.Entities;
@@ -73,6 +74,11 @@ public sealed class CreateQuoteUseCase(
         if (inquiry is not null && (route.Id != inquiry.RouteId || route.ExternalServiceCode != inquiry.ExternalServiceCode ||
             route.InquiryProvider != inquiry.Provider || service.Currency != inquiry.Currency))
             return Failure("Inquiry is incompatible with the current service route.");
+
+        var bill = inquiry is null ? null : BillIdentityStrategy.Select(inquiry.Provider, inquiry.ExternalServiceCode,
+            inquiry.References(), inquiry.BillingPeriod);
+        if (inquiry is not null && bill is null)
+            return Failure("Inquiry does not identify a payable bill; consult again.");
 
         var country = await quoteConfigurationRepository.GetCountryAsync(
             service.CountryId,
@@ -173,6 +179,7 @@ public sealed class CreateQuoteUseCase(
             {
                 Id = Guid.NewGuid(),
                 InquiryId = inquiry?.Id,
+                BillIdentityJson = bill is null ? null : JsonSerializer.Serialize(bill),
                 ClientId = request.ClientId,
                 ServiceId = service.Id,
                 ServiceName = service.Name,
