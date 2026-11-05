@@ -113,11 +113,14 @@ Verified client -> ClientProfiles identity resolution -> inquiry reservation
   Processor rejection finalizes the quote as PaymentFailed, Invalidated, or
   NoLongerDue. A missing payment or RPC outage stays pending, including on
   the explicit status endpoint.
-- Verification uses a new provider operation key, checks the original route
+- Inquiry-backed verification uses a new provider operation key, checks the original route
   and exact bill/service amount/currency, and persists the evidence separately
   from the creation inquiry and the immutable submission. Recovery looks up
   existing execution first and obtains fresh evidence if Processor requires it
-  before the first company payment.
+  before the first payment operation. Configured-price submission also checks
+  current service eligibility and the original route before dispatch.
+  An unavailable route is recorded on the consumed quote before Processor is
+  asked to record non-acceptance. Recovery preserves the recorded decision.
 - `QuoteSubmissionRecoveryService` scans up to 100 due intents every ten seconds.
   Fresh scopes and leased claims resume pending dispatch/status with the exact
   persisted package. SQL stores retry count, next attempt, lease, and final result.
@@ -152,10 +155,11 @@ PayableServices includes the verified billing period in the workload handoff
 and projects Processor's RefundPending and Refunded outcomes to consumed quotes.
 Live company verification remains pending. See the [Quotes requirement](../requirements/quotes.md)
 and [target flow](../flows/quote-review-and-payment.md).
-Deploy Processor's migration and bill-aware RPC before cutting over
+Deploy Processor's bill-aware and route-rejection RPCs before cutting over
 PayableServices. Unsubmitted inquiry-backed legacy quotes without bill evidence
 become Invalidated. Previously accepted work remains recoverable. The migrations
-block downgrade when it would discard consumed submissions or bill evidence.
+block downgrade when it would discard consumed submissions, bill evidence, or
+recorded route rejections.
 Explicit quote cancellation is out of scope. Leaving the summary causes no
 backend mutation or submission revocation; existing Cancelled history remains.
 

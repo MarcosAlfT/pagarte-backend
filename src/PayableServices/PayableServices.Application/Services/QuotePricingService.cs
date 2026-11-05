@@ -78,8 +78,8 @@ public sealed class QuotePricingService(ICurrencyCatalog currencies)
         var root = BuildNode(definition.Root, depth: 0);
         if (membership.Count != groups.Count + rules.Count)
             throw new MoneyValidationException("Every configured item must belong to the quote breakdown.");
-        if (root.MinorUnits is not > 0)
-            throw new MoneyValidationException("The monetary total must be greater than zero.");
+        // The evidence follows display order, which is also the order sent to Processor.
+        var total = MoneyValue.Sum(evidence.Select(entry => calculated[entry.Rule.Id].Value));
 
         var referenceNodes = references.Select(reference => new QuoteBreakdownNode(
             "Reference", reference.Key, null, null, reference.Value, [])).ToList();
@@ -88,7 +88,6 @@ public sealed class QuotePricingService(ICurrencyCatalog currencies)
         if (referenceNodes.Count > 0)
             root = root with { Children = [.. root.Children, new("Group", "References", null, null, null, referenceNodes)] };
 
-        var total = MoneyValue.FromMinorUnits(root.MinorUnits.Value, currency, currencies);
         return new(total, items, new(1, root, evidence));
     }
 

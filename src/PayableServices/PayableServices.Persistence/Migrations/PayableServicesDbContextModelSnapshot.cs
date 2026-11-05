@@ -713,6 +713,9 @@ namespace PayableServices.Persistence.Migrations
                     b.Property<string>("SubmissionResultJson")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("SubmissionRouteUnavailable")
+                        .HasColumnType("bit");
+
                     b.Property<DateTime?>("SubmittedAt")
                         .HasColumnType("datetime2");
 

@@ -1,13 +1,12 @@
 using System.Text.Json;
 using PayableServices.Application.Abstractions;
 using PayableServices.Application.Models;
+using PayableServices.Application.Services;
 using PayableServices.Domain.Entities;
 
 namespace PayableServices.Application.UseCases;
 
-public sealed class VerifySubmittedBillUseCase(IInquiryRepository inquiries,
-    IPayableServiceRepository services, IPaymentRouteRepository routes,
-    IQuoteConfigurationRepository configuration, ICompanyRouteConfiguration connections,
+public sealed class VerifySubmittedBillUseCase(IInquiryRepository inquiries, QuoteRouteEligibility routeEligibility,
     IAmountInquiryProvider provider, IClock clock, IUnitOfWork unitOfWork)
 {
     public async Task<BillVerification> ExecuteAsync(Quote quote, CancellationToken cancellationToken)
@@ -18,7 +17,7 @@ public sealed class VerifySubmittedBillUseCase(IInquiryRepository inquiries,
             inquiry.ClientId != quote.ClientId || inquiry.QuoteId != quote.Id || inquiry.RouteId != quote.RouteId)
             return new("BILL_IDENTITY_REQUIRED");
 
-        if (!await OriginalRouteIsEligibleAsync(quote, inquiry.Provider, cancellationToken))
+        if (!await routeEligibility.IsEligibleAsync(quote, inquiry.Provider, cancellationToken))
             return new("BILL_ROUTE_UNAVAILABLE");
 
         var references = inquiry.References();
@@ -37,7 +36,7 @@ public sealed class VerifySubmittedBillUseCase(IInquiryRepository inquiries,
             return new("BILL_VERIFICATION_UNAVAILABLE", operationKey, result.ProviderInquiryId);
 
         await using var transaction = await unitOfWork.BeginAsync("catalogue", cancellationToken);
-        if (!await OriginalRouteIsEligibleAsync(quote, inquiry.Provider, cancellationToken))
+        if (!await routeEligibility.IsEligibleAsync(quote, inquiry.Provider, cancellationToken))
             return new("BILL_ROUTE_UNAVAILABLE", operationKey, result.ProviderInquiryId);
 
         var checkedAt = result.ResultAt!.Value;
@@ -50,29 +49,5 @@ public sealed class VerifySubmittedBillUseCase(IInquiryRepository inquiries,
                 : result.AmountMinorUnits != inquiry.AmountMinorUnits ? "BILL_CHANGED" : null;
         return new(error, operationKey, result.ProviderInquiryId, observed.Key, result.AmountMinorUnits,
             result.Currency, checkedAt, expiry, observed.BillingPeriod);
-    }
-
-    private async Task<bool> OriginalRouteIsEligibleAsync(Quote quote, string inquiryProvider, CancellationToken cancellationToken)
-    {
-        var service = await services.GetByIdAsync(quote.ServiceId, cancellationToken);
-        var route = await routes.GetByIdAsync(quote.RouteId, cancellationToken);
-        var country = await configuration.GetCountryAsync(quote.CountryId, cancellationToken);
-        var connection = connections.Resolve(inquiryProvider);
-        return service is { IsActive: true, AllowsQuote: true, AllowsPayment: true } &&
-            service.CountryId == quote.CountryId && service.Currency == quote.Currency &&
-            country is not null && country.Currency == quote.Currency &&
-            country.Code.Trim().ToUpperInvariant() == quote.CountryCode &&
-            route is { IsActive: true } && route.PayableServiceId == quote.ServiceId &&
-            route.InquiryProvider == inquiryProvider && route.RouteType == quote.RouteType &&
-            route.ExternalServiceCode == quote.ExternalServiceCode && route.ExternalSourceCode == quote.ExternalSourceCode &&
-            route.ProviderId == quote.ProviderId && route.PaymentNetworkId == quote.PaymentNetworkId &&
-            route.CompanyPaymentEndpoint == quote.CompanyPaymentEndpoint &&
-            route.CompanyRollbackEndpoint == quote.CompanyRollbackEndpoint &&
-            route.CompanyStatusEndpoint == quote.CompanyStatusEndpoint &&
-            route.CompanyCredentialReference == quote.CompanyCredentialReference &&
-            connection is not null && connection.PaymentEndpoint == quote.CompanyPaymentEndpoint &&
-            connection.RollbackEndpoint == quote.CompanyRollbackEndpoint &&
-            connection.StatusEndpoint == quote.CompanyStatusEndpoint &&
-            connection.CredentialReference == quote.CompanyCredentialReference;
     }
 }

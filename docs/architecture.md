@@ -63,9 +63,11 @@ Client with access token
   -> client confirms with Quote ID + stored Card ID
   -> PayableServices loads the owned snapshot
   -> PayableServices commits Submitted + card + server claim time + immutable intent
+  -> validate the original route before dispatch and verify the unpaid bill for inquiry-backed quotes
   -> authenticate the configured-price or verified-bill gRPC handoff
   -> Processor validates timely bound claim, card ownership, totals, and idempotency
   -> Processor records one accepted Payment or immutable rejection by SourceQuoteId
+      -> inquiry-backed acceptance also reserves the bill key
   -> operator checks card readiness
       -> decline: final failure; a new attempt requires a new quote
   -> charge-first mode: charge full total, then recover company acknowledgment
@@ -73,6 +75,7 @@ Client with access token
   -> company-first mode: pay company, then charge full total
       -> charge fails: roll back company when safe
   -> PayableServices refreshes execution status
+      -> lookup returns the owned payment or recorded rejection
       -> Completed: Quote = Paid
       -> final decline or completed rollback: Quote = PaymentFailed
       -> compensation: Quote = RefundPending or Refunded
@@ -81,8 +84,9 @@ Client with access token
 
 Processor commits an in-progress transition before each external operation.
 Its scheduler resumes due work from `PaymentDb`, including after a process
-restart. Separate stable idempotency keys protect company payment, card charge,
-and company rollback. See [Quote Lifecycle](flows/quote-lifecycle.md) and
+restart. Separate stable idempotency keys protect charge, company confirmation,
+and compensation, as well as the company-first payment and rollback operations.
+See [Quote Lifecycle](flows/quote-lifecycle.md) and
 [Payment Lifecycle](flows/payment-lifecycle.md) for the detailed flows.
 
 ## Ownership
@@ -142,8 +146,8 @@ longer reads Processor for this workflow. Processor does not own inquiries or qu
 | --- | --- | --- |
 | Keycloak PostgreSQL | Keycloak | Users, sessions, realm configuration, and keys |
 | `ClientProfilesDb` | `ClientProfiles` | Clients, external identity mapping, and contact information |
-| `PayableServicesDb` | `PayableServices` | Catalogue, routes, mappings, inquiries, quote snapshots/status, immutable submission IDs/packages, leases/retry schedules/results |
-| `PaymentDb` | Processor; Worker for refund fields | Card setup/session audits, immutable integration/credential pins, stored cards, quote submission acceptance/rejection outcomes, payment execution snapshots/retry state, operators, retained catalogue, outbox |
+| `PayableServicesDb` | `PayableServices` | Catalogue, routes, mappings, inquiries, pricing definitions, quote pricing and bill snapshots, immutable submissions, verification evidence, leases and results |
+| `PaymentDb` | Processor and Worker for legacy refund fields | Stored cards and audits, integration pins, submission outcomes, bill reservations, payment snapshots and retry state, recovery audits, operators, retained catalogue, outbox |
 
 ## Shared Libraries
 
@@ -197,7 +201,8 @@ their original evidence and execution order.
 
 Charge-first execution is enabled for supported Development inquiry routes.
 Processor owns the compensation refund. Worker guards legacy refunds by persisted
-execution mode. Live-provider acceptance remains pending.
+execution mode. Live-provider acceptance is
+tracked in [Current Problems](current-problems.md#7-quote-acceptance-boundaries).
 See the [Quotes requirement](requirements/quotes.md) and
 [target flow](flows/quote-review-and-payment.md).
 

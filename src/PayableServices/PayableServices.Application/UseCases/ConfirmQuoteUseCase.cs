@@ -1,5 +1,6 @@
 using PayableServices.Application.Abstractions;
 using PayableServices.Application.Models;
+using PayableServices.Application.Services;
 using PayableServices.Domain.Entities;
 using PayableServices.Domain.Enums;
 using System.Security.Cryptography;
@@ -11,7 +12,8 @@ namespace PayableServices.Application.UseCases;
 public sealed class ConfirmQuoteUseCase(
     IQuoteRepository quoteRepository,
     IPaymentExecutionClient paymentExecutionClient,
-    IClock clock, IUnitOfWork unitOfWork, VerifySubmittedBillUseCase verifyBill)
+    IClock clock, IUnitOfWork unitOfWork, VerifySubmittedBillUseCase verifyBill,
+    QuoteRouteEligibility routeEligibility)
 {
     public async Task<ConfirmQuoteResult> ExecuteAsync(
         ConfirmQuoteCommand request,
@@ -98,7 +100,13 @@ public sealed class ConfirmQuoteUseCase(
                 result = await paymentExecutionClient.ConfirmQuoteAsync(package with { BillVerification = verification }, cancellationToken);
             }
             else if (awaitingAcceptance)
-                result = await paymentExecutionClient.ConfirmQuoteAsync(package, cancellationToken);
+            {
+                var eligible = await CheckConfiguredRouteAsync(snapshot.Id, lease, cancellationToken);
+                if (eligible is null) return Pending(snapshot);
+                result = eligible.Value
+                    ? await paymentExecutionClient.ConfirmQuoteAsync(package, cancellationToken)
+                    : await paymentExecutionClient.RejectUnavailableRouteAsync(package, cancellationToken);
+            }
             if (!result.Accepted && result.PaymentId is null && !(result.Final && result.SubmissionRecorded))
                 result = Pending(snapshot);
         }
@@ -137,6 +145,24 @@ public sealed class ConfirmQuoteUseCase(
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return true;
+    }
+
+    private async Task<bool?> CheckConfiguredRouteAsync(Guid quoteId, Guid lease, CancellationToken cancellationToken)
+    {
+        await using var transaction = await unitOfWork.BeginAsync("quote:" + quoteId, cancellationToken);
+        var quote = await quoteRepository.GetByIdAsync(quoteId, cancellationToken);
+        if (quote is null || !quote.OwnsSubmissionLease(lease) || quote.SubmissionLeaseUntil <= clock.UtcNow)
+            return null;
+        if (quote.SubmissionRouteUnavailable) return false;
+
+        var eligible = await routeEligibility.IsEligibleAsync(quote, inquiryProvider: null, cancellationToken);
+        if (!eligible)
+        {
+            quote.RecordUnavailableRoute(lease);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        return quote.SubmissionLeaseUntil > clock.UtcNow ? eligible : null;
     }
 
     public async Task<ConfirmQuoteResult> RefreshStatusAsync(

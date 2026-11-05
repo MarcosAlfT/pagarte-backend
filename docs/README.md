@@ -34,11 +34,8 @@ is explicitly marked as proposed.
 
 ## Requirements and Acceptance
 
-- [Quotes](requirements/quotes.md) - active quote transactions with Composite/Strategy
-  pricing and business keys, permanent consumption at Pay, five-minute expiry
-  only while Unpaid,
-  and charge-first company confirmation
-  with full refund on rejection. QUOTE-06 (explicit cancellation) is out of scope.
+- [Quotes](requirements/quotes.md) - five development points, accepted behavior,
+  implementation scope, and open acceptance gaps. QUOTE-06 is out of scope.
 - [Payment Methods](requirements/payment-methods.md) - scope, status, and acceptance rules.
 - [Payment-Method Acceptance Tests](../tests/PaymentSwitch.Processor.Tests/README.md) -
   configuration, manual fixtures, and verification evidence.

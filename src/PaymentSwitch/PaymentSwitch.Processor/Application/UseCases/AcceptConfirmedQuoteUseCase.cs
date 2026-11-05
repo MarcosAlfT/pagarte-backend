@@ -25,7 +25,8 @@ public sealed class AcceptConfirmedQuoteUseCase(
 {
 	public async Task<PaymentExecutionResult> ExecuteAsync(
 		ConfirmedQuoteExecution execution,
-		CancellationToken cancellationToken = default)
+		CancellationToken cancellationToken = default,
+        bool rejectUnavailableRoute = false)
 	{
         if (string.IsNullOrWhiteSpace(execution.ClientId) || execution.ClientId.Length > 100 || execution.SourceQuoteId == Guid.Empty)
             return Failure("INVALID_EXECUTION_PACKAGE", "Execution ownership is invalid.");
@@ -103,14 +104,18 @@ public sealed class AcceptConfirmedQuoteUseCase(
             // The legacy RPC may recover an accepted payment, but cannot authorize a new one.
             if (execution.SubmissionId is null)
                 return Failure("SUBMISSION_REQUIRED", "New execution requires a durably claimed quote submission.");
-			var card = await creditCardRepository.GetByIdAsync(execution.CreditCardId);
             var validationError = validator.Validate(execution, clock.UtcNow);
             if (validationError is not null)
                 return await RejectAsync("INVALID_EXECUTION_PACKAGE", validationError);
+            if (rejectUnavailableRoute)
+                return execution.RequiresBillVerification
+                    ? Failure("INVALID_EXECUTION_PACKAGE", "Bill-backed quotes require bill verification.")
+                    : await RejectAsync("QUOTE_ROUTE_UNAVAILABLE", "The original payment route is unavailable. Consult again.");
             if (BillVerificationPolicy.Validate(execution, clock.UtcNow) is { } initialBillError)
                 return initialBillError.Code == Payment.StaleBillVerification
                     ? Failure(initialBillError.Code, initialBillError.Message) with { Final = false }
                     : await RejectAsync(initialBillError.Code, initialBillError.Message);
+			var card = await creditCardRepository.GetByIdAsync(execution.CreditCardId);
 			if (card is null || card.ClientId != execution.ClientId)
 			{
 				return await RejectAsync(

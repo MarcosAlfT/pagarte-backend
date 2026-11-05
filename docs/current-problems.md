@@ -3,7 +3,7 @@
 This document records unresolved problems in the confirmed-quote execution
 saga, context boundaries, and card-lifecycle implementation.
 
-Last reviewed for card-lifecycle implementation: 2026-11-03.
+Last reviewed for the five quote development points on 2026-11-05.
 
 ## Review Status
 
@@ -15,10 +15,9 @@ Last reviewed for card-lifecycle implementation: 2026-11-03.
 | Remaining integration coverage | Partially resolved | Keep the current unit coverage and add the database-backed and transport-level scenarios listed below. |
 | Execution package carries connection data | Open | Resolve company endpoints and credentials server-side from stable route identifiers. |
 | Payment-method acceptance and recovery gaps | Open | Confirm bound dLocal setup/recovery/challenge contracts and complete live-provider/mobile acceptance. |
-| Live bill verification and payment execution | Open | Verify live bill, acknowledgment, and compensation contracts before enabling charge-first execution beyond Development. |
+| Quote acceptance boundaries | Open for live providers | Verify live bill, company acknowledgment, and compensation contracts. |
 
-Seven quote-execution items have been verified as resolved and are listed at
-the end of this document.
+Resolved quote-execution items are listed at the end of this document.
 
 ## 1. Duplicate Catalogue Ownership
 
@@ -97,19 +96,17 @@ idempotency, callbacks, default concurrency/rollback, restart recovery, legacy
 migration, removal/payment ordering, and original-integration Worker refunds.
 It uses synthetic providers and does not close real dLocal/mobile acceptance.
 
-The claimed-submission suite now runs the actual PayableServices execution client
-against Processor gRPC and SQL. It verifies workload rejection/success, concurrent
+The claimed-submission suite runs the actual PayableServices execution client
+against Processor gRPC and SQL. It verifies workload authorization, concurrent
 delivery, post-deadline acceptance, and durable rejection after card eligibility
-changes. PayableServices HTTP/SQL tests separately cover claims, failed commits,
-response fencing, migration, and API-restart recovery. This is not one complete
-public quote-HTTP through Processor runtime test or real-provider acceptance.
+changes. The public Pay recovery tests also run both service hosts and databases
+in one flow with Development providers. They cover lost responses, restarts,
+duplicate Pay delivery, full compensation, and the original finalized lines
+after a pricing change.
 
 The repository still needs database-backed and transport-level coverage for:
 
-- Full authenticated quote confirmation/status refresh through live Processor
-  gRPC and SQL in one public-API runtime bridge beyond the independently tested
-  quote HTTP/SQL and actual handoff-client gRPC/SQL boundaries.
-- Restart recovery and row-version contention between dispatcher instances.
+- Concurrent hosted dispatcher instances contending for the same operation.
 - Real provider contract fixtures for company status/rollback and dLocal
   readiness/charge reconciliation.
 - Migration execution against a production-like copy after legacy work has been
@@ -117,9 +114,9 @@ The repository still needs database-backed and transport-level coverage for:
 
 Quote confirmation and execution-status authentication are implemented. A
 local AppHost run verified authenticated HTTP quote creation with a real
-Keycloak token and SQL Server persistence on 2026-10-19. Repeatable automated
-public quote-HTTP-to-Processor transport coverage remains open; the claimed
-submission acceptance/auth/concurrency gRPC boundary is now independently tested.
+Keycloak token and SQL Server persistence on 2026-10-19. The automated
+two-host tests use signed test tokens and isolated LocalDB databases. A fresh
+full Docker/AppHost smoke run and live provider acceptance remain open.
 
 ## 5. Execution Package Carries Company Connection Data
 
@@ -162,11 +159,29 @@ or invent lost-reference lookup. See the [flow](flows/card-registration.md),
 [requirement](requirements/payment-methods.md#confirmations-required-before-enabling-dlocal-registration),
 and [verification guide](../tests/PaymentSwitch.Processor.Tests/README.md).
 
+## 7. Quote Acceptance Boundaries
+
+- **Live-provider acceptance.** Charge-first acceptance is enabled for eligible
+  Development routes. Live enablement requires authoritative bill evidence,
+  matching and recoverable company acknowledgment, and full refund recovery
+  on the original operator charge.
+  [Payment lifecycle](flows/payment-lifecycle.md)
+
 ## Verified Resolved by the Quote Execution Change
 
-The historical verification below does not close the newer
-[Quotes requirement](requirements/quotes.md). Owned quote history is implemented;
-detail/list/creation replay derive Expired at the stored deadline without writes.
+- **Configured-price route eligibility.** PayableServices checks the current
+  service and original route before configured-price dispatch. An observed
+  unavailability survives restart and Processor records a bound rejection.
+  An earlier accepted payment can still be recovered.
+  [Submission branches](../src/PayableServices/PayableServices.Application/UseCases/ConfirmQuoteUseCase.cs)
+- **Composite overflow parity.** Creation now checks finalized leaves in the
+  same order as Processor, including when the grouped total fits but an
+  intermediate flat sum overflows.
+  [Quote pricing](../src/PayableServices/PayableServices.Application/Services/QuotePricingService.cs)
+
+See the [five development points](requirements/quotes.md#implementation-status)
+for the implemented scope. Owned quote history is implemented. Detail, list,
+and creation replay derive Expired at the stored deadline without writes.
 Explicit execution refresh now discovers Processor state by source quote ID even
 without local PaymentId, including after expiry. Durable single-use submission,
 one-minute lease fencing, ten-second restart recovery scans, five-minute Unpaid

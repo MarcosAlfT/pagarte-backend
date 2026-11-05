@@ -162,11 +162,12 @@ acceptance. `SubmitVerifiedBill` validates fresh evidence against the approved
 bill key and service amount. A transaction-owned lock and filtered unique index
 allow one active reservation per bill across clients and quotes. Acceptance and
 reservation commit together. A blocked client receives a generic rejection.
-Successful and uncertain payments keep the reservation. A failure before the
-first company operation, definitive rejection of that first operation, or
-confirmed rollback releases it. Evidence for a new
-payment must be fresh after release. If verification expires during card checks,
-Processor waits for PayableServices to refresh it before the first company payment.
+Successful and uncertain payments keep the reservation. A definitive failure
+without payment effects, confirmed company rollback, or confirmed full
+compensation can release it. A new attempt requires fresh unpaid evidence after
+release. If verification expires during card checks, Processor waits for
+PayableServices to refresh it before the first charge in charge-first mode
+or the first company payment in company-first mode.
 
 Supported Development bills pin charge-first execution, the billing period,
 notification endpoint, and one compensation key on acceptance. Processor
@@ -176,6 +177,8 @@ on definitive rejection. An unknown result holds the bill reservation. Worker
 admits only matching legacy refunds. See the [Quotes requirement](../requirements/quotes.md).
 Execution status lookup returns the owned payment or durable rejection by
 source quote ID. A missing outcome keeps an already submitted quote pending.
+The configured-price route-rejection RPC records a terminal result for an
+unaccepted submission and replays any earlier recorded outcome.
 For stalled charge-first work, a scoped recovery request records actor, reason,
 request key, payment version, and operation stage in the transaction that
 schedules one attempt. The normal dispatcher recovers the original operation.

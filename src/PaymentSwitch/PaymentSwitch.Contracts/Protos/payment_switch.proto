@@ -157,6 +157,8 @@ service PaymentExecutionService {
   rpc ConfirmQuote (ConfirmQuoteRequest) returns (ConfirmQuoteResponse);
   // A distinct method prevents an older server from ignoring submission evidence.
   rpc SubmitClaimedQuote (SubmitClaimedQuoteRequest) returns (ConfirmQuoteResponse);
+  // Records non-acceptance of a claimed configured-price quote, or replays an existing outcome.
+  rpc RejectUnavailableQuoteRoute (SubmitClaimedQuoteRequest) returns (ConfirmQuoteResponse);
   // Bill-backed submissions require a server that enforces verification and the bill reservation.
   rpc SubmitVerifiedBill (SubmitVerifiedBillRequest) returns (ConfirmQuoteResponse);
   rpc GetExecutionStatus (GetExecutionStatusRequest) returns (ConfirmQuoteResponse);
