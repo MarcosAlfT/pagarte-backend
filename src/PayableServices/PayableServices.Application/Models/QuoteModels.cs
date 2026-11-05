@@ -30,7 +30,8 @@ public sealed record QuoteDto(
     DateTime ExpiresAt,
     Guid? PaymentId,
     IReadOnlyCollection<QuoteLineDto> Items,
-    IReadOnlyCollection<QuoteReferenceValueDto> ReferenceValues, Guid? InquiryId = null);
+    IReadOnlyCollection<QuoteReferenceValueDto> ReferenceValues, Guid? InquiryId = null,
+    QuoteBreakdownNode? Breakdown = null);
 
 public sealed record CreateQuoteCommand(
     string ClientId,

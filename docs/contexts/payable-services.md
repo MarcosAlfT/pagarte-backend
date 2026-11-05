@@ -9,6 +9,7 @@ payment routes, persisted amount inquiries, and immutable quotes.
 
 - Countries, categories, subcategories, providers, and payment networks.
 - Payable services, ordered reference definitions, and configured quote components.
+- Composite quote pricing, versioned rule evaluation, and immutable pricing evidence.
 - Versioned external snapshots, stable source/code mappings, and route approval.
 - Client-owned inquiries, idempotency reservations, execution leases, and expiry.
 - One immutable quote per consumed inquiry and quote execution status.
@@ -85,6 +86,12 @@ Verified client -> ClientProfiles identity resolution -> inquiry reservation
   number with leading zeroes, provider billing period, and strategy version.
   A payable quote requires all four identity values. The reservation key uses
   the canonical values and stays stable across compatible strategy versions.
+- A trusted amount composition can define nested display groups and versioned
+  monetary rules. Percentage rules use explicitly listed finalized leaves as
+  their basis. Each amount rounds to the service currency scale before aggregation.
+  The quote persists the finalized leaves, grouped breakdown, rates, and bases.
+  Public quote detail exposes the breakdown and display amounts. Internal rules
+  remain in the snapshot.
 - Legacy services without `RequiresInquiry` retain configured-amount quoting.
   Configured amounts have no authoritative bill verification.
 - Detail, creation replay, and history derive Expired for an Unpaid quote with
@@ -118,6 +125,7 @@ Verified client -> ClientProfiles identity resolution -> inquiry reservation
 ## Data Ownership
 
 `PayableServicesDb` contains catalogue state, `AmountInquiries`, quotes, lines,
+trusted pricing definitions and immutable pricing snapshots,
 reference snapshots, bill identity and verification, and submission evidence/result/schedule on the
 quote row. Unique filtered indexes protect `InquiryId` and `SubmissionId`.
 `IUnitOfWork` owns commits; repositories stage writes. SQL transaction-owned
@@ -142,7 +150,7 @@ across API instances. The inquiry table retains keys for its lifetime.
 
 PayableServices includes the verified billing period in the workload handoff
 and projects Processor's RefundPending and Refunded outcomes to consumed quotes.
-Composite pricing and live company verification remain pending. See the [Quotes requirement](../requirements/quotes.md)
+Live company verification remains pending. See the [Quotes requirement](../requirements/quotes.md)
 and [target flow](../flows/quote-review-and-payment.md).
 Deploy Processor's migration and bill-aware RPC before cutting over
 PayableServices. Unsubmitted inquiry-backed legacy quotes without bill evidence

@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using System.Text.Json;
 using PayableServices.Application.Abstractions;
 using PayableServices.Application.Models;
+using PayableServices.Application.Services;
 using PayableServices.Domain.Entities;
 using PayableServices.Domain.Enums;
 using Utilities.Money;
@@ -13,7 +14,7 @@ public sealed class CreateQuoteUseCase(
     IPaymentRouteRepository paymentRouteRepository,
     IQuoteConfigurationRepository quoteConfigurationRepository,
     IQuoteRepository quoteRepository,
-    ICurrencyCatalog currencyCatalog,
+    QuotePricingService pricing,
     IClock clock, IInquiryRepository inquiries, IUnitOfWork unitOfWork)
 {
     public async Task<CreateQuoteResult> ExecuteAsync(
@@ -75,7 +76,7 @@ public sealed class CreateQuoteUseCase(
             route.InquiryProvider != inquiry.Provider || service.Currency != inquiry.Currency))
             return Failure("Inquiry is incompatible with the current service route.");
 
-        var bill = inquiry is null ? null : BillIdentityStrategy.Select(inquiry.Provider, inquiry.ExternalServiceCode,
+        var bill = inquiry is null ? null : BillIdentityStrategyRegistry.Select(inquiry.Provider, inquiry.ExternalServiceCode,
             inquiry.References(), inquiry.BillingPeriod);
         if (inquiry is not null && bill is null)
             return Failure("Inquiry does not identify a payable bill; consult again.");
@@ -111,68 +112,12 @@ public sealed class CreateQuoteUseCase(
 
         try
         {
-            var rounding = MidpointRounding.ToEven;
             var composition = await quoteConfigurationRepository.GetAmountCompositionAsync(
                 service.Id,
                 cancellationToken);
-            var configuredComponents = composition?.Components.OrderBy(x => x.DisplayOrder).ToArray()
-                ?? [];
-
-            if (configuredComponents.Length == 0)
-            {
-                configuredComponents =
-                [
-                    new AmountComponent
-                    {
-                        ComponentType = "ServiceAmount",
-                        Description = service.Name,
-                        Amount = service.BaseAmount,
-                        Currency = service.Currency,
-                        Source = "Catalogue",
-                        IsRequired = true,
-                        IsVisibleToClient = true,
-                        DisplayOrder = 1
-                    }
-                ];
-            }
-
-            if (inquiry is not null)
-            {
-                // Replace every configured base with exactly one persisted provider value.
-                configuredComponents = configuredComponents.Where(x => x.ComponentType is not ("ServiceAmount" or "Value"))
-                    .Prepend(new AmountComponent
-                    {
-                        ComponentType = "ServiceAmount",
-                        Description = service.Name,
-                        Amount = MoneyValue.FromMinorUnits(inquiry.AmountMinorUnits!.Value, inquiry.Currency!, currencyCatalog).Amount,
-                        Currency = inquiry.Currency!,
-                        Source = "AmountInquiry",
-                        IsRequired = true,
-                        IsVisibleToClient = true,
-                        DisplayOrder = 0
-                    }).ToArray();
-            }
-            if (configuredComponents.Any(component => component.Currency != service.Currency))
-                return Failure("Every amount component must match the service currency.");
-
-            if (configuredComponents.Any(component =>
-                string.IsNullOrWhiteSpace(component.ComponentType)))
-            {
-                return Failure("Every amount component must have a component type.");
-            }
-
-            var moneyComponents = configuredComponents
-                .Select(component => new
-                {
-                    Component = component,
-                    Money = MoneyValue.Create(
-                        component.Amount,
-                        component.Currency,
-                        currencyCatalog,
-                        rounding)
-                })
-                .ToArray();
-            var total = MoneyValue.Sum(moneyComponents.Select(x => x.Money));
+            var references = inquiry is null ? referenceValidation.Values : inquiry.References();
+            var priced = pricing.Calculate(service, composition, inquiry, references, bill);
+            var total = priced.Total;
             var now = clock.UtcNow;
 
             var quote = new Quote
@@ -180,6 +125,7 @@ public sealed class CreateQuoteUseCase(
                 Id = Guid.NewGuid(),
                 InquiryId = inquiry?.Id,
                 BillIdentityJson = bill is null ? null : JsonSerializer.Serialize(bill),
+                PricingSnapshotJson = priced.Snapshot is null ? null : JsonSerializer.Serialize(priced.Snapshot),
                 ClientId = request.ClientId,
                 ServiceId = service.Id,
                 ServiceName = service.Name,
@@ -197,7 +143,7 @@ public sealed class CreateQuoteUseCase(
                 CompanyCredentialReference = route.CompanyCredentialReference,
                 Currency = total.Currency,
                 CurrencyScale = total.Scale,
-                RoundingMode = rounding.ToString(),
+                RoundingMode = total.Rounding.ToString(),
                 Status = QuoteStatus.Unpaid,
                 CreatedAt = now,
                 LifecycleVersion = 1,
@@ -206,24 +152,13 @@ public sealed class CreateQuoteUseCase(
                 TotalMinorUnits = total.MinorUnits
             };
 
-            foreach (var component in moneyComponents)
+            foreach (var item in priced.Items)
             {
-                quote.Items.Add(new QuoteItem
-                {
-                    Id = Guid.NewGuid(),
-                    QuoteId = quote.Id,
-                    ComponentType = component.Component.ComponentType,
-                    Description = component.Component.Description,
-                    Source = component.Component.Source,
-                    IsVisibleToClient = component.Component.IsVisibleToClient,
-                    DisplayOrder = component.Component.DisplayOrder,
-                    Amount = component.Money.Amount,
-                    MinorUnits = component.Money.MinorUnits,
-                    Currency = component.Money.Currency
-                });
+                item.QuoteId = quote.Id;
+                quote.Items.Add(item);
             }
 
-            foreach (var reference in inquiry is null ? referenceValidation.Values : inquiry.References())
+            foreach (var reference in references)
             {
                 quote.ReferenceValues.Add(new QuoteReferenceValue
                 {

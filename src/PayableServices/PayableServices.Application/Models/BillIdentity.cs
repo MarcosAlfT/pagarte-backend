@@ -7,15 +7,26 @@ namespace PayableServices.Application.Models;
 public sealed record BillIdentity(string StrategyId, int StrategyVersion,
     string Company, string Service, string AccountNumber, string BillingPeriod, string Key);
 
-internal static class BillIdentityStrategy
+internal static class BillIdentityStrategyRegistry
 {
+    private static readonly IReadOnlyDictionary<(string Provider, string Service),
+        Func<string, IReadOnlyDictionary<string, string>, string?, BillIdentity?>> Strategies =
+        new Dictionary<(string, string), Func<string, IReadOnlyDictionary<string, string>, string?, BillIdentity?>>
+        {
+            [("MOCKCOMPANY", "ELEC-EC")] = CompanyAccountPeriod,
+            [("MOCKCOMPANY", "WATER-EC")] = CompanyAccountPeriod,
+            [("MOCKCOMPANY", "NET-US")] = CompanyAccountPeriod
+        };
+
     public static BillIdentity? Select(string provider, string service,
+        IReadOnlyDictionary<string, string> references, string? billingPeriod) =>
+        Strategies.TryGetValue((provider.ToUpperInvariant(), service), out var strategy)
+            ? strategy(service, references, billingPeriod) : null;
+
+    private static BillIdentity? CompanyAccountPeriod(string service,
         IReadOnlyDictionary<string, string> references, string? billingPeriod)
     {
-        // The development provider defines the same account/period contract for these services.
-        if (!string.Equals(provider, "MockCompany", StringComparison.OrdinalIgnoreCase) ||
-            service is not ("ELEC-EC" or "WATER-EC" or "NET-US") ||
-            !references.TryGetValue("accountNumber", out var account) ||
+        if (!references.TryGetValue("accountNumber", out var account) ||
             account.Length is < 8 or > 20 || account.Any(c => !char.IsAsciiDigit(c)) ||
             billingPeriod is not { Length: 7 } ||
             !DateOnly.TryParseExact(billingPeriod + "-01", "yyyy-MM-dd", CultureInfo.InvariantCulture,

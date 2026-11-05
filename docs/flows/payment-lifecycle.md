@@ -43,6 +43,10 @@ operator route pin charge-first execution at acceptance. Existing payments
 retain their recorded mode. Processor starts the first charge only with fresh
 bill evidence and a ready card.
 
+PayableServices sends the finalized monetary leaves and approved quote total.
+Processor validates their sum and uses the verified service-amount leaf for
+company acknowledgment. Display subtotals and pricing rules stay in the quote.
+
 ```text
 Accepted payment + reserved bill
   -> verify readiness and freshness

@@ -6,6 +6,7 @@ public sealed class Quote
 {
     public Guid? InquiryId { get; set; }
     public string? BillIdentityJson { get; set; }
+    public string? PricingSnapshotJson { get; init; }
     public string? BillVerificationJson { get; private set; }
     public Guid Id { get; set; }
     public string ClientId { get; set; } = string.Empty;

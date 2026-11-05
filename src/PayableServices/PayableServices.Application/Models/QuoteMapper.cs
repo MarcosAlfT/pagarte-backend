@@ -1,3 +1,4 @@
+using System.Text.Json;
 using PayableServices.Domain.Entities;
 
 namespace PayableServices.Application.Models;
@@ -37,5 +38,6 @@ public static class QuoteMapper
             quote.ReferenceValues
                 .OrderBy(reference => reference.Key, StringComparer.Ordinal)
                 .Select(reference => new QuoteReferenceValueDto(reference.Key, reference.Value))
-                .ToArray(), quote.InquiryId);
+                .ToArray(), quote.InquiryId,
+            quote.PricingSnapshotJson is { } json ? JsonSerializer.Deserialize<QuotePricingSnapshot>(json)?.Breakdown : null);
 }

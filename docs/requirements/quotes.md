@@ -4,7 +4,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Single-use submission, five-minute Unpaid expiry, bill reservation, and charge-first execution with full compensation are implemented for supported Development bills. Composite pricing and live-provider acceptance remain pending. |
+| Status | Composite pricing is implemented for services with explicit pricing definitions. Single-use submission, bill reservation, and charge-first execution with full compensation are implemented for supported Development bills. Live-provider acceptance remains pending. |
 | Transactions | QUOTE-01 through QUOTE-08; QUOTE-06 is out of scope; required payment-execution changes remain in scope |
 | Primary owner | PayableServices |
 | Integration owners | PaymentSwitch.Processor and ExternalConnections; coordinate refund compatibility with Worker |
@@ -29,6 +29,9 @@ with the company are outside this application.
 - Itemized immutable quotes, owner-only detail/listing, inquiry consumption,
   and durable single-use submission exist. Explicit quote
   cancellation is out of scope; QUOTE-06 remains a historical identifier.
+- Explicit pricing definitions produce a nested breakdown and an immutable
+  snapshot of each rule, its finalized basis, and its finalized amount.
+  Existing flat snapshots retain their stored amounts and presentation.
 - Confirmation commits Submitted, selected card, server timestamp, immutable
   package/fingerprint, and one submission ID before dispatch. Consumed quotes
   are excluded from customer listing, including failed attempts. Rejections

@@ -29,6 +29,10 @@ quote execution.
 - Calculation of quote components or totals.
 - External credentials in execution packages.
 
+PayableServices sends finalized monetary leaves and the approved total.
+Processor validates that exact sum and stores the same leaves for execution.
+Display groups, reference nodes, and pricing rules stay in PayableServices.
+
 ## Runtime Boundary
 
 ```text

@@ -6,7 +6,7 @@ This document describes current implementation. The accepted
 [review/expiry/payment flow](quote-review-and-payment.md) and
 [Quotes requirement](../requirements/quotes.md) describe the target. Supported
 Development bills use charge-first execution and compensation. Composite pricing
-and live provider enablement remain pending.
+is available for explicit service definitions. Live provider enablement remains pending.
 The five-minute Unpaid window, permanent Submitted claim, customer-list exclusion,
 and durable submission recovery are implemented. The accepted server claim must
 precede expiry; Processor acceptance and recovery may continue afterward.
@@ -31,9 +31,9 @@ Authenticated client
   -> require owned, unexpired AmountDue evidence compatible with the service/route/currency
   -> derive references and ServiceAmount from persisted inquiry
   -> snapshot strategy version and company/service/account/billing-period key
-  -> replace configured base components exactly once
-  -> finalize each amount component with ISO scale and ToEven rounding
-  -> checked-sum the full positive total
+  -> calculate the configured monetary leaves using versioned rules
+  -> round each leaf to ISO scale with ToEven, then sum finalized leaves
+  -> persist the breakdown and pricing evidence alongside the finalized lines
   -> atomically consume inquiry and persist one immutable quote in PayableServicesDb
   -> set LifecycleVersion 1 and ExpiresAt = CreatedAt + five minutes
 ```
@@ -50,6 +50,29 @@ The snapshot includes the source inquiry, service and route IDs, external servic
 operation endpoints, server-side credential reference, reference values,
 amount components, total minor units, currency scale, rounding rule, and
 expiry. It contains no API key or payment-operator card token.
+
+### Pricing Configuration
+
+Provision a service's trusted pricing definition on
+`AmountCompositions.PricingDefinitionJson`. The
+[pricing models](../../src/PayableServices/PayableServices.Application/Models/QuotePricingModels.cs)
+and [synthetic fixture](../../tests/PayableServices.Tests/CompositeQuotePricingTests.cs)
+show the shape and a complete example. Use one composition per service.
+Configured-price services use a fixed service amount. Inquiry-backed services
+use the verified provider amount as their single service-amount leaf.
+
+Percentage rates are decimal fractions. For example, `0.05` means five percent.
+List the monetary leaf IDs that form each basis. A tax includes fees only when
+those leaves are in its basis. Percentage rules use the already-rounded
+amounts of their dependencies. Fixed discounts take a positive magnitude
+and produce a negative line. Invalid definitions fail quote creation before
+the inquiry is consumed.
+
+The grouped `breakdown` on quote detail contains subtotals and reference nodes.
+The existing `items` list and Processor handoff carry finalized monetary leaves.
+Rule IDs, versions, rates, and calculated bases remain in the immutable
+server-side snapshot. Historical flat quotes and services using flat amount
+configuration continue to return their flat items.
 
 ## Owned History and Detail
 
