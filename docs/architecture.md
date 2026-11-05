@@ -192,6 +192,12 @@ The Processor saga migration requires legacy active payments and pending
 
 ## Detailed Documentation
 
+Implementation conventions are maintained in
+[Application Design](standards/application-design.md),
+[Money Handling](standards/money-handling.md), and [Testing](standards/testing.md).
+The [PayableServices context](contexts/payable-services.md#quote-design-composite-and-strategy)
+owns quote-specific Composite and Strategy design; ADRs record the decisions.
+
 PayableServices owns five-minute Unpaid expiry, permanent consumption at Pay,
 customer-list filtering, leased recovery, and fresh bill verification for the
 Development company. Processor accepts the bound post-deadline handoff and

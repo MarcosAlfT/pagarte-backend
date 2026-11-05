@@ -5,8 +5,8 @@ internal gRPC services, SQL Server databases, and RabbitMQ workers. Keycloak
 owns interactive authentication and token issuance.
 
 The backend implements client profiles, catalogue and amount inquiries,
-immutable quotes, a durable company-first payment saga, and stored-card
-management. Card setup currently uses a Development-only synthetic operator.
+immutable quotes, durable payment execution with pinned company-first and
+Development charge-first modes, and stored-card management. Card setup currently uses a Development-only synthetic operator.
 Live dLocal/mobile tokenization and challenge acceptance remain pending.
 Refund execution/retries and email consumption exist; public refund initiation
 and initial payment-result notification publication remain incomplete.
@@ -19,7 +19,7 @@ and initial payment-result notification publication remain incomplete.
 | `ClientProfiles.Api` | Profiles, contact data, and external-identity to internal-client mapping | Public HTTP and protected internal resolver | `ClientProfilesDb` |
 | `Payments.Api` | Owned card/session endpoints and operator callback transport | HTTP to clients/providers, authenticated card gRPC to Processor | None |
 | `PayableServices.Api` | Catalogue, routes, persisted inquiries, quotes, and execution status | HTTP and authenticated execution gRPC client | `PayableServicesDb` |
-| `PaymentSwitch.Processor` | Card setup/persistence and durable company-first payment execution | gRPC and provider adapters | `PaymentDb` |
+| `PaymentSwitch.Processor` | Card setup/persistence and durable payment execution in its pinned mode | gRPC and provider adapters | `PaymentDb` |
 | `PaymentSwitch.Worker` | Refund retries and notification consumption | RabbitMQ and provider adapters | Refund-field updates in `PaymentDb` |
 | `MockCompany.Api` | Development catalogue feed and synthetic balances | HTTP | Synthetic fixtures |
 

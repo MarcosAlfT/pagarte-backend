@@ -47,10 +47,10 @@ inquiry and quote. A Submitted quote never reopens or expires from that deadline
 
 ## Quote Items and Business Identity
 
-Composite organizes monetary and reference/identity items. Pricing Strategies
-calculate monetary leaves; a separate service-specific key Strategy selects
-the items that identify the obligation. Snapshot selected names/values and
-Strategy versions. Nonmonetary identity items do not contribute to totals.
+PayableServices supplies the immutable item breakdown and bill identity using
+its [Composite and Strategy design](../contexts/payable-services.md#quote-design-composite-and-strategy).
+The handoff carries finalized monetary leaves and approved bill evidence.
+Nonmonetary reference items do not contribute to the charge.
 
 For electricity, the key might be company + service + account + billing period.
 Changing any selected key value identifies a different obligation. The billing

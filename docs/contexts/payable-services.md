@@ -82,16 +82,8 @@ Verified client -> ClientProfiles identity resolution -> inquiry reservation
   creation; quote expiry is CreatedAt + five minutes, independent of inquiry
   expiry. Identical creation retries return the same quote; a new attempt
   requires a new inquiry.
-- The Development key strategy snapshots company, external service, account
-  number with leading zeroes, provider billing period, and strategy version.
-  A payable quote requires all four identity values. The reservation key uses
-  the canonical values and stays stable across compatible strategy versions.
-- A trusted amount composition can define nested display groups and versioned
-  monetary rules. Percentage rules use explicitly listed finalized leaves as
-  their basis. Each amount rounds to the service currency scale before aggregation.
-  The quote persists the finalized leaves, grouped breakdown, rates, and bases.
-  Public quote detail exposes the breakdown and display amounts. Internal rules
-  remain in the snapshot.
+- Quote composition, pricing, and bill-key selection follow the
+  [Composite and Strategy design](#quote-design-composite-and-strategy) below.
 - Legacy services without `RequiresInquiry` retain configured-amount quoting.
   Configured amounts have no authoritative bill verification.
 - Detail, creation replay, and history derive Expired for an Unpaid quote with
@@ -124,6 +116,106 @@ Verified client -> ClientProfiles identity resolution -> inquiry reservation
 - `QuoteSubmissionRecoveryService` scans up to 100 due intents every ten seconds.
   Fresh scopes and leased claims resume pending dispatch/status with the exact
   persisted package. SQL stores retry count, next attempt, lease, and final result.
+
+## Quote Design: Composite and Strategy
+
+This section is the implementation reference for quote composition, pricing,
+and bill identity. [ADR 0005](../decisions/0005-resumable-quotes-and-payment-revalidation.md)
+records the accepted design choice. The [Quotes requirement](../requirements/quotes.md)
+defines product behavior and acceptance; shared conventions live in
+[Application Design](../standards/application-design.md) and
+[Money Handling](../standards/money-handling.md).
+
+### Current Implementation
+
+Composite pricing is implemented for services with explicit trusted pricing
+definitions. The flat pricing path remains supported. Bill-key selection is
+implemented for the supported Development company services; additional live
+provider identity contracts and acceptance remain pending. Do not describe a
+generic configurable bill-key engine or live-provider enablement as implemented.
+
+| Responsibility | Implementation |
+| --- | --- |
+| Composition and snapshot models | [QuotePricingModels](../../src/PayableServices/PayableServices.Application/Models/QuotePricingModels.cs) describes groups, leaves, display nodes, and retained rule evidence. |
+| Composition evaluation | [QuotePricingService](../../src/PayableServices/PayableServices.Application/Services/QuotePricingService.cs) validates structure/dependencies, calculates leaves, and builds the immutable breakdown. |
+| Monetary strategies | [QuotePricingStrategies](../../src/PayableServices/PayableServices.Application/Services/QuotePricingStrategies.cs) resolves trusted strategy ID/version pairs for provider base, fixed, percentage, and discount calculations. |
+| Bill-key strategy | [BillIdentityStrategyRegistry](../../src/PayableServices/PayableServices.Application/Models/BillIdentity.cs) selects a trusted provider/service strategy independently of monetary calculation. |
+| Orchestration and persistence | [CreateQuoteUseCase](../../src/PayableServices/PayableServices.Application/UseCases/CreateQuoteUseCase.cs) coordinates inquiry consumption and persists finalized items, pricing evidence, and bill identity with the quote. |
+
+Composite is represented through group/leaf records and recursive evaluation;
+it does not require a class hierarchy for every node. Groups aggregate children
+for display and contribute no second charge. Reference nodes have no monetary
+value. Reject missing children, cycles, duplicate membership, unreachable items,
+and mixed currencies before persisting the quote.
+
+Pricing strategies calculate individual monetary leaves. Dependencies name
+other leaves explicitly; missing or cyclic bases fail validation. Finalize each
+leaf with the shared money rules before using it as a percentage basis or
+summing the total. Keep strategy selection in the trusted registry, not
+service/operator conditionals scattered through use cases.
+
+The Development bill-key strategy selects company, external service, account,
+and authoritative billing period. It preserves significant account zeroes and
+hashes an unambiguous serialized canonical tuple. The snapshot retains strategy
+ID/version and the selected values. The key is distinct from QuoteId and request
+idempotency keys. A compatible strategy version must still identify the same
+obligation; a version change must not bypass Processor's bill reservation.
+
+### Extension and Snapshot Rules
+
+- Add pricing calculations through the existing versioned registry and keep
+  pricing separate from bill identity and provider transport mapping.
+- For a new bill-key strategy, define authoritative fields, canonicalization,
+  and date/period format. Reject missing identity evidence. Establish compatible
+  key mapping or block affected outstanding obligations before activating an
+  incompatible identity version. Inquiry or charge time is not a bill date.
+- Persist the finalized leaves, grouped breakdown, rule versions, rates, bases,
+  currency, total, and separate bill identity once. Reads and dispatch use stored
+  evidence rather than the current strategy configuration.
+- Keep current rounding support explicit: quote boundaries accept ToEven only.
+  Check the display-ordered leaf sum used by Processor, including intermediate
+  overflow even when the final grouped result would fit.
+- Preserve historical flat quotes without inventing missing strategy evidence.
+  A new definition/version affects newly created quotes, not approved snapshots.
+- Keep external schemas in ExternalConnections. Processor validates finalized
+  monetary lines and owns bill reservation/execution; it does not price quotes.
+
+### Pricing Configuration
+
+Provision a service's trusted pricing definition on
+`AmountCompositions.PricingDefinitionJson`. The
+[pricing models](../../src/PayableServices/PayableServices.Application/Models/QuotePricingModels.cs)
+and [synthetic fixture](../../tests/PayableServices.Tests/CompositeQuotePricingTests.cs)
+show the shape and a complete example. Use one composition per service.
+Configured-price services use a fixed service amount. Inquiry-backed services
+use the verified provider amount as their single service-amount leaf.
+
+Percentage rates are decimal fractions. For example, `0.05` means five percent.
+List the monetary leaf IDs that form each basis. A tax includes fees only when
+those leaves are in its basis. Percentage rules use the already-rounded
+amounts of their dependencies. Fixed discounts take a positive magnitude
+and produce a negative line. Invalid definitions fail quote creation before
+the inquiry is consumed.
+Quote creation checks the finalized monetary leaves in the same display order
+used by Processor. Overflow at any step rejects the quote during creation.
+
+The grouped `breakdown` on quote detail contains subtotals and reference nodes.
+The existing `items` list and Processor handoff carry finalized monetary leaves.
+Rule IDs, versions, rates, and calculated bases remain in the immutable
+server-side snapshot. Historical flat quotes and services using flat amount
+configuration continue to return their flat items.
+
+### Verification
+
+Use [CompositeQuotePricingTests](../../tests/PayableServices.Tests/CompositeQuotePricingTests.cs)
+for composition validation, dependency calculation, currencies, discounts,
+overflow, and snapshots. Use
+[QuoteSubmissionAcceptanceTests](../../tests/PayableServices.Tests/QuoteSubmissionAcceptanceTests.cs)
+for bill identity and submission behavior, and
+[PaymentRecoveryEndToEndTests](../../tests/PayableServices.Tests/PaymentRecoveryEndToEndTests.cs)
+for preservation of approved pricing across HTTP/gRPC execution and recovery.
+Follow the [Testing Standard](../standards/testing.md) and
+[acceptance guide](../../tests/PayableServices.Tests/README.md) for setup and scope.
 
 ## Data Ownership
 

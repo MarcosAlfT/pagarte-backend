@@ -31,7 +31,13 @@ Worker use internal layer folders inside one deployable project.
 
 - Business workflows have explicit entry points.
 - Transport technology can change without moving business rules.
-- Dependencies point from Application abstractions toward Infrastructure
-  implementations.
+- Infrastructure depends on Application abstractions; Application does not
+  depend on concrete Infrastructure implementations.
 - Small workflows require an additional use-case type, but the responsibility
   remains clear.
+
+## Implementation Guidance
+
+[Application Design](../standards/application-design.md) maintains the coding
+conventions for this decision. Context documents describe their current layout
+and specialized patterns; this ADR retains the architectural rationale.

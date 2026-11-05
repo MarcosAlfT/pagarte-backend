@@ -53,28 +53,10 @@ expiry. It contains no API key or payment-operator card token.
 
 ### Pricing Configuration
 
-Provision a service's trusted pricing definition on
-`AmountCompositions.PricingDefinitionJson`. The
-[pricing models](../../src/PayableServices/PayableServices.Application/Models/QuotePricingModels.cs)
-and [synthetic fixture](../../tests/PayableServices.Tests/CompositeQuotePricingTests.cs)
-show the shape and a complete example. Use one composition per service.
-Configured-price services use a fixed service amount. Inquiry-backed services
-use the verified provider amount as their single service-amount leaf.
-
-Percentage rates are decimal fractions. For example, `0.05` means five percent.
-List the monetary leaf IDs that form each basis. A tax includes fees only when
-those leaves are in its basis. Percentage rules use the already-rounded
-amounts of their dependencies. Fixed discounts take a positive magnitude
-and produce a negative line. Invalid definitions fail quote creation before
-the inquiry is consumed.
-Quote creation checks the finalized monetary leaves in the same display order
-used by Processor. Overflow at any step rejects the quote during creation.
-
-The grouped `breakdown` on quote detail contains subtotals and reference nodes.
-The existing `items` list and Processor handoff carry finalized monetary leaves.
-Rule IDs, versions, rates, and calculated bases remain in the immutable
-server-side snapshot. Historical flat quotes and services using flat amount
-configuration continue to return their flat items.
+The owning context documents [quote composition, strategies, and trusted pricing
+configuration](../contexts/payable-services.md#quote-design-composite-and-strategy).
+This flow consumes their finalized snapshot; Processor receives monetary leaves
+and the approved total, without repricing or adding group subtotals.
 
 ## Owned History and Detail
 

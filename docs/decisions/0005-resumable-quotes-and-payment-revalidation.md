@@ -10,7 +10,8 @@ pricing is implemented for explicit service definitions. Live-provider
 acceptance remains pending.
 This revision supersedes this ADR's original resumable-freshness proposal and
 the company-first execution/compensation direction of [ADR 0003](0003-quote-execution-saga.md)
-for future implementation. The file path is retained to preserve existing links.
+for supported charge-first routes. Existing payments retain their pinned mode.
+The file path is retained to preserve existing links.
 On 2026-11-05, explicit quote cancellation (QUOTE-06) was removed from scope;
 submission ownership, fencing, and recovery remain required.
 The same clarification makes a quote single-use at Pay: persist Submitted and
@@ -24,7 +25,8 @@ The accepted product behavior is a short-lived, fixed payment summary. The clien
 can consult again after expiry instead of managing automatic refresh or linked
 replacements. Payment notification to the company records a bill payment after
 the card charge; it does not transfer money. Later settlement/reconciliation is
-outside this application. The current code still executes the company-first saga.
+outside this application. At the original decision, execution was company-first;
+supported Development routes now implement the charge-first direction.
 
 ## Decision
 
@@ -93,3 +95,11 @@ completes. Pre-charge verification alone does not prevent another channel paying
 in the gap; company conflict detection and compensation handle that case.
 The [implementation status](../requirements/quotes.md#implementation-status)
 records the delivered scope and links to open acceptance gaps.
+
+## Implementation Guidance
+
+[PayableServices: Quote Design](../contexts/payable-services.md#quote-design-composite-and-strategy)
+maintains Composite and Strategy responsibilities, extension rules, and current
+implementation limits. [Money Handling](../standards/money-handling.md) and
+[Testing](../standards/testing.md) supply shared implementation conventions.
+The requirement remains the source for product behavior and acceptance criteria.
