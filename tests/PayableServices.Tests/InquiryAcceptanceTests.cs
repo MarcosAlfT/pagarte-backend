@@ -196,7 +196,7 @@ public sealed class InquiryAcceptanceTests
     }
 
     [Fact]
-    public async Task Provider_short_expiry_limits_quote_and_replay_never_refreshes_lifetime()
+    public async Task Fresh_short_lived_inquiry_creates_a_fixed_five_minute_quote_without_extending_inquiry_evidence()
     {
         await using var rig = await TestRig.CreateAsync();
         using var client = rig.Client();
@@ -215,7 +215,7 @@ public sealed class InquiryAcceptanceTests
         var inquiry = await TestRig.Data(await rig.Inquire(client, key: "short"));
         var id = inquiry.GetProperty("id").GetGuid();
         var quote = await TestRig.Data(await rig.Quote(client, id));
-        Assert.Equal(now.AddMinutes(3), quote.GetProperty("expiresAt").GetDateTime());
+        Assert.Equal(now.AddMinutes(5), quote.GetProperty("expiresAt").GetDateTime());
         rig.Clock.UtcNow = now.AddMinutes(4);
         var replay = await TestRig.Data(await rig.Inquire(client, key: "short"));
         Assert.True(replay.GetProperty("expired").GetBoolean());

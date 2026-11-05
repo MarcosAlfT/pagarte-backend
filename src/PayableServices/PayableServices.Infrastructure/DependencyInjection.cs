@@ -33,6 +33,7 @@ public static class DependencyInjection
 
         services.AddCompanyInquiries(configuration, environment);
         services.AddHostedService<InquiryRecoveryService>();
+        services.AddHostedService<QuoteSubmissionRecoveryService>();
         services.AddScoped<IPaymentExecutionClient, PaymentSwitchExecutionClient>();
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<ICurrencyCatalog, CurrencyCatalog>();

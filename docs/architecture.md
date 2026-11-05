@@ -24,7 +24,8 @@ PayableServices.Api
   -> validates client access tokens for quote operations
   -> resolves the internal Client.Id through ClientProfiles
   -> owns PayableServicesDb, catalogue, routes, persisted inquiries, and customer-visible quotes
-  -> sends authenticated immutable execution packages to Processor
+  -> atomically consumes one five-minute quote and persists immutable submission intent
+  -> sends authenticated claimed execution packages to Processor; recovers leased work
 
 PaymentSwitch.Processor
   -> authenticates card and quote-execution workloads
@@ -57,8 +58,10 @@ Client with access token
   -> client confirms with Quote ID + stored Card ID
   -> PayableServices loads the owned snapshot
   -> authenticated workload gRPC handoff
-  -> Processor validates package, expiry, card ownership, and idempotency
-  -> Processor persists one Payment by SourceQuoteId
+  -> PayableServices commits Submitted + card + server claim time + immutable intent
+  -> authenticated SubmitClaimedQuote gRPC handoff
+  -> Processor validates timely bound claim, card ownership, totals, and idempotency
+  -> Processor records one accepted Payment or immutable rejection by SourceQuoteId
   -> operator checks card readiness
       -> decline: final failure; a new attempt requires a new quote
   -> company pays the service using service code + references
@@ -112,8 +115,9 @@ longer reads Processor for this workflow. Processor does not own inquiries or qu
   lease recovery, and atomic single-quote consumption. HTTP runs outside those
   transactions.
 - Owned quote history and detail read stored snapshots without company or
-  Processor calls. Explicit execution refresh recovers by source quote ID even
-  without local PaymentId; complete submission fencing/restart recovery is pending.
+  Processor calls. Customer listing excludes consumed quotes. Explicit refresh
+  and leased submission recovery use source quote ID without depending on local
+  PaymentId. An unknown outcome stays consumed; no SQL lock spans a gRPC call.
 - ASP.NET Core JWT bearer validation and named policies secure public APIs.
 - Payments and PayableServices resolve `(iss, sub)` over a protected internal
   ClientProfiles HTTP endpoint before client-owned operations.
@@ -136,8 +140,8 @@ longer reads Processor for this workflow. Processor does not own inquiries or qu
 | --- | --- | --- |
 | Keycloak PostgreSQL | Keycloak | Users, sessions, realm configuration, and keys |
 | `ClientProfilesDb` | `ClientProfiles` | Clients, external identity mapping, and contact information |
-| `PayableServicesDb` | `PayableServices` | Catalogue, routes, mappings, inquiry reservations/results/leases, quote snapshots and status |
-| `PaymentDb` | Processor; Worker for refund fields | Card setup sessions/inbox/consent/review audits, immutable integration/credential pins, deferred card removal, safe stored-card references, payment execution snapshots, retry state, operators, retained service catalogue, outbox |
+| `PayableServicesDb` | `PayableServices` | Catalogue, routes, mappings, inquiries, quote snapshots/status, immutable submission IDs/packages, leases/retry schedules/results |
+| `PaymentDb` | Processor; Worker for refund fields | Card setup/session audits, immutable integration/credential pins, stored cards, quote submission acceptance/rejection outcomes, payment execution snapshots/retry state, operators, retained catalogue, outbox |
 
 ## Shared Libraries
 
@@ -184,13 +188,19 @@ The Processor saga migration requires legacy active payments and pending
 
 The accepted [Quotes requirement](requirements/quotes.md) and
 [target flow](flows/quote-review-and-payment.md) propose Composite/Strategy
-pricing and business-key selection, five-minute quote expiry, and payment-time
-bill verification. The revised target charges the card before notifying the
+pricing and business-key selection and fresh bill verification. These remain
+pending. The revised target charges the card before notifying the
 company: OK completes payment; definitive NOT OK requires a full card refund.
 Notification transfers no funds; later company settlement is outside this app.
 These changes are not implemented in the runtime map above. PayableServices
 keeps quote/pricing ownership; Processor owns execution and compensation, with
 Worker refund coordination to prevent duplicate refunds.
+Five-minute Unpaid expiry, permanent consumption at Pay, customer-list filtering,
+leased restart recovery, and the bound post-deadline handoff are implemented.
+Processor retains the company-first saga; the submission protocol is not the
+charge-first/bill-verification delivery. Migrate/deploy Processor before the new
+PayableServices cutover. Unexecuted legacy quotes cannot acquire invented claim
+authority; accepted legacy payments retain their original evidence/order.
 
 See the [documentation index](README.md), [Quote Lifecycle](flows/quote-lifecycle.md),
 and [Payment Lifecycle](flows/payment-lifecycle.md).

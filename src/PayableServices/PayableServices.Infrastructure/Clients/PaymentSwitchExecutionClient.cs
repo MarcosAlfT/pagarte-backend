@@ -26,10 +26,12 @@ public sealed class PaymentSwitchExecutionClient(
 			Snapshot = MapSnapshot(package)
 		};
 
-		var response = await client.ConfirmQuoteAsync(
-			request,
-			CreateHeaders(),
-			cancellationToken: cancellationToken);
+        var response = package.SubmissionId is { } submissionId && package.SubmittedAt is { } submittedAt
+            ? await client.SubmitClaimedQuoteAsync(new SubmitClaimedQuoteRequest
+            {
+                Quote = request, SubmissionId = submissionId.ToString(), SubmittedAt = submittedAt.ToString("O")
+            }, CreateHeaders(), cancellationToken: cancellationToken)
+            : await client.ConfirmQuoteAsync(request, CreateHeaders(), cancellationToken: cancellationToken);
 		return MapResponse(response);
 	}
 
@@ -120,7 +122,8 @@ public sealed class PaymentSwitchExecutionClient(
 			EmptyToNull(response.ErrorCode),
 			EmptyToNull(response.ErrorMessage),
 			response.Replayed,
-			response.Final);
+			response.Final,
+            response.SubmissionRecorded);
 
 	private static string? EmptyToNull(string value) =>
 		string.IsNullOrWhiteSpace(value) ? null : value;

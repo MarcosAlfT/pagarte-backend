@@ -58,6 +58,7 @@ namespace PaymentSwitch.Processor
 			// Repositories
 			builder.Services.AddScoped<ICreditCardRepository, CreditCardRepository>();
 			builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
+			builder.Services.AddScoped<IQuoteSubmissionRepository, QuoteSubmissionRepository>();
 			builder.Services.AddScoped<IPaymentOperatorRepository, PaymentOperatorRepository>();
 			builder.Services.AddScoped<IServiceRepository, ServiceRepository>();
 			builder.Services.AddScoped<IOutboxRepository, OutboxRepository>();

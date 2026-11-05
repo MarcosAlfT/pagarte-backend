@@ -18,22 +18,50 @@ public sealed class AcceptConfirmedQuoteUseCase(
 	ICurrencyCatalog currencyCatalog,
 	IOptions<PaymentExecutionOptions> options,
 	IClock clock,
-	ICardMutationScope mutations)
+	ICardMutationScope mutations,
+    IQuoteSubmissionRepository submissions)
 {
 	public async Task<PaymentExecutionResult> ExecuteAsync(
 		ConfirmedQuoteExecution execution,
 		CancellationToken cancellationToken = default)
 	{
-		var validationError = validator.Validate(execution, clock.UtcNow);
-		if (validationError is not null)
-		{
-			return Failure("INVALID_EXECUTION_PACKAGE", validationError);
-		}
+        if (string.IsNullOrWhiteSpace(execution.ClientId) || execution.ClientId.Length > 100 || execution.SourceQuoteId == Guid.Empty)
+            return Failure("INVALID_EXECUTION_PACKAGE", "Execution ownership is invalid.");
 
 		var fingerprint = ConfirmedQuoteValidator.Fingerprint(execution);
 		Payment payment;
 		await using (var transaction = await mutations.BeginAsync(execution.ClientId, cancellationToken))
 		{
+            var recorded = await submissions.GetAsync(execution.SourceQuoteId, cancellationToken);
+            if (recorded is not null)
+            {
+                if (recorded.ClientId != execution.ClientId || recorded.SubmissionId != execution.SubmissionId ||
+                    recorded.PackageFingerprint != fingerprint)
+                    return Failure("SOURCE_QUOTE_FINGERPRINT_CONFLICT", "The quote already has another submission.");
+                if (recorded.PaymentId is { } acceptedId)
+                {
+                    var accepted = await paymentRepository.GetByIdAsync(acceptedId, cancellationToken)
+                        ?? throw new InvalidOperationException("Accepted submission payment is missing.");
+                    return PaymentExecutionResultMapper.Map(accepted, replayed: true) with { SubmissionRecorded = true };
+                }
+                return Failure(recorded.ErrorCode!, recorded.ErrorMessage!) with { Replayed = true, SubmissionRecorded = true };
+            }
+
+            async Task<PaymentExecutionResult> RejectAsync(string code, string message)
+            {
+                if (execution.SubmissionId is { } submissionId && submissionId != Guid.Empty)
+                {
+                    submissions.Add(new QuoteSubmissionOutcome
+                    {
+                        SourceQuoteId = execution.SourceQuoteId, SubmissionId = submissionId,
+                        ClientId = execution.ClientId, PackageFingerprint = fingerprint,
+                        ErrorCode = code, ErrorMessage = message, RecordedAt = clock.UtcNow
+                    });
+                    await transaction.CommitAsync(cancellationToken);
+                    return Failure(code, message) with { SubmissionRecorded = true };
+                }
+                return Failure(code, message);
+            }
 			var existing = await paymentRepository.GetBySourceQuoteIdAsync(
 				execution.SourceQuoteId,
 				cancellationToken);
@@ -57,19 +85,25 @@ public sealed class AcceptConfirmedQuoteUseCase(
 				return PaymentExecutionResultMapper.Map(existing, replayed: true);
 			}
 
+            // The legacy RPC may recover an accepted payment, but cannot authorize a new one.
+            if (execution.SubmissionId is null)
+                return Failure("SUBMISSION_REQUIRED", "New execution requires a durably claimed quote submission.");
 			var card = await creditCardRepository.GetByIdAsync(execution.CreditCardId);
+            var validationError = validator.Validate(execution, clock.UtcNow);
+            if (validationError is not null)
+                return await RejectAsync("INVALID_EXECUTION_PACKAGE", validationError);
 			if (card is null || card.ClientId != execution.ClientId)
 			{
-				return Failure(
+				return await RejectAsync(
 					"CARD_NOT_OWNED",
 					"The stored card does not belong to the authenticated client.");
 			}
 
 			if (!card.IsAvailable(clock.UtcNow))
-				return Failure("CARD_UNAVAILABLE", "The stored card is unavailable for new payments.");
+				return await RejectAsync("CARD_UNAVAILABLE", "The stored card is unavailable for new payments.");
 
 			if (!await cardPaymentGateway.SupportsExecutionAsync(card, execution.CountryCode, execution.Currency, cancellationToken))
-				return Failure("CARD_MARKET_UNSUPPORTED", "The card integration does not support this country and currency.");
+				return await RejectAsync("CARD_MARKET_UNSUPPORTED", "The card integration does not support this country and currency.");
 
 			var operatorProvider = await cardPaymentGateway.EnsureOperatorProviderAsync(
 				card,
@@ -156,6 +190,13 @@ public sealed class AcceptConfirmedQuoteUseCase(
 				return PaymentExecutionResultMapper.Map(insertion.Payment, replayed: true);
 			}
 
+            if (execution.SubmissionId is { } submissionId)
+                submissions.Add(new QuoteSubmissionOutcome
+                {
+                    SourceQuoteId = execution.SourceQuoteId, SubmissionId = submissionId,
+                    ClientId = execution.ClientId, PackageFingerprint = fingerprint,
+                    PaymentId = payment.Id, RecordedAt = clock.UtcNow
+                });
 			await transaction.CommitAsync(cancellationToken);
 		}
 
@@ -163,7 +204,7 @@ public sealed class AcceptConfirmedQuoteUseCase(
 
 		var current = await paymentRepository.GetByIdAsync(payment.Id, cancellationToken)
 			?? payment;
-		return PaymentExecutionResultMapper.Map(current);
+		return PaymentExecutionResultMapper.Map(current) with { SubmissionRecorded = execution.SubmissionId is not null };
 	}
 
 	private static PaymentExecutionResult Failure(string code, string message) =>

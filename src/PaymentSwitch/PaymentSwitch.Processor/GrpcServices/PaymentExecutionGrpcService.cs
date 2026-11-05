@@ -14,6 +14,22 @@ public sealed class PaymentExecutionGrpcService(
 	ILogger<PaymentExecutionGrpcService> logger)
 	: PaymentExecutionService.PaymentExecutionServiceBase
 {
+    public override async Task<ConfirmQuoteResponse> SubmitClaimedQuote(
+        SubmitClaimedQuoteRequest request, ServerCallContext context)
+    {
+        try
+        {
+            if (request.Quote is null) return InvalidRequest("Execution snapshot is required.");
+            var execution = MapExecution(request.Quote) with
+            {
+                SubmissionId = ParseGuid(request.SubmissionId, "submission"),
+                SubmittedAt = ParseDate(request.SubmittedAt, "submission")
+            };
+            return MapResult(await acceptConfirmedQuoteUseCase.ExecuteAsync(execution, context.CancellationToken));
+        }
+        catch (FormatException exception) { return InvalidRequest(exception.Message); }
+    }
+
 	public override async Task<ConfirmQuoteResponse> ConfirmQuote(
 		ConfirmQuoteRequest request,
 		ServerCallContext context)
@@ -108,7 +124,8 @@ public sealed class PaymentExecutionGrpcService(
 			ErrorCode = result.ErrorCode ?? string.Empty,
 			ErrorMessage = result.ErrorMessage ?? string.Empty,
 			Replayed = result.Replayed,
-			Final = result.Final
+			Final = result.Final,
+            SubmissionRecorded = result.SubmissionRecorded
 		};
 
 	private static ConfirmQuoteResponse InvalidRequest(string message) =>

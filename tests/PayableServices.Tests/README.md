@@ -29,16 +29,28 @@ commit. Concurrent HTTP calls exercise SQL locks and unique indexes.
 | QUOTE-08 | Owned positive evidence, exact base replacement plus configured components, atomic rollback, concurrent retries, expiry/currency/route rejection, unchanged Processor execution validation and quote confirmation. |
 | QUOTE-03, QUOTE-04, QUOTE-05 | Verified-client quote history, owner isolation, all lifecycle/service/date filters, UTC offsets/inclusive bounds, stable ID ties/pages, bounded/invalid pagination, safe summaries, effective expiry shared with detail/creation replay, and no provider or execution calls from reads. |
 | Quote execution recovery | Injected local commit failure after the execution probe accepts, source-quote lookup without local PaymentId after expiry, same payment recovery, foreign-ID hiding, and unchanged local state on not-found/outage. |
+| Single-use submission / QUOTE-04 | Commit Submitted/card/server time/package before dispatch; concurrent replay and card conflicts, consumed-list exclusion, exact expiry, late acceptance, durable rejection, stale-response fencing, failed commits, API restart, and legacy migration. |
 
 Run only the new slice with
-`dotnet test tests/PayableServices.Tests/PayableServices.Tests.csproj --filter FullyQualifiedName~QuoteHistoryAcceptanceTests`.
+`dotnet test tests/PayableServices.Tests/PayableServices.Tests.csproj --filter "FullyQualifiedName~QuoteHistoryAcceptanceTests|FullyQualifiedName~QuoteSubmissionAcceptanceTests"`.
 The execution probe uses the real Processor package validator and retains source-quote
-results, but it does not exercise live gRPC acceptance, fencing, or saga execution.
-Fixed five-minute creation, cancellation/submission fencing, bill keys/verification,
-and charge-first confirmation/refund are not implemented by this slice.
+results. PayableServices lease fencing is tested over HTTP/SQL, while the probe
+does not exercise Processor gRPC/SQL acceptance or saga execution.
+The separate Processor `QuoteSubmissionGrpcTests` run the actual handoff client
+against authenticated gRPC/SQL for acceptance, rejection, concurrency, and timing.
+Bill keys/verification and charge-first confirmation/refund remain unimplemented.
+Explicit quote cancellation (QUOTE-06) is out of scope; no cancellation endpoint
+or Pay/Cancel acceptance scenario is required. Existing Cancelled history stays.
+Single-use submission and customer filtering are implemented. Tests hold the
+first dispatch open, prove committed Submitted state and one-card ownership,
+advance beyond expiry, and verify the original payment completes without reuse.
+Restart and stale-lease tests resume/fence the immutable intent. Current Processor
+execution remains company-first; tests do not establish future bill contracts.
 
-Verified on 2026-11-04 with SQL Server LocalDB: all 46 PayableServices tests and
-all 7 shared-money tests passed. The build reports existing dependency audit
+Verified on 2026-11-04 with SQL Server LocalDB: all 53 PayableServices tests,
+103 Processor/card/provider tests, 7 shared-money tests, and 9 security tests
+passed. Downgrade guards are checked for consumed quotes and recorded rejection.
+The build reports existing dependency audit
 warnings for Microsoft.OpenApi and System.Security.Cryptography.Pkcs.
 
 Run the existing `PaymentSwitch.Processor.Tests`, `Utilities.Money.Tests`, and
@@ -64,6 +76,15 @@ Run the existing `PaymentSwitch.Processor.Tests`, `Utilities.Money.Tests`, and
 7. Confirm the quote using the existing stored-card flow. Repeat the inquiry key
    and quote request to verify their stable IDs. Try accounts 2 through 6 for
    nonpayable outcomes.
+8. Observe Submitted and an empty customer quote list while dispatch is pending.
+   A technical retry with the same card returns the original pending/final result;
+   another card cannot reuse the quote. After a timely claim, wait past the quote
+   deadline and verify that status/recovery still follows the same payment.
+
+Deploy/migrate Processor before cutting over all PayableServices instances.
+The PayableServices migration makes legacy unexecuted quotes Expired without
+inventing claim authority; accepted legacy payment history remains recoverable.
+Both migrations block downgrade once their submission records exist.
 
 Full Aspire startup with Keycloak is a separate local smoke check. The automated
 HTTP/SQL tests do not require Docker, an external company, or a live Keycloak

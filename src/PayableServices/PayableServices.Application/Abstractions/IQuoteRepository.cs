@@ -5,6 +5,7 @@ namespace PayableServices.Application.Abstractions;
 
 public interface IQuoteRepository
 {
+	Task<IReadOnlyCollection<Guid>> GetRecoverableSubmissionsAsync(DateTime utcNow, CancellationToken cancellationToken = default);
 	Task<IReadOnlyCollection<QuoteSummaryDto>> ListAsync(
 		string clientId, QuoteHistoryQuery query, DateTime utcNow, CancellationToken cancellationToken = default);
 	Task<Quote?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);

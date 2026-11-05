@@ -226,9 +226,9 @@ public sealed class CardTestRig : IAsyncDisposable
 		var execution = new ConfirmedQuoteExecution(Owner, Guid.NewGuid(), cardId, Guid.NewGuid(), "Test Service",
 			Guid.NewGuid(), country, Guid.NewGuid(), "TestRoute", null, null, "Test", "TEST-SERVICE",
 			"https://company.test/pay", "https://company.test/rollback", "https://company.test/status/{reference}", "test-credential",
-			Clock.UtcNow, Clock.UtcNow.AddMinutes(15), "ToEven", 1000, "USD",
+			Clock.UtcNow, Clock.UtcNow.AddMinutes(5), "ToEven", 1000, "USD",
 			[new ConfirmedQuoteComponent("ServiceAmount", "Service", "Catalogue", true, 1, 1000, "USD")],
-			[new ConfirmedQuoteReference("account", "synthetic")]);
+			[new ConfirmedQuoteReference("account", "synthetic")], Guid.NewGuid(), Clock.UtcNow);
 		return await scope.ServiceProvider.GetRequiredService<AcceptConfirmedQuoteUseCase>().ExecuteAsync(execution);
 	}
 

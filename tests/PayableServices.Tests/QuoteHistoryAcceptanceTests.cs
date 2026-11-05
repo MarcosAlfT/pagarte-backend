@@ -33,17 +33,17 @@ public sealed class QuoteHistoryAcceptanceTests
         var now = rig.Clock.UtcNow;
         var quotes = Enumerable.Range(1, 105).Select(i => Snapshot(i, now.AddSeconds(-i))).ToArray();
         var foreign = Snapshot(106, now.AddMinutes(1), owner: OtherOwner);
-        var paid = quotes[0];
+        var paid = Snapshot(107, now.AddMinutes(1));
         paid.Status = QuoteStatus.Paid;
         paid.PaymentId = Guid.NewGuid();
-        await rig.InDb(async db => { db.Quotes.AddRange(quotes.Append(foreign)); await db.SaveChangesAsync(); });
+        await rig.InDb(async db => { db.Quotes.AddRange(quotes.Append(foreign).Append(paid)); await db.SaveChangesAsync(); });
 
         var first = await TestRig.Data(await owner.GetAsync("/api/quotes"));
         Assert.Equal(1, first.GetProperty("page").GetInt32());
         Assert.Equal(20, first.GetProperty("pageSize").GetInt32());
         Assert.Equal(quotes.Take(20).Select(q => q.Id), Ids(first));
-        Assert.Equal(paid.PaymentId, first.GetProperty("quotes")[0].GetProperty("paymentId").GetGuid());
-        Assert.Equal("Paid", first.GetProperty("quotes")[0].GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, first.GetProperty("quotes")[0].GetProperty("paymentId").ValueKind);
+        Assert.Equal("Unpaid", first.GetProperty("quotes")[0].GetProperty("status").GetString());
         var summary = first.GetProperty("quotes")[0];
         Assert.Equal(10200, summary.GetProperty("totalMinorUnits").GetInt64());
         Assert.Equal("00123", summary.GetProperty("referenceValues")[0].GetProperty("value").GetString());
@@ -87,7 +87,7 @@ public sealed class QuoteHistoryAcceptanceTests
         Assert.Equal(new[] { second.Id }, Ids(await TestRig.Data(await client.GetAsync(query))));
         Assert.Equal(new[] { first.Id }, Ids(await TestRig.Data(await client.GetAsync(query + "&page=2"))));
         Assert.Empty(Ids(await TestRig.Data(await client.GetAsync(query + "&page=3"))));
-        Assert.Equal(new[] { cancelled.Id }, Ids(await TestRig.Data(await client.GetAsync("/api/quotes?status=Cancelled"))));
+        Assert.Empty(Ids(await TestRig.Data(await client.GetAsync("/api/quotes?status=Cancelled"))));
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public sealed class QuoteHistoryAcceptanceTests
         var history = await TestRig.Data(await client.GetAsync("/api/quotes?status=Expired"));
         Assert.Equal(new[] { id }, Ids(history));
         Assert.Empty(Ids(await TestRig.Data(await client.GetAsync("/api/quotes?status=Unpaid"))));
-        Assert.Equal(new[] { processing.Id }, Ids(await TestRig.Data(await client.GetAsync("/api/quotes?status=Processing"))));
+        Assert.Empty(Ids(await TestRig.Data(await client.GetAsync("/api/quotes?status=Processing"))));
         var replay = await TestRig.Data(await rig.Quote(client, inquiryId));
         Assert.Equal("Expired", replay.GetProperty("status").GetString());
         Assert.Equal(created.GetProperty("expiresAt").GetDateTime(), replay.GetProperty("expiresAt").GetDateTime());
@@ -163,7 +163,7 @@ public sealed class QuoteHistoryAcceptanceTests
         {
             var stored = await db.Quotes.SingleAsync(q => q.Id == id);
             Assert.Null(stored.PaymentId);
-            Assert.Equal(QuoteStatus.Unpaid, stored.Status);
+            Assert.Equal(QuoteStatus.Submitted, stored.Status);
         });
 
         rig.Clock.UtcNow = quote.GetProperty("expiresAt").GetDateTime().AddHours(1);
@@ -175,7 +175,7 @@ public sealed class QuoteHistoryAcceptanceTests
         Assert.Equal("Paid", (await TestRig.Data(await client.GetAsync($"/api/quotes/{id}"))).GetProperty("status").GetString());
         Assert.Single(rig.Execution.Results);
         Assert.Equal(1, rig.Execution.ConfirmCalls);
-        Assert.Equal(2, rig.Execution.StatusCalls);
+        Assert.Equal(3, rig.Execution.StatusCalls);
         Assert.Equal(1, rig.Provider.Calls);
         await rig.InDb(async db => Assert.Equal(accepted.PaymentId, (await db.Quotes.SingleAsync(q => q.Id == id)).PaymentId));
     }

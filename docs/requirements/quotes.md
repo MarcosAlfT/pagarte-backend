@@ -4,18 +4,21 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Accepted revised product definitions; history and explicit status recovery implemented; remaining work pending |
-| Transactions | QUOTE-01 through QUOTE-08, with required payment-execution changes |
+| Status | Single-use submission, five-minute Unpaid expiry, filtering, and bound recovery implemented; pricing/bill verification/charge-first work pending |
+| Transactions | QUOTE-01 through QUOTE-08; QUOTE-06 is out of scope; required payment-execution changes remain in scope |
 | Primary owner | PayableServices |
 | Integration owners | PaymentSwitch.Processor and ExternalConnections; coordinate refund compatibility with Worker |
 | Patterns | Composite for quote items; Strategies for pricing and business-key selection |
-| Quote lifetime | Exactly five minutes from server-side creation |
+| Quote lifetime | Five minutes from server-side creation while Unpaid; Submitted work continues independently of that deadline |
 | Customer flow | Consult, review, Pay; consult again after expiry or invalidation |
 
 This revision supersedes the earlier resumable-freshness and linked-replacement
 proposal. There is no automatic quote refresh or additional approval workflow.
 Tapping Pay authorizes the fixed displayed total. A valid, unchanged, unpaid
-bill proceeds directly. The [target flow](../flows/quote-review-and-payment.md)
+bill proceeds directly. On the first valid Pay request, the backend atomically
+changes the quote from Unpaid to Submitted and permanently consumes it. The
+customer no longer sees that quote as a payment summary and can never pay it
+again, including after failure or refund. The [target flow](../flows/quote-review-and-payment.md)
 charges the card first, then notifies the company: OK completes the payment;
 definitive NOT OK requires a full card refund. Company notification records the
 bill payment; it does not transfer money. Later reconciliation and settlement
@@ -23,22 +26,31 @@ with the company are outside this application.
 
 ## Current Baseline and Required Changes
 
-- Itemized immutable quotes, owner-only detail/history, inquiry consumption,
-  and confirmation exist. Cancellation and durable submission intent are missing.
-- Current legacy quotes expire after 60 minutes; inquiry-backed quotes inherit
-  inquiry expiry. The target uses CreatedAt + five minutes for new quotes.
+- Itemized immutable quotes, owner-only detail/listing, inquiry consumption,
+  and durable single-use submission exist. Explicit quote
+  cancellation is out of scope; QUOTE-06 remains a historical identifier.
+- Confirmation commits Submitted, selected card, server timestamp, immutable
+  package/fingerprint, and one submission ID before dispatch. Consumed quotes
+  are excluded from customer listing, including failed attempts. Rejections
+  recorded by Processor permanently close the original quote.
+- New configured-price and inquiry-backed quotes expire five minutes after
+  creation while Unpaid. A timely claim remains valid after that deadline.
+  The migration preserves legacy snapshots and makes unexecuted legacy quotes
+  non-payable without fabricating submission or bill evidence.
 - Current Processor execution calls the company before charging the card and
   rolls back the company on charge failure. The new order is not implemented.
-- Explicit status refresh now recovers by source quote ID without local PaymentId.
-  Confirmation-time recovery before retry/expiry rejection and restart recovery
-  remain pending.
+- Explicit refresh and leased background submission recovery find accepted
+  execution by source quote ID without local PaymentId. Original intents resume
+  after restart/expiry with the same package and card; missing or unavailable
+  Processor state does not release a consumed quote. Processor records acceptance
+  or rejection durably for the new authenticated submission RPC.
 - No production data exists. Historical/test records still must not acquire
   invented bill identities or pricing evidence during migration.
 
 ## Ownership
 
 - PayableServices owns quote items, pricing and key Strategies, business-key
-  evidence, inquiry binding, expiry, history, cancellation, and submission intent.
+  evidence, inquiry binding, expiry, history, and submission intent.
 - Processor owns payment acceptance, card eligibility, durable charge, company
   notification, compensation refund, duplicate protection, and recovery.
 - ExternalConnections translates provider-neutral inquiry, notification/status,
@@ -106,37 +118,88 @@ with the company are outside this application.
 - All client-relevant charges are visible; internal metadata and credentials
   remain private. USD is the initial company fixture currency; use shared money
   scale logic rather than assuming every currency has two decimals.
-- During the five-minute validity window, a configuration change with the same
-  total but different fee/tax allocation does not rewrite the quote. Neither a
+- Before submission and throughout execution, a configuration change with the
+  same total but different fee/tax allocation does not rewrite the quote. Neither a
   new Strategy version nor new rounding configuration changes its amounts.
   A disabled/invalid route blocks payment; never silently substitute a route.
 
 ### QR-003: Retrieve and Expire (QUOTE-03, QUOTE-04)
 
-- Set ExpiresAt = CreatedAt + five minutes using server UTC. At now >= ExpiresAt,
-  an unsubmitted quote cannot initiate payment. Return the effective expired
-  state consistently in detail, list, and submission responses.
+- Set ExpiresAt = CreatedAt + five minutes using server UTC. The deadline applies
+  only while the quote is unconsumed and Unpaid. At now >= ExpiresAt, that quote
+  becomes Expired and cannot initiate Pay. Return that effective state consistently
+  in detail, list, and submission responses.
 - Inquiry evidence must be fresh at creation; its earlier expiry does not shorten
-  or extend this fixed quote lifetime. Every new Pay requires a new bill check.
+  or extend this fixed Unpaid window. Every new Pay requires a new bill check.
   This revises the inquiry cap in MAI-007/MAI-009 for future quote implementation.
 - Expiry preserves the original snapshot/history but requires the client to
   consult again. Never extend the existing deadline or refresh it in place.
 - Returning from card registration within five minutes permits normal Pay.
-  Returning after five minutes requires a new inquiry and quote. Registration,
+  Returning after five minutes without prior submission requires a new inquiry
+  and quote. Registration,
   retrieval, and listing never charge or automatically consult the company.
-- Processor must durably accept a new execution before ExpiresAt; merely tapping
-  Pay or reserving submission intent does not extend the deadline. Verification
-  or transport that crosses the deadline cannot authorize a new execution.
-- An execution already accepted continues through confirmation/refund/recovery
-  after expiry. Recover an existing or uncertain submission before reporting an
-  expired quote as safe to replace. No customer-facing freshness lifecycle exists.
+- PayableServices checks server time while atomically claiming the first valid
+  Pay as Unpaid -> Submitted. That claim must occur before ExpiresAt; client tap
+  time alone cannot backdate a submission. Persist its authoritative SubmittedAt
+  with the bound intent. This is the quote-expiry boundary, not later Processor
+  acceptance.
+- Once Submitted, original quote expiry cannot stop verification, dispatch,
+  Processor acceptance, charging, confirmation, refund, or recovery of that one
+  submission. Do not mark it Expired when its original deadline passes. Verify
+  the existing intent before applying expiry to a technical request redelivery.
+- Processor must validate that the server-owned submission was claimed before
+  its quote deadline and matches the owner, snapshot, and selected card. It must
+  not reject that valid handoff because its current clock is past ExpiresAt.
+  SubmittedAt is server evidence, not an amount or timestamp supplied by the client.
+- Fresh bill evidence, route/card eligibility, operation timeouts, retry policies,
+  and outcome reconciliation still apply after submission. If delayed dispatch
+  or recovery makes verification evidence stale, obtain fresh evidence for the
+  same intent before charging and compare it to the approved bill/snapshot;
+  never reprice, reopen the quote, or create a second customer attempt.
+- Only an unconsumed Unpaid quote before its deadline can initiate Pay. A valid
+  owned Pay request must atomically persist Unpaid -> Submitted, consumption
+  time, selected card, and one submission intent before company verification
+  or Processor dispatch. The customer removes the summary immediately on Pay;
+  server state enforces the same restriction independently of the app.
+- Consumption is permanent. Submitted, Processing, Paid, failed, invalidated,
+  no-longer-due, and refunded outcomes never return that quote to Unpaid.
+  Unsubmitted Expired quotes also never reopen.
+  Keep the financial snapshot and status for backend audit/recovery, without
+  redisplaying the consumed summary as a customer quote to pay.
+
+The target quote statuses are distinct from payment-execution status:
+
+| Quote status | Meaning |
+| --- | --- |
+| Unpaid | Not consumed; can initiate Pay only before expiry and with valid prerequisites. |
+| Submitted | Permanently consumed by Pay; verification or handoff is in progress. |
+| Processing | Processor accepted the associated payment; execution or outcome recovery continues. |
+| Paid | The card charge and matching company acknowledgment succeeded. |
+| PaymentFailed | The submitted attempt definitively failed without a charge; another attempt requires a new quote. |
+| Invalidated | Verification found changed bill identity, amount, or currency; require a new quote. |
+| NoLongerDue | The company confirms already paid/nothing due; no Pagarte success or receipt is invented. |
+| Expired | The original deadline elapsed while the quote was still unconsumed and Unpaid; no Pay is allowed. Submitted work never becomes Expired merely because time passes. |
+| RefundPending | The card was charged, the company definitively rejected it, and full refund is unresolved. |
+| Refunded | The operator confirmed the full refund; the consumed quote remains unusable. |
+
+Submitted and the existing Unpaid/Processing/Paid/PaymentFailed/Expired states
+are implemented by this slice. Invalidated, NoLongerDue, RefundPending, and
+Refunded quote transitions depend on later bill-verification/charge-first work.
+Legacy Cancelled history remains non-payable. An uncertain dispatched
+submission stays unresolved until safely reconciled, rather than being declared
+Expired or reusable from the local clock alone. Freshness/operation policy can
+fail a submitted attempt safely, but original quote expiry cannot. Failure before
+Processor creates a payment can close the consumed quote without inventing a
+PaymentId.
 
 ### QR-004: Verify, Charge, Notify, Confirm or Refund
 
 - Tapping Pay is the customer's authorization for the displayed immutable total;
   no separate approval is required when checks succeed.
-- Reserve durable submission intent and check for an existing/unresolved payment
-  first. For new execution, obtain fresh company evidence with a new inquiry
+- Atomically consume the quote and reserve its only submission intent. Recover
+  that same intent or its existing/unresolved payment on technical request
+  redelivery; never start a second attempt from this quote. For new execution,
+  obtain fresh company evidence with a new inquiry
   operation key, not a replay of the creation inquiry. Store verification evidence
   separately without consuming another inquiry into the same quote.
 - Verify the same Strategy-selected business key, unpaid bill, service amount,
@@ -147,8 +210,8 @@ with the company are outside this application.
 | Same unpaid bill, service amount and currency; valid quote/route/card | Continue the same Pay action with the stored total. |
 | Any selected key value, service amount, or currency changed | Invalidate the old quote; require a new consultation and quote. |
 | Already paid / nothing due | Do not charge; explain the outcome without inventing a Pagarte payment. |
-| Unavailable / malformed evidence | Return a safe verification error; retry only while the quote remains valid. |
-| Expired quote or invalid route | Do not charge; require a new consultation when the service is available. |
+| Unavailable / malformed evidence | Return a safe verification error and close the consumed attempt as failed if no execution can take effect. Any new customer attempt requires a new consultation/quote; never restore Unpaid. |
+| Quote expired before the Unpaid -> Submitted claim, or route is invalid | Do not charge; require a new consultation when the service is available. Passing the original quote deadline after a valid claim is not a verification failure. |
 
 - Processor atomically prevents concurrent or already successful payments for
   the same bill key across quotes and clients, without exposing another client's
@@ -182,29 +245,34 @@ with the company are outside this application.
 
 ### QR-005: List Quotes (QUOTE-05)
 
-Provide owner-only history with lifecycle, service, and created-date filters,
-stable newest-first ordering with ID tie-breaker, and bounded pagination (default
+Provide an owner-only customer quote list with lifecycle, service, and
+created-date filters, stable newest-first ordering with ID tie-breaker, and bounded pagination (default
 20, maximum 100). Reject invalid bounds/ranges. Return immutable total/currency,
 expiry, safe reference summary, and the owner's associated payment status/ID.
-An empty list succeeds. Reads never initiate external calls or payment.
+An empty list succeeds. Exclude permanently consumed quotes from this customer
+list and do not redisplay their payment summaries, regardless of later success,
+failure, expiry, or refund. Retain the backend records and payment association
+for recovery/audit. Reads never initiate external calls or payment. Existing
+listing now applies this exclusion; owned detail/status retains the stored
+snapshot for read-only recovery/audit.
 
-### QR-006: Cancel Before Submission (QUOTE-06)
+### QR-006: Quote Cancellation Out of Scope (QUOTE-06)
 
-- Only an unpaid, unsubmitted quote can be cancelled. Repeated cancellation is
-  idempotent; retain history and consumed inquiry. Cancellation is not a refund.
-- Pay and Cancel must compete for one atomic durable transition. If Cancel wins,
-  no submission can be issued. If Pay wins, cancellation is blocked while any
-  submission can still take effect, even if no local PaymentId is saved.
-- Persist attempt ID, package fingerprint, and version before dispatch. Workers
-  resume the same intent and cannot dispatch a cancelled/unclaimed intent. A
-  stale lease or lookup returning not found does not release a dispatched attempt.
-- Release a dispatched attempt only after Processor durably records a terminal
-  non-acceptance for that attempt and rejects delayed replays. Otherwise continue
-  recovery; never report cancellation while a delayed request could be accepted.
+Explicit quote cancellation was removed from scope on 2026-11-05. The customer
+may leave the payment summary without a backend mutation; the quote retains its
+original five-minute deadline. If never submitted, it can still be paid before
+expiry if its other checks pass. No cancellation endpoint or Pay/Cancel race
+workflow is required. Preserve this ID and existing Cancelled history/enum
+values for compatibility; do not renumber requirements
+or rewrite historical records.
+
+Leaving the summary after Pay does not stop an accepted or uncertain submission.
+Submission ownership, fencing, idempotency, and recovery remain required by
+QR-008. Payment-execution cancellation is a separate PAY-05 product decision.
 
 ### QR-007: Consult Again (QUOTE-07)
 
-After expiry, invalidation, cancellation, or a definitive unsuccessful payment,
+After expiry, invalidation, or a definitive unsuccessful payment,
 the client explicitly consults again and creates a new quote from a new eligible
 inquiry. The client can re-enter its data. There is no automatic refresh,
 predecessor/replacement chain, or additional replacement-approval endpoint.
@@ -217,10 +285,21 @@ After confirmed refund, a new attempt also requires fresh unpaid-bill evidence.
 - Persist transitions before external effects; use separate stable charge,
   notification, and refund keys. Recover by ClientId + SourceQuoteId even without
   local PaymentId. Processor acceptance and bill-key reservation are atomic.
-- Identical submissions return the same payment; changed package/card conflicts.
+- Technical redelivery resumes or returns the original intent/result, including
+  while no PaymentId exists. It never permits another customer Pay action or
+  changes the quote back to Unpaid. Changed package/card conflicts.
   Stale callbacks/responses cannot regress terminal state or repeat a side effect.
-- Processor owns restart recovery. Persist attempts, versions, external references,
+- PayableServices owns restart recovery for durable submission intents; Processor
+  owns recovery of accepted payment executions. Persist attempts, versions, external references,
   retry counters/schedule, and safe errors. Never hold SQL locks during HTTP calls.
+- Persist attempt ID, package fingerprint, and version before dispatch. Only the
+  current durably claimed intent can dispatch; workers resume that same intent.
+  A stale lease or lookup returning not found does not release a dispatched attempt.
+- Close a dispatched attempt as non-accepted only after Processor durably
+  records terminal non-acceptance for that attempt and rejects delayed replays.
+  Otherwise continue recovery. Closing it can permit a fresh inquiry/new quote
+  once bill-level barriers allow; the original quote is permanently consumed.
+  Leaving the summary does not revoke submission.
 
 | Durable execution situation | Client payment status | Next permitted work |
 | --- | --- | --- |
@@ -233,19 +312,26 @@ After confirmed refund, a new attempt also requires fresh unpaid-bill evidence.
 
 Operational attention is metadata on the unresolved payment, not false success
 or failure. Preserve clear refund status because money was already charged.
-Before execution exists, expiry, changed bill, unavailable verification, unsupported
-integration, and cancellation blocked are ordinary operation errors, not separate
-approval/freshness payment workflows. Public errors need stable codes and safe
-messages; keep transport schemas in their API/gRPC sources during implementation.
+Expiry before submission, changed bill, unavailable verification, unsupported
+integration, and unresolved submission return stable operation errors with the
+stored quote status. They do not create extra approval/freshness workflows or
+make a consumed quote reusable. Public errors need safe messages; keep transport
+schemas in their API/gRPC sources during implementation.
 
 ## Acceptance Scenarios
 
 1. Nested Composite sums each monetary leaf once; pricing/key Strategies select
    their respective rules deterministically. Test cycles, discounts, rounding,
    overflow, leading zeroes, key-field changes, and Strategy-version compatibility.
-2. A USD 102 quote created at 10:00 expires at 10:05. At 10:04 it can be accepted
-   after verification; at exactly 10:05 new acceptance fails. A payment accepted
-   at 10:04 continues after 10:05. A 12-minute card registration requires requery.
+2. A USD 102 Unpaid quote created at 10:00 expires at 10:05. A server claim at
+   10:04:59 atomically persists Submitted and its intent. Verification and Processor
+   acceptance at 10:05:02 may continue under the same approved snapshot and fresh
+   bill checks; the quote never becomes Expired. At exactly 10:05, an unclaimed
+   Unpaid quote rejects Pay without starting external work. Technical redelivery
+   of the earlier valid claim resumes its original intent after the deadline.
+   A 12-minute card registration without prior submission requires a new inquiry.
+   An expiry update racing with Pay must produce one atomic winner: Expired or
+   Submitted. An expiry worker must never overwrite a successful Submitted claim.
 3. Bill and stored price unchanged: one Pay causes one USD 102 charge, company
    acknowledgment for the USD 100 bill, then success with no extra approval.
 4. Company NOT OK after charge: one full USD 102 refund. Pending/failed/unknown
@@ -260,10 +346,21 @@ messages; keep transport schemas in their API/gRPC sources during implementation
 8. Concurrent quotes/clients for one bill cannot create duplicate local payments.
    Successful and unresolved executions remain protected despite stale company balance.
 9. Lost Processor response/local commit is recovered by source quote ID after
-   expiry. Cancel/Pay races, delayed dispatch, stale workers, and restarts preserve
-   a single winner; a not-found lookup never proves a delayed submission impossible.
-10. Owner-only list/detail/cancel, atomic inquiry consumption, immutable historical
-    reads, new inquiry after expiry, and no payment caused by card registration.
+   expiry. Concurrent Pay requests, delayed dispatch, stale workers, and restarts
+   preserve a single submission; a not-found lookup never proves a delayed
+   submission impossible. Leaving the summary does not revoke submitted work.
+10. Owner-only list/detail, atomic inquiry consumption, immutable historical
+    reads, new inquiry after expiry, and no payment caused by card registration
+    or by leaving the summary. An abandoned quote keeps its original deadline.
+11. The first valid Pay atomically persists Submitted plus consumption and intent
+    before external work, and removes that summary from the customer quote list.
+    Success, verification/card failure, passing the original quote deadline,
+    lost response, and refund never restore it to Unpaid. Direct requests and technical redelivery
+    cannot start another attempt or select a different card for that consumed
+    quote. A permitted later customer attempt always uses a new inquiry/quote.
+    Crossing the original deadline during verification or handoff cannot expire
+    or cancel a valid Submitted intent; independent operation failures still use
+    their normal failure/recovery rules.
 
 Use deterministic clocks and isolated mutable company fixtures. The mock must
 support stable bill-key evidence, external payment, notification OK/NOT OK,
@@ -274,19 +371,22 @@ SQL concurrency, restart recovery, and failure injection as well as unit tests.
 ## Delivery and Compatibility
 
 1. Implement Composite/pricing/key Strategies and persist their evidence, exact
-   five-minute expiry, list/cancel, and ordinary new-inquiry/new-quote behavior.
+   five-minute expiry, target quote statuses/permanent consumption, customer-list
+   exclusion of consumed quotes, and ordinary new-inquiry/new-quote behavior.
 2. Extend provider-neutral bill verification and post-charge notification/status
    contracts with distinct service and total amounts. Validate mock capabilities;
    real adapters must demonstrate idempotency, lookup, acknowledgment/rejection,
    and refund recovery before enabling this flow.
-3. Coordinate submission recovery, duplicate protection, and acceptance expiry
-   across PayableServices and Processor. Implement charge -> notify -> complete
+3. Coordinate the atomic server-side Pay deadline, bound submission evidence,
+   duplicate protection, and post-deadline acceptance/recovery across PayableServices
+   and Processor. Revise the current execution expiry validator together with
+   that handoff. Implement charge -> notify -> complete
    or refund with durable transitions and exclusive compensation ownership.
 4. Introduce an execution-flow version or drain old active executions before
    cutover. Never resume a company-first payment using the new order. Coordinate
    Worker refund messages/status updates so they cannot duplicate compensation.
 5. Preserve old quote/inquiry snapshots. Unexecuted legacy quotes without the new
-   identity/expiry contract become non-payable and require a new inquiry; do not
+   identity/submission contract become non-payable and require a new inquiry; do not
    bind them to today's bill or reopen expired records. Existing executions keep
    their original evidence/flow. Represent old flat components as a legacy flat
    snapshot (or presentation-only group), with unavailable Strategy evidence
@@ -296,8 +396,9 @@ SQL concurrency, restart recovery, and failure injection as well as unit tests.
 
 ## Out of Scope
 
-Automatic refresh, linked replacements, additional approval screens, multi-service
-carts, partial payments/refunds, currency conversion, recurring automatic payment,
+Explicit quote cancellation (QUOTE-06), automatic refresh, linked replacements,
+additional approval screens, multi-service carts, partial payments/refunds,
+currency conversion, recurring automatic payment,
 company settlement/transfers, reconciliation processing, card-registration redesign,
 and production mobile UI implementation. Full compensation refund for company
 rejection is explicitly in scope.

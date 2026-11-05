@@ -39,21 +39,29 @@ currency rules determine whether it can be used.
 ## Company-First Quote Execution
 
 The flow below is current implementation. The accepted
-[quote/payment flow](quote-review-and-payment.md) now proposes five-minute quotes
-and fresh bill verification followed by card charge, company notification, and
+[quote/payment flow](quote-review-and-payment.md) now proposes five-minute expiry
+only while Unpaid. A timely server-side Submitted claim permanently consumes
+the quote; fresh bill verification and Processor acceptance can continue after
+its original deadline. The target then uses card charge, company notification, and
 success on OK or full card refund on definitive NOT OK. Notification transfers
 no funds; later settlement is outside this app. Unknown outcomes require
-reconciliation, not guessed failure. Quote expiry does not stop accepted work.
+reconciliation, not guessed failure. Original quote expiry does not stop submitted
+or accepted work; fresh evidence and independent operation policies still apply.
 Implement the related [Quotes requirement](../requirements/quotes.md) across
 the affected contexts and coordinate Worker refunds before switching execution
 order; the company-first diagram below remains the implemented baseline.
+Single-use submission is already implemented: a timely durable Submitted claim,
+new authenticated RPC, and Processor acceptance/rejection record bind one card
+and immutable package. Original quote expiry does not block this handoff;
+leased PayableServices recovery resumes the same intent after restart. This
+changes acceptance/recovery only; the company-first operation order below remains.
 
 ```text
 Authenticated client
   -> PayableServices: create immutable quote
   -> PayableServices: confirm quote with stored-card ID
   -> authenticated Processor gRPC
-      -> validate package, expiry, total, idempotency, and card ownership
+      -> replay recorded outcome or validate timely bound claim, total, and card
       -> persist Payment + snapshot + retry policy
       -> check card readiness with operator
           -> definitive decline: fail; create a new quote to retry

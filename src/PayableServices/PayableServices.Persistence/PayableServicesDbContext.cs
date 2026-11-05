@@ -51,6 +51,13 @@ public sealed class PayableServicesDbContext(DbContextOptions<PayableServicesDbC
 
         modelBuilder.Entity<Quote>(entity =>
         {
+            entity.Property(x => x.SubmittedAt).HasConversion(v => v, v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : (DateTime?)null);
+            entity.Property(x => x.SubmissionLeaseUntil).HasConversion(v => v, v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : (DateTime?)null);
+            entity.Property(x => x.SubmissionNextAttemptAt).HasConversion(v => v, v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : (DateTime?)null);
+            entity.Property(x => x.SubmissionCompletedAt).HasConversion(v => v, v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : (DateTime?)null);
+            entity.Property(x => x.SubmissionFingerprint).HasMaxLength(64);
+            entity.HasIndex(x => x.SubmissionId).IsUnique().HasFilter("[SubmissionId] IS NOT NULL");
+            entity.HasIndex(x => new { x.SubmissionNextAttemptAt, x.SubmissionLeaseUntil });
             entity.Property(x => x.CreatedAt).HasConversion(v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
             entity.Property(x => x.ExpiresAt).HasConversion(v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
             entity.HasIndex(x => x.InquiryId).IsUnique().HasFilter("[InquiryId] IS NOT NULL");

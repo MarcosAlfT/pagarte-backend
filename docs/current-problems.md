@@ -97,13 +97,18 @@ idempotency, callbacks, default concurrency/rollback, restart recovery, legacy
 migration, removal/payment ordering, and original-integration Worker refunds.
 It uses synthetic providers and does not close real dLocal/mobile acceptance.
 
+The claimed-submission suite now runs the actual PayableServices execution client
+against Processor gRPC and SQL. It verifies workload rejection/success, concurrent
+delivery, post-deadline acceptance, and durable rejection after card eligibility
+changes. PayableServices HTTP/SQL tests separately cover claims, failed commits,
+response fencing, migration, and API-restart recovery. This is not one complete
+public quote-HTTP through Processor runtime test or real-provider acceptance.
+
 The repository still needs database-backed and transport-level coverage for:
 
 - Full authenticated quote confirmation/status refresh through live Processor
-  gRPC and its SQL persistence, beyond the existing HTTP adapter/validator coverage.
-- Quote-execution workload authentication rejection and success; the card
-  boundary now has both.
-- Concurrent duplicate confirmations against SQL Server.
+  gRPC and SQL in one public-API runtime bridge beyond the independently tested
+  quote HTTP/SQL and actual handoff-client gRPC/SQL boundaries.
 - Restart recovery and row-version contention between dispatcher instances.
 - Real provider contract fixtures for company status/rollback and dLocal
   readiness/charge reconciliation.
@@ -113,7 +118,8 @@ The repository still needs database-backed and transport-level coverage for:
 Quote confirmation and execution-status authentication are implemented. A
 local AppHost run verified authenticated HTTP quote creation with a real
 Keycloak token and SQL Server persistence on 2026-10-19. Repeatable automated
-transport coverage for confirmation and status refresh remains open.
+public quote-HTTP-to-Processor transport coverage remains open; the claimed
+submission acceptance/auth/concurrency gRPC boundary is now independently tested.
 
 ## 5. Execution Package Carries Company Connection Data
 
@@ -162,16 +168,26 @@ The historical verification below does not close the newer
 [Quotes requirement](requirements/quotes.md). Owned quote history is implemented;
 detail/list/creation replay derive Expired at the stored deadline without writes.
 Explicit execution refresh now discovers Processor state by source quote ID even
-without local PaymentId, including after expiry. Missing/unavailable execution
-does not release a potentially dispatched submission. Durable submission intent,
-confirmation-time recovery before expiry rejection, and restart recovery remain open.
-Five-minute expiry, cancellation/submission coordination, Strategy-defined bill
-keys, and fresh bill verification remain pending. Current execution also calls
+without local PaymentId, including after expiry. Durable single-use submission,
+one-minute lease fencing, ten-second restart recovery scans, five-minute Unpaid
+expiry, and consumed-summary exclusion are now implemented. Processor records
+acceptance or rejection durably; unknown/missing results do not release a consumed
+quote. Strategy-defined bill keys and fresh bill verification remain pending.
+Current execution still calls
 the company before charging; the revised target charges first and then either
 confirms on company OK or refunds the full charge on definitive NOT OK. Unknown
 company/charge/refund outcomes need durable recovery and exclusive refund
 ownership across Processor and Worker. No company settlement is in scope;
 see the [accepted target flow](flows/quote-review-and-payment.md).
+Explicit quote cancellation (QUOTE-06) was removed from scope on 2026-11-05;
+it is not missing implementation. Existing Cancelled history is preserved.
+Pay now persists Submitted with its only intent before external work. Recorded
+rejection leaves PaymentFailed, never Unpaid. Recovery belongs to the original
+submission; a later eligible customer attempt requires a new quote.
+The accepted expiry boundary is the atomic server-side Unpaid -> Submitted claim,
+not Processor acceptance. Bound submission evidence and coordinated validator
+changes allow acceptance/recovery after the original quote deadline. That does
+not implement the still-missing fresh bill checks or cross-quote duplicate barrier.
 
 The following items were rechecked against the working tree on 2026-09-13:
 

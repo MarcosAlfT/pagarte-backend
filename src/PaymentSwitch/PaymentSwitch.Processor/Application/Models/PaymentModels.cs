@@ -35,7 +35,9 @@ public sealed record ConfirmedQuoteExecution(
 	long TotalMinorUnits,
 	string Currency,
 	IReadOnlyCollection<ConfirmedQuoteComponent> Components,
-	IReadOnlyCollection<ConfirmedQuoteReference> ReferenceValues);
+	IReadOnlyCollection<ConfirmedQuoteReference> ReferenceValues,
+	Guid? SubmissionId = null,
+	DateTime? SubmittedAt = null);
 
 public enum PaymentExecutionResultStatus
 {
@@ -55,7 +57,8 @@ public sealed record PaymentExecutionResult(
 	string? ErrorCode,
 	string? ErrorMessage,
 	bool Replayed,
-	bool Final);
+	bool Final,
+	bool SubmissionRecorded = false);
 
 public sealed class PaymentExecutionOptions
 {

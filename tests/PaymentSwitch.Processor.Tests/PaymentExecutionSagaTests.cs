@@ -43,8 +43,11 @@ public sealed class PaymentExecutionSagaTests
 			continuation,
 			catalog,
 			Options.Create(new PaymentExecutionOptions()),
-			clock, new FakeCardMutationScope());
-		var execution = CreateExecution(foreignCard.Id, clock.UtcNow);
+			clock, new FakeCardMutationScope(), new FakeQuoteSubmissions());
+		var execution = CreateExecution(foreignCard.Id, clock.UtcNow) with
+        {
+            QuoteExpiresAt = clock.UtcNow.AddMinutes(5), SubmissionId = Guid.NewGuid(), SubmittedAt = clock.UtcNow
+        };
 
 		var result = await useCase.ExecuteAsync(execution);
 
@@ -299,6 +302,14 @@ public sealed class PaymentExecutionSagaTests
 		public Task UpdateAsync(Payment candidate, CancellationToken cancellationToken = default) =>
 			Task.CompletedTask;
 	}
+
+    private sealed class FakeQuoteSubmissions : IQuoteSubmissionRepository
+    {
+        private readonly Dictionary<Guid, QuoteSubmissionOutcome> outcomes = [];
+        public Task<QuoteSubmissionOutcome?> GetAsync(Guid id, CancellationToken ct) =>
+            Task.FromResult(outcomes.GetValueOrDefault(id));
+        public void Add(QuoteSubmissionOutcome outcome) => outcomes.Add(outcome.SourceQuoteId, outcome);
+    }
 
 	private sealed class FakeCardGateway(
 		List<string> calls,

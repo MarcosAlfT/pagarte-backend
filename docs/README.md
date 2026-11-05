@@ -28,15 +28,17 @@ is explicitly marked as proposed.
 
 - [Authentication](flows/authentication.md)
 - [Quote Lifecycle](flows/quote-lifecycle.md)
-- [Quote Review, Expiry, and Payment Confirmation](flows/quote-review-and-payment.md) - accepted target flow; implementation pending.
+- [Quote Review, Expiry, and Payment Confirmation](flows/quote-review-and-payment.md) - accepted target; submission/expiry implemented, bill verification/charge-first execution pending.
 - [Payment Lifecycle](flows/payment-lifecycle.md)
 - [Card Registration and Removal](flows/card-registration.md)
 
 ## Requirements and Acceptance
 
-- [Quotes](requirements/quotes.md) - complete QUOTE-01 through QUOTE-08 with
-  Composite/Strategy pricing and business keys, five-minute expiry, and charge-first
-  company confirmation with full refund on rejection.
+- [Quotes](requirements/quotes.md) - active quote transactions with Composite/Strategy
+  pricing and business keys, permanent consumption at Pay, five-minute expiry
+  only while Unpaid,
+  and charge-first company confirmation
+  with full refund on rejection. QUOTE-06 (explicit cancellation) is out of scope.
 - [Payment Methods](requirements/payment-methods.md) - scope, status, and acceptance rules.
 - [Payment-Method Acceptance Tests](../tests/PaymentSwitch.Processor.Tests/README.md) -
   configuration, manual fixtures, and verification evidence.

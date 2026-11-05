@@ -26,6 +26,16 @@
 Keep current implementation facts separate from proposed architecture. Do not
 describe a proposed boundary as implemented until the code follows it.
 
+## Quote and Payment Rules
+
+- Before changing quote or payment lifecycle behavior, read
+  [the Quotes requirement](docs/requirements/quotes.md) and
+  [the accepted quote/payment decision](docs/decisions/0005-resumable-quotes-and-payment-revalidation.md),
+  together with the relevant context and flow documents.
+- Use those documents as the source of accepted business rules. Keep their
+  implementation status explicit; do not duplicate the detailed lifecycle
+  rules in agent instructions or skills.
+
 ## Collaboration
 
 - Prefer the repository's existing patterns over inventing new ones.
