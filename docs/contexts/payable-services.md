@@ -81,9 +81,12 @@ Verified client -> ClientProfiles identity resolution -> inquiry reservation
   creation; quote expiry is CreatedAt + five minutes, independent of inquiry
   expiry. Identical creation retries return the same quote; a new attempt
   requires a new inquiry.
+- The Development key strategy snapshots company, external service, account
+  number with leading zeroes, provider billing period, and strategy version.
+  A payable quote requires all four identity values. The reservation key uses
+  the canonical values and stays stable across compatible strategy versions.
 - Legacy services without `RequiresInquiry` retain configured-amount quoting.
-  The existing company-first Processor saga remains in place; charge-first
-  notification/refund and fresh bill verification are pending work.
+  Configured amounts have no authoritative bill verification.
 - Detail, creation replay, and history derive Expired for an Unpaid quote with
   no local PaymentId at its stored deadline, without changing the row. Processing
   and final states retain their lifecycle. Display expiry is not proof that an
@@ -99,8 +102,14 @@ Verified client -> ClientProfiles identity resolution -> inquiry reservation
   Only the matching lease can apply its response; terminal results never reopen.
 - Original quote expiry never rejects the claimed intent. Same-card technical
   redelivery returns/resumes that one result; another card conflicts. A recorded
-  Processor rejection sets PaymentFailed, never Unpaid. A missing payment or RPC
-  outage stays pending, including on the explicit status endpoint.
+  Processor rejection finalizes the quote as PaymentFailed, Invalidated, or
+  NoLongerDue. A missing payment or RPC outage stays pending, including on
+  the explicit status endpoint.
+- Verification uses a new provider operation key, checks the original route
+  and exact bill/service amount/currency, and persists the evidence separately
+  from the creation inquiry and the immutable submission. Recovery looks up
+  existing execution first and obtains fresh evidence if Processor requires it
+  before the first company payment.
 - `QuoteSubmissionRecoveryService` scans up to 100 due intents every ten seconds.
   Fresh scopes and leased claims resume pending dispatch/status with the exact
   persisted package. SQL stores retry count, next attempt, lease, and final result.
@@ -108,7 +117,7 @@ Verified client -> ClientProfiles identity resolution -> inquiry reservation
 ## Data Ownership
 
 `PayableServicesDb` contains catalogue state, `AmountInquiries`, quotes, lines,
-reference snapshots, and single-use submission evidence/result/schedule on the
+reference snapshots, bill identity and verification, and submission evidence/result/schedule on the
 quote row. Unique filtered indexes protect `InquiryId` and `SubmissionId`.
 `IUnitOfWork` owns commits; repositories stage writes. SQL transaction-owned
 application locks serialize catalogue import/approval and inquiry/quote work
@@ -130,17 +139,13 @@ across API instances. The inquiry table retains keys for its lifetime.
 
 ## Change Guidance
 
-Remaining work in the accepted [Quotes requirement](../requirements/quotes.md)
-includes Composite/Strategy pricing, service-specific bill keys, fresh bill
-verification and cross-quote duplicate protection. The accepted
-[target flow](../flows/quote-review-and-payment.md) uses charge-first company
-confirmation/full refund; that execution change is pending. Single-use submission,
-fixed five-minute Unpaid expiry, customer filtering, and leased recovery are
-implemented above; they do not establish the missing provider capabilities.
-Deploy Processor's new RPC/migration before exposing the new PayableServices
-release and stop/drain older PayableServices instances at cutover. Unexecuted
-legacy quotes become Expired without submission evidence. Legacy accepted
-payments remain recoverable. Downgrade is blocked once consumed quotes exist.
+Composite pricing, live company verification contracts, and charge-first
+confirmation/full refund remain pending. See the [Quotes requirement](../requirements/quotes.md)
+and [target flow](../flows/quote-review-and-payment.md).
+Deploy Processor's migration and bill-aware RPC before cutting over
+PayableServices. Unsubmitted inquiry-backed legacy quotes without bill evidence
+become Invalidated. Previously accepted work remains recoverable. The migrations
+block downgrade when it would discard consumed submissions or bill evidence.
 Explicit quote cancellation is out of scope. Leaving the summary causes no
 backend mutation or submission revocation; existing Cancelled history remains.
 

@@ -30,9 +30,9 @@ The implemented [quote submission lifecycle](quotes.md) sets a fixed five-minute
 Unpaid window from quote creation, replacing the inherited inquiry-expiry cap.
 Creation still requires fresh inquiry evidence. A timely server-side Submitted
 claim permanently consumes the quote; Processor acceptance/recovery can continue
-after its original deadline. Fresh payment-time bill verification, Strategy-selected
-bill identity, and post-charge acknowledgment remain pending additional mock and
-application contracts. The execution saga currently remains company-first.
+after its original deadline. The Development provider supplies a billing period
+for the company/service/account/period key and supports a fresh inquiry within
+Pay. Post-charge acknowledgment is pending. Current execution is company-first.
 
 Pagarte shall complete the Service Catalogue and Amount Inquiry section of
 the transaction inventory. Because external companies are not available yet,

@@ -74,8 +74,10 @@ those decisions and supplies stable, operation-specific idempotency keys.
 `ExternalConnections.CompanyInquiries` implements Application-owned catalogue,
 amount-inquiry, and trusted connection-configuration interfaces. The adapter
 uses configured endpoints/API keys, disables redirects, applies a five-second
-HTTP timeout, parses signed 64-bit USD minor units, and rejects malformed evidence.
-PayableServices further validates identity, references, timestamps, and expiry.
+HTTP timeout, parses signed 64-bit minor units and provider billing period,
+and rejects malformed evidence. PayableServices validates currency, identity,
+references, timestamps, and expiry. Creation expects USD. At verification a
+different well-formed currency invalidates the quoted bill.
 Read-only inquiry timeouts normalize to `TemporarilyUnavailable`; balance evidence
 is absent for failures. Latency and timeout counters use .NET metrics.
 Catalogue parsing/transport failure yields no snapshot, preserving local state.
@@ -84,14 +86,16 @@ outside Development. Card-operator mock use is also restricted to Development.
 
 ## Change Guidance
 
-The accepted [Quotes requirement](../requirements/quotes.md) proposes fresh
-bill-key/status/amount evidence and post-charge company notification with stable
-idempotency and status lookup. Keep service amount separate from full card total:
+Fresh bill verification uses the existing inquiry adapter with a new operation
+key. The accepted [Quotes requirement](../requirements/quotes.md) also calls for
+post-charge company notification with stable idempotency and status lookup.
+Keep service amount separate from full card total:
 USD 100 bill plus USD 2 fee means a USD 102 charge and a USD 100 bill confirmation.
 Notification transfers no funds. Normalize matching OK, definitive NOT OK, and
 unknown/transient outcomes so Processor can complete, refund, or reconcile.
 Refund/status contracts must support full-charge recovery without duplicate
-refunds. These capabilities are pending; price/key Strategies stay in PayableServices.
+refunds. Post-charge notification and compensation contracts are pending.
+Price and key strategies belong to PayableServices.
 
 Use the existing factory/resolver and central integration registry. Processor pins
 provider/account/environment/version/credential identity; Worker loads it read-only.

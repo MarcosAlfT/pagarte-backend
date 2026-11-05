@@ -281,6 +281,8 @@ public sealed class PaymentExecutionSagaTests
 
 	private sealed class FakePaymentRepository(Payment payment) : IPaymentRepository
 	{
+		public Task<BillReservationStatus> CheckBillReservationAsync(string billKey, DateTime checkedAt, CancellationToken cancellationToken) =>
+			Task.FromResult(BillReservationStatus.Available);
 		public Task<Payment?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
 			Task.FromResult<Payment?>(id == payment.Id ? payment : null);
 

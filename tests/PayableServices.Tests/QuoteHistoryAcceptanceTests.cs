@@ -176,7 +176,7 @@ public sealed class QuoteHistoryAcceptanceTests
         Assert.Single(rig.Execution.Results);
         Assert.Equal(1, rig.Execution.ConfirmCalls);
         Assert.Equal(3, rig.Execution.StatusCalls);
-        Assert.Equal(1, rig.Provider.Calls);
+        Assert.Equal(2, rig.Provider.Calls);
         await rig.InDb(async db => Assert.Equal(accepted.PaymentId, (await db.Quotes.SingleAsync(q => q.Id == id)).PaymentId));
     }
 

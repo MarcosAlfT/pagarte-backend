@@ -26,6 +26,10 @@ public sealed record ExecutionAmountComponent(
 
 public sealed record ExecutionReferenceValue(string Key, string Value);
 
+public sealed record BillVerification(string? ErrorCode, string? OperationKey = null,
+    string? ProviderInquiryId = null, string? ObservedBillKey = null, long? AmountMinorUnits = null,
+    string? Currency = null, DateTime? CheckedAt = null, DateTime? ExpiresAt = null);
+
 public sealed record QuoteExecutionPackage(
 	string ClientId,
 	Guid SourceQuoteId,
@@ -52,7 +56,9 @@ public sealed record QuoteExecutionPackage(
 	IReadOnlyCollection<ExecutionAmountComponent> Components,
 	IReadOnlyCollection<ExecutionReferenceValue> ReferenceValues,
 	Guid? SubmissionId = null,
-	DateTime? SubmittedAt = null);
+	DateTime? SubmittedAt = null,
+	string? BillKey = null,
+	BillVerification? BillVerification = null);
 
 public sealed record ConfirmQuoteResult(
 	bool Accepted,

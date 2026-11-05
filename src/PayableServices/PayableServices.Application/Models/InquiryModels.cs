@@ -10,7 +10,8 @@ public sealed record ProviderInquiryRequest(string Provider, string ExternalServ
 public sealed record ProviderInquiryResult(InquiryOutcome Outcome, string? ProviderInquiryId = null,
     string? ExternalServiceCode = null, IReadOnlyDictionary<string, string>? References = null,
     long? AmountMinorUnits = null, string? Currency = null, DateTime? ResultAt = null,
-    DateTime? ExpiresAt = null, DateTime? DueDate = null, string? ErrorCode = null);
+    DateTime? ExpiresAt = null, DateTime? DueDate = null, string? ErrorCode = null,
+    string? BillingPeriod = null);
 public sealed record InquiryDto(Guid Id, Guid ServiceId, string Outcome,
     IReadOnlyDictionary<string, string> References, long? AmountMinorUnits, string? Currency,
     string? ProviderInquiryId, DateTime CreatedAt, DateTime? ProviderResultAt,

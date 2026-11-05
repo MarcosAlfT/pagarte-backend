@@ -5,6 +5,8 @@ namespace PayableServices.Domain.Entities;
 public sealed class Quote
 {
     public Guid? InquiryId { get; set; }
+    public string? BillIdentityJson { get; set; }
+    public string? BillVerificationJson { get; private set; }
     public Guid Id { get; set; }
     public string ClientId { get; set; } = string.Empty;
     public Guid ServiceId { get; set; }
@@ -86,6 +88,12 @@ public sealed class Quote
     }
 
     public bool OwnsSubmissionLease(Guid leaseId) => SubmissionCompletedAt is null && SubmissionLeaseId == leaseId;
+
+    public void RecordBillVerification(Guid leaseId, string json)
+    {
+        if (!OwnsSubmissionLease(leaseId)) throw new InvalidOperationException("Submission lease is stale.");
+        BillVerificationJson = json;
+    }
 
     public void FinishSubmissionWork(Guid leaseId, string? resultJson, bool final, DateTime utcNow)
     {

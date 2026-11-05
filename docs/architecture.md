@@ -186,21 +186,18 @@ The Processor saga migration requires legacy active payments and pending
 
 ## Detailed Documentation
 
-The accepted [Quotes requirement](requirements/quotes.md) and
-[target flow](flows/quote-review-and-payment.md) propose Composite/Strategy
-pricing and business-key selection and fresh bill verification. These remain
-pending. The revised target charges the card before notifying the
-company: OK completes payment; definitive NOT OK requires a full card refund.
-Notification transfers no funds; later company settlement is outside this app.
-These changes are not implemented in the runtime map above. PayableServices
-keeps quote/pricing ownership; Processor owns execution and compensation, with
-Worker refund coordination to prevent duplicate refunds.
-Five-minute Unpaid expiry, permanent consumption at Pay, customer-list filtering,
-leased restart recovery, and the bound post-deadline handoff are implemented.
-Processor retains the company-first saga; the submission protocol is not the
-charge-first/bill-verification delivery. Migrate/deploy Processor before the new
-PayableServices cutover. Unexecuted legacy quotes cannot acquire invented claim
-authority; accepted legacy payments retain their original evidence/order.
+PayableServices owns five-minute Unpaid expiry, permanent consumption at Pay,
+customer-list filtering, leased recovery, and fresh bill verification for the
+Development company. Processor accepts the bound post-deadline handoff and
+reserves the bill key atomically across clients and quotes. Migrate and deploy
+Processor before the PayableServices cutover. Legacy accepted payments retain
+their original evidence and execution order.
+
+Composite pricing and charge-first execution are pending. The accepted target
+charges the card before company notification. A definitive rejection requires
+a full refund coordinated between Processor and Worker. Later company settlement
+is outside this app. See the [Quotes requirement](requirements/quotes.md) and
+[target flow](flows/quote-review-and-payment.md).
 
 See the [documentation index](README.md), [Quote Lifecycle](flows/quote-lifecycle.md),
 and [Payment Lifecycle](flows/payment-lifecycle.md).

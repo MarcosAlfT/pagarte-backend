@@ -30,6 +30,7 @@ commit. Concurrent HTTP calls exercise SQL locks and unique indexes.
 | QUOTE-03, QUOTE-04, QUOTE-05 | Verified-client quote history, owner isolation, all lifecycle/service/date filters, UTC offsets/inclusive bounds, stable ID ties/pages, bounded/invalid pagination, safe summaries, effective expiry shared with detail/creation replay, and no provider or execution calls from reads. |
 | Quote execution recovery | Injected local commit failure after the execution probe accepts, source-quote lookup without local PaymentId after expiry, same payment recovery, foreign-ID hiding, and unchanged local state on not-found/outage. |
 | Single-use submission / QUOTE-04 | Commit Submitted/card/server time/package before dispatch; concurrent replay and card conflicts, consumed-list exclusion, exact expiry, late acceptance, durable rejection, stale-response fencing, failed commits, API restart, and legacy migration. |
+| Bill verification | Stable account/period identity, fresh operation key and persisted evidence, changed identity/amount/currency, zero balance, malformed evidence, disabled route, and legacy quotes without identity. |
 
 Run only the new slice with
 `dotnet test tests/PayableServices.Tests/PayableServices.Tests.csproj --filter "FullyQualifiedName~QuoteHistoryAcceptanceTests|FullyQualifiedName~QuoteSubmissionAcceptanceTests"`.
@@ -38,7 +39,7 @@ results. PayableServices lease fencing is tested over HTTP/SQL, while the probe
 does not exercise Processor gRPC/SQL acceptance or saga execution.
 The separate Processor `QuoteSubmissionGrpcTests` run the actual handoff client
 against authenticated gRPC/SQL for acceptance, rejection, concurrency, and timing.
-Bill keys/verification and charge-first confirmation/refund remain unimplemented.
+Charge-first confirmation and refund remain pending.
 Explicit quote cancellation (QUOTE-06) is out of scope; no cancellation endpoint
 or Pay/Cancel acceptance scenario is required. Existing Cancelled history stays.
 Single-use submission and customer filtering are implemented. Tests hold the

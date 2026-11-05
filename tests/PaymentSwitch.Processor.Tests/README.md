@@ -15,11 +15,13 @@ identity resolution, and SQL migrations/constraints. Explicit recovery calls rep
 RabbitMQ/background loops. A separate per-test provider journal survives host restarts.
 
 `QuoteSubmissionGrpcTests` runs the actual PayableServices execution client over
-workload-authenticated SubmitClaimedQuote gRPC and SQL acceptance/rejection
-records. It verifies late acceptance of a timely claim, invalid timestamps,
+workload-authenticated SubmitClaimedQuote and SubmitVerifiedBill gRPC and SQL
+acceptance/rejection records. It verifies late acceptance of a timely claim, invalid timestamps,
 concurrent delivery, unchanged rejection after card eligibility changes, and
-blocking new execution through legacy ConfirmQuote. This is submission protocol
-coverage, not bill-key verification or charge-first execution acceptance.
+blocking new execution through legacy ConfirmQuote. Bill tests cover cross-client
+reservation while in flight and after success, stale evidence at acceptance and
+before company payment, and fresh verification following reservation release.
+Charge-first execution acceptance remains pending.
 
 ## Local Runtime Configuration
 
@@ -154,7 +156,7 @@ compatibility, live recovery, or mobile/issuer UI. Those remain in
 PayableServices tests, nine security tests, and seven money tests passed.
 Only isolated test databases were migrated. New quote submission evidence and
 acceptance/rejection outcomes block destructive downgrade. The company-first
-saga is retained; bill-key verification and charge-first refund work remain pending.
+saga was used in this run. The bill verification cases above cover subsequent work.
 
 2026-11-03: 97 Processor/payment-method tests passed. After final full-response
 hardening, 32 focused dLocal/configuration tests passed again. AppHost built; EF found

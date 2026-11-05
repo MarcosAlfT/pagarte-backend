@@ -2,10 +2,11 @@
 
 ## Status
 
-Accepted revised target; implementation pending. This replaces the previous
-resumable-freshness/replacement proposal. The [Quotes requirement](../requirements/quotes.md)
-is authoritative. The [current quote flow](quote-lifecycle.md) and
-[current payment flow](payment-lifecycle.md) describe the implemented baseline.
+Accepted revised target. The current quote and payment flows document the
+implemented single-use submission, Development bill verification and reservation,
+and company-first execution. Composite pricing and the charge-first flow below
+remain pending. See the [Quotes requirement](../requirements/quotes.md),
+[current quote flow](quote-lifecycle.md), and [current payment flow](payment-lifecycle.md).
 
 ## Customer Flow
 

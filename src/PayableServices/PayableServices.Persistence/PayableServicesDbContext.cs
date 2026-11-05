@@ -42,6 +42,7 @@ public sealed class PayableServicesDbContext(DbContextOptions<PayableServicesDbC
             entity.Property(x => x.Provider).HasMaxLength(100);
             entity.Property(x => x.ExternalServiceCode).HasMaxLength(100);
             entity.Property(x => x.ProviderInquiryId).HasMaxLength(200);
+            entity.Property(x => x.BillingPeriod).HasMaxLength(7);
             entity.Property(x => x.Currency).HasMaxLength(3);
             entity.Property(x => x.ErrorCode).HasMaxLength(100);
             entity.HasIndex(x => new { x.ClientId, x.IdempotencyKey }).IsUnique();

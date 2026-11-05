@@ -89,12 +89,14 @@ public sealed class CompanyInquiryAdapter(IHttpClientFactory clients, IConfigura
             if (outcome is not (InquiryOutcome.AmountDue or InquiryOutcome.NothingDue)) return Failure(outcome);
             var amount = root.GetProperty("amount_minor").GetInt64();
             var currency = root.GetProperty("currency").GetString();
-            if (currency != inquiry.Currency || currency != "USD" || (outcome == InquiryOutcome.AmountDue ? amount <= 0 : amount != 0))
+            if (currency is not { Length: 3 } || currency.Any(c => c is < 'A' or > 'Z') ||
+                (outcome == InquiryOutcome.AmountDue ? amount <= 0 : amount != 0))
                 return Failure(InquiryOutcome.InvalidProviderResponse);
             var references = root.GetProperty("references").EnumerateObject().ToDictionary(x => x.Name, x => x.Value.GetString()!, StringComparer.Ordinal);
             return new(outcome, root.GetProperty("inquiry_id").GetString(), root.GetProperty("service_code").GetString(),
                 references, amount, currency, Utc(root.GetProperty("result_at")), Utc(root.GetProperty("expires_at")),
-                root.TryGetProperty("due_date", out var due) && due.ValueKind != JsonValueKind.Null ? Utc(due) : null);
+                root.TryGetProperty("due_date", out var due) && due.ValueKind != JsonValueKind.Null ? Utc(due) : null,
+                BillingPeriod: root.TryGetProperty("billing_period", out var period) ? period.GetString() : null);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         { Timeouts.Add(1); return Failure(InquiryOutcome.TemporarilyUnavailable); }

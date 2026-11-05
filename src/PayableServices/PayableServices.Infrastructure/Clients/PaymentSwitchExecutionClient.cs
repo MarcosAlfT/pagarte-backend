@@ -26,13 +26,34 @@ public sealed class PaymentSwitchExecutionClient(
 			Snapshot = MapSnapshot(package)
 		};
 
-        var response = package.SubmissionId is { } submissionId && package.SubmittedAt is { } submittedAt
-            ? await client.SubmitClaimedQuoteAsync(new SubmitClaimedQuoteRequest
+        if (package.SubmissionId is not { } submissionId || package.SubmittedAt is not { } submittedAt)
+            return MapResponse(await client.ConfirmQuoteAsync(request, CreateHeaders(), cancellationToken: cancellationToken));
+
+        var submission = new SubmitClaimedQuoteRequest
+        {
+            Quote = request, SubmissionId = submissionId.ToString(), SubmittedAt = submittedAt.ToString("O")
+        };
+        if (package.BillVerification is not { } verification)
+            return MapResponse(await client.SubmitClaimedQuoteAsync(submission, CreateHeaders(), cancellationToken: cancellationToken));
+
+        return MapResponse(await client.SubmitVerifiedBillAsync(new SubmitVerifiedBillRequest
+        {
+            Submission = submission,
+            BillKey = package.BillKey ?? string.Empty,
+            Verification = new BillVerificationEvidence
             {
-                Quote = request, SubmissionId = submissionId.ToString(), SubmittedAt = submittedAt.ToString("O")
-            }, CreateHeaders(), cancellationToken: cancellationToken)
-            : await client.ConfirmQuoteAsync(request, CreateHeaders(), cancellationToken: cancellationToken);
-		return MapResponse(response);
+                ErrorCode = verification.ErrorCode ?? string.Empty,
+                ProviderInquiryId = verification.ProviderInquiryId ?? string.Empty,
+                ObservedBillKey = verification.ObservedBillKey ?? string.Empty,
+                CheckedAt = verification.CheckedAt?.ToString("O") ?? string.Empty,
+                ExpiresAt = verification.ExpiresAt?.ToString("O") ?? string.Empty,
+                ServiceAmount = new Money
+                {
+                    MinorUnits = verification.AmountMinorUnits ?? 0,
+                    CurrencyCode = verification.Currency ?? string.Empty
+                }
+            }
+        }, CreateHeaders(), cancellationToken: cancellationToken));
 	}
 
 	public async Task<ConfirmQuoteResult> GetStatusAsync(

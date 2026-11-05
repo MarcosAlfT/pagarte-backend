@@ -146,7 +146,9 @@ public sealed class ConfirmedQuoteValidator(ICurrencyCatalog currencyCatalog)
 			ReferenceValues = execution.ReferenceValues
 				.OrderBy(reference => reference.Key, StringComparer.Ordinal)
 		};
-		var bytes = execution.SubmissionId is null && execution.SubmittedAt is null
+		var bytes = execution.BillKey is not null
+            ? JsonSerializer.SerializeToUtf8Bytes(new { execution.SubmissionId, execution.SubmittedAt, execution.BillKey, Snapshot = canonical })
+            : execution.SubmissionId is null && execution.SubmittedAt is null
             ? JsonSerializer.SerializeToUtf8Bytes(canonical)
             : JsonSerializer.SerializeToUtf8Bytes(new { execution.SubmissionId, execution.SubmittedAt, Snapshot = canonical });
 		return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();

@@ -81,6 +81,9 @@ public sealed class TestRig : IAsyncDisposable
     public Guid ServiceId { get; private set; }
     public Guid RouteId { get; private set; }
 
+    public void SetBill(string account, string period, long amount, string currency = "USD") =>
+        mock.Services.GetRequiredService<MockCompany.Api.MockResponses>().SetBill("ELEC-EC", account, new(period, amount, currency));
+
     public static async Task<TestRig> CreateAsync(bool activate = true)
     {
         var rig = new TestRig();

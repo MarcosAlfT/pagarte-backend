@@ -53,18 +53,20 @@ order; the company-first diagram below remains the implemented baseline.
 Single-use submission is already implemented: a timely durable Submitted claim,
 new authenticated RPC, and Processor acceptance/rejection record bind one card
 and immutable package. Original quote expiry does not block this handoff;
-leased PayableServices recovery resumes the same intent after restart. This
-changes acceptance/recovery only; the company-first operation order below remains.
+leased PayableServices recovery resumes the same intent after restart.
 
 ```text
 Authenticated client
   -> PayableServices: create immutable quote
   -> PayableServices: confirm quote with stored-card ID
+  -> for an inquiry-backed quote, verify the original unpaid bill with a fresh operation key
   -> authenticated Processor gRPC
       -> replay recorded outcome or validate timely bound claim, total, and card
       -> persist Payment + snapshot + retry policy
+      -> reserve the verified bill key in the same transaction as acceptance
       -> check card readiness with operator
           -> definitive decline: fail; create a new quote to retry
+      -> if evidence is stale, wait for fresh evidence before the first company payment
       -> pay company service using service code and reference values
           -> definitive rejection: fail without charging card
           -> unknown: reconcile or retry with the same idempotency key
@@ -72,12 +74,13 @@ Authenticated client
           -> success: complete
           -> retryable failure: persist schedule and retry
           -> unknown: reconcile; at cap require manual intervention
-          -> definitive/exhausted retryable failure: roll back company now
+          -> definitive failure: roll back company now
+          -> exhausted retryable failure for a bill-backed payment: manual review
       -> rollback company for the full service payment
           -> success: finish CompanyRolledBack
           -> retryable/unknown: persist retry state
           -> definitive/cap: require manual intervention
-  -> PayableServices records Paid, PaymentFailed, or Processing
+  -> PayableServices records Paid, PaymentFailed, Invalidated, NoLongerDue, or Processing
 ```
 
 Processor's scheduler polls durable `NextAttemptAt` state. Each execution gets a
@@ -92,6 +95,10 @@ the external call.
   fingerprint.
 - Identical confirmation calls return the existing payment; conflicting reuse
   is rejected.
+- One active reservation per bill key covers all clients and quote IDs.
+  Successful or uncertain work holds it. Failure before the first company
+  operation, definitive rejection of that first operation, or confirmed company
+  rollback releases it. A new attempt needs verification after release.
 - Company payment, card charge, and rollback use separate stable idempotency
   keys.
 - Attempt caps, interval, counters, next attempt, external references, and

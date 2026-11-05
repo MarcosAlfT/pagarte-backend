@@ -127,6 +127,11 @@ namespace PaymentSwitch.Processor.Infrastructure
 				entity.HasKey(e => e.Id);
 				entity.Property(e => e.ClientId).IsRequired();
 				entity.Property(e => e.PackageFingerprint).IsRequired().HasMaxLength(64);
+				entity.Property(e => e.BillKey).HasMaxLength(64);
+				entity.HasIndex(e => e.BillKey).IsUnique()
+					.HasFilter("[BillKey] IS NOT NULL AND [BillReservationReleased] = 0");
+				entity.HasIndex(e => new { e.BillKey, e.ProcessedAt })
+					.HasFilter("[BillKey] IS NOT NULL AND [BillReservationReleased] = 1");
 				entity.Property(e => e.ServiceName).IsRequired().HasMaxLength(200);
 				entity.Property(e => e.CountryCode).IsRequired().HasMaxLength(2);
 				entity.Property(e => e.RouteType).IsRequired().HasMaxLength(100);

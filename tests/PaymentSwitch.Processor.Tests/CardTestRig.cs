@@ -44,9 +44,12 @@ public sealed class CardTestFaults : SaveChangesInterceptor
 	public bool FailRemovalCommit;
 	public bool FailReviewCommit;
 	public bool FailDefaultCommit;
+	public Action? BeforePaymentInsert;
 	public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
 		InterceptionResult<int> result, CancellationToken cancellationToken = default)
 	{
+		if (eventData.Context!.ChangeTracker.Entries<Payment>().Any(e => e.State == EntityState.Added))
+			BeforePaymentInsert?.Invoke();
 		if (FailReviewCommit && eventData.Context!.ChangeTracker.Entries<CardReviewOperation>().Any(e => e.State == EntityState.Modified && e.Entity.CompletedAt != null))
 		{
 			FailReviewCommit = false;
@@ -232,6 +235,12 @@ public sealed class CardTestRig : IAsyncDisposable
 		return await scope.ServiceProvider.GetRequiredService<AcceptConfirmedQuoteUseCase>().ExecuteAsync(execution);
 	}
 
+	public async Task ContinuePayment(Guid paymentId)
+	{
+		using var scope = Services.CreateScope();
+		await scope.ServiceProvider.GetRequiredService<ContinuePaymentExecutionUseCase>().ExecuteAsync(paymentId);
+	}
+
 	public async Task<HttpResponseMessage> Notify(Guid sessionId, string eventId, string integrationId = "mock-a", bool valid = true, DateTime? timestamp = null)
 	{
 		using var client = Client(null);
@@ -282,6 +291,7 @@ public sealed class CardTestCompany : ICompanyPaymentGateway
 {
 	public bool Pause;
 	public int Calls;
+	public PaymentOperationOutcome Outcome = PaymentOperationOutcome.Succeeded;
 	public readonly TaskCompletionSource Entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
 	public readonly TaskCompletionSource Release = new(TaskCreationOptions.RunContinuationsAsynchronously);
 	public async Task<PaymentOperationResult> PayServiceAsync(Payment payment, CancellationToken ct = default)
@@ -289,7 +299,7 @@ public sealed class CardTestCompany : ICompanyPaymentGateway
 		Interlocked.Increment(ref Calls);
 		Entered.TrySetResult();
 		if (Pause) await Release.Task.WaitAsync(TimeSpan.FromSeconds(20), ct);
-		return new(PaymentOperationOutcome.Succeeded, "synthetic-company-payment", null, null);
+		return new(Outcome, Outcome == PaymentOperationOutcome.Succeeded ? "synthetic-company-payment" : null, null, null);
 	}
 	public Task<PaymentOperationResult> ReconcilePaymentAsync(Payment payment, CancellationToken ct = default) => Task.FromResult(new PaymentOperationResult(PaymentOperationOutcome.Succeeded, "synthetic-company-payment", null, null));
 	public Task<PaymentOperationResult> RollbackAsync(Payment payment, CancellationToken ct = default) => Task.FromResult(new PaymentOperationResult(PaymentOperationOutcome.Succeeded, "synthetic-rollback", null, null));
