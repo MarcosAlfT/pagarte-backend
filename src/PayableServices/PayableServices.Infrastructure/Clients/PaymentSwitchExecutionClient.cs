@@ -45,6 +45,7 @@ public sealed class PaymentSwitchExecutionClient(
                 ErrorCode = verification.ErrorCode ?? string.Empty,
                 ProviderInquiryId = verification.ProviderInquiryId ?? string.Empty,
                 ObservedBillKey = verification.ObservedBillKey ?? string.Empty,
+                BillingPeriod = verification.BillingPeriod ?? string.Empty,
                 CheckedAt = verification.CheckedAt?.ToString("O") ?? string.Empty,
                 ExpiresAt = verification.ExpiresAt?.ToString("O") ?? string.Empty,
                 ServiceAmount = new Money
@@ -137,6 +138,8 @@ public sealed class PaymentSwitchExecutionClient(
 				ExecutionStatus.Declined => QuoteExecutionStatus.Declined,
 				ExecutionStatus.RollbackPending => QuoteExecutionStatus.RollbackPending,
 				ExecutionStatus.Failed => QuoteExecutionStatus.Failed,
+				ExecutionStatus.RefundPending => QuoteExecutionStatus.RefundPending,
+				ExecutionStatus.Refunded => QuoteExecutionStatus.Refunded,
 				ExecutionStatus.ManualIntervention => QuoteExecutionStatus.ManualIntervention,
 				_ => QuoteExecutionStatus.Processing
 			},

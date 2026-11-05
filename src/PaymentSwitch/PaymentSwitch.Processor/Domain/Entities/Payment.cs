@@ -2,7 +2,7 @@ using PaymentSwitch.Messaging;
 
 namespace PaymentSwitch.Processor.Domain.Entities;
 
-public sealed class Payment
+public sealed partial class Payment
 {
 	public const string StaleBillVerification = "BILL_VERIFICATION_STALE";
 	public string? BillKey { get; private set; }
@@ -10,12 +10,12 @@ public sealed class Payment
 	public DateTime? BillVerificationExpiresAt { get; private set; }
 	public bool BillReservationReleased { get; private set; }
 	public bool NeedsBillVerification => BillKey is not null && Status == PaymentTransactionStatus.CardReady &&
-		CompanyPaymentAttempts == 0 && ErrorCode == StaleBillVerification;
+		CompanyPaymentAttempts == 0 && ChargeAttempts == 0 && ErrorCode == StaleBillVerification;
 
 	public void SetBillVerification(string billKey, string json, DateTime expiresAt, DateTime utcNow)
 	{
 		if (BillKey is not null && (!NeedsBillVerification || BillKey != billKey))
-			throw new InvalidOperationException("Bill verification can only be refreshed before company payment.");
+			throw new InvalidOperationException("Bill verification can only be refreshed before execution starts.");
 		BillKey = billKey;
 		BillVerificationJson = json;
 		BillVerificationExpiresAt = expiresAt;
@@ -90,6 +90,7 @@ public sealed class Payment
 	public ICollection<PaymentReferenceValue> ReferenceValues { get; set; } = [];
 
 	public bool IsFinal => Status is PaymentTransactionStatus.Completed
+		or PaymentTransactionStatus.Compensated
 		or PaymentTransactionStatus.Failed
 		or PaymentTransactionStatus.CompanyRolledBack
 		or PaymentTransactionStatus.ManualIntervention;
@@ -242,7 +243,7 @@ public sealed class Payment
 	public void BeginCardCharge(DateTime utcNow)
 	{
 		RequireStatus(
-			PaymentTransactionStatus.CompanyPaid,
+			ChargeFirst ? PaymentTransactionStatus.CardReady : PaymentTransactionStatus.CompanyPaid,
 			PaymentTransactionStatus.ChargeRetryScheduled,
 			PaymentTransactionStatus.ChargeOutcomeUnknown);
 		Status = PaymentTransactionStatus.ChargingCard;
@@ -255,6 +256,7 @@ public sealed class Payment
 	{
 		RequireStatus(PaymentTransactionStatus.ChargeOutcomeUnknown);
 		Status = PaymentTransactionStatus.ChargingCard;
+		if (ChargeFirst) ChargeAttempts++;
 		NextAttemptAt = utcNow.AddSeconds(RetryIntervalSeconds);
 		ClearError(utcNow);
 	}
@@ -283,6 +285,7 @@ public sealed class Payment
 
 	public void MarkCompleted(string operatorPaymentId, DateTime utcNow)
 	{
+		if (ChargeFirst) throw new InvalidOperationException("Company acknowledgment is required.");
 		RequireStatus(PaymentTransactionStatus.ChargingCard, PaymentTransactionStatus.ChargeOutcomeUnknown);
 		OperatorPaymentId = operatorPaymentId;
 		Status = PaymentTransactionStatus.Completed;

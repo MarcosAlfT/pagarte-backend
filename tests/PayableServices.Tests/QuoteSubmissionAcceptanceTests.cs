@@ -369,6 +369,27 @@ public sealed class QuoteSubmissionAcceptanceTests
     private static Task<HttpResponseMessage> Pay(HttpClient client, Guid quote, Guid card) =>
         client.PostAsJsonAsync($"/api/quotes/{quote}/confirm", new { creditCardId = card });
 
+    [Fact]
+    public async Task A_consumed_quote_projects_pending_and_confirmed_compensation_without_returning_to_the_list()
+    {
+        await using var rig = await TestRig.CreateAsync();
+        using var client = rig.Client();
+        var quoteId = (await CreateQuote(rig, client)).GetProperty("id").GetGuid();
+        var pending = new ConfirmQuoteResult(true, Guid.NewGuid(), "execution-reference", QuoteExecutionStatus.RefundPending,
+            null, null, false, false, true);
+        rig.Execution.ConfirmOverride = (_, _) => Task.FromResult(pending);
+        var submitted = await TestRig.Data(await Pay(client, quoteId, Guid.NewGuid()));
+        Assert.Equal("RefundPending", submitted.GetProperty("status").GetString());
+        Assert.Equal("RefundPending", (await TestRig.Data(await client.GetAsync($"/api/quotes/{quoteId}"))).GetProperty("status").GetString());
+
+        rig.Execution.Results[(TestRig.Owner, quoteId)] = pending with { Status = QuoteExecutionStatus.Refunded, Final = true };
+        var recovered = await TestRig.Data(await client.GetAsync($"/api/quotes/{quoteId}/execution"));
+        Assert.Equal("Refunded", recovered.GetProperty("status").GetString());
+        Assert.Equal("Refunded", (await TestRig.Data(await client.GetAsync($"/api/quotes/{quoteId}"))).GetProperty("status").GetString());
+        Assert.Empty((await TestRig.Data(await client.GetAsync("/api/quotes"))).GetProperty("quotes").EnumerateArray());
+        Assert.Equal(1, rig.Execution.ConfirmCalls);
+    }
+
     private static async Task<JsonElement> CreateQuote(TestRig rig, HttpClient client, string account = "10000001")
     {
         var inquiry = await TestRig.Data(await rig.Inquire(client, account));

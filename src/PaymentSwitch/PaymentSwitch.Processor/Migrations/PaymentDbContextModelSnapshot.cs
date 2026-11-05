@@ -480,6 +480,10 @@ namespace PaymentSwitch.Processor.Migrations
                     b.Property<string>("BillVerificationJson")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("BillingPeriod")
+                        .HasMaxLength(7)
+                        .HasColumnType("nvarchar(7)");
+
                     b.Property<string>("CardChargeIdempotencyKey")
                         .IsRequired()
                         .HasMaxLength(42)
@@ -491,6 +495,9 @@ namespace PaymentSwitch.Processor.Migrations
                     b.Property<int>("ChargeAttempts")
                         .HasColumnType("int");
 
+                    b.Property<bool>("ChargeFirst")
+                        .HasColumnType("bit");
+
                     b.Property<string>("ClientId")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
@@ -499,6 +506,10 @@ namespace PaymentSwitch.Processor.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("CompanyNotificationEndpoint")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<int>("CompanyPaymentAttempts")
                         .HasColumnType("int");
@@ -529,6 +540,13 @@ namespace PaymentSwitch.Processor.Migrations
                     b.Property<string>("CompanyStatusEndpoint")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("CompensationAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CompensationKey")
+                        .HasMaxLength(42)
+                        .HasColumnType("nvarchar(42)");
 
                     b.Property<string>("CountryCode")
                         .IsRequired()
@@ -581,6 +599,9 @@ namespace PaymentSwitch.Processor.Migrations
                     b.Property<int>("MaxCompanyPaymentAttempts")
                         .HasColumnType("int");
 
+                    b.Property<int>("MaxCompensationAttempts")
+                        .HasColumnType("int");
+
                     b.Property<int>("MaxRollbackAttempts")
                         .HasColumnType("int");
 
@@ -597,6 +618,10 @@ namespace PaymentSwitch.Processor.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("OperatorRefundId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("PackageFingerprint")
                         .IsRequired()
@@ -674,9 +699,6 @@ namespace PaymentSwitch.Processor.Migrations
                         .IsUnique()
                         .HasFilter("[BillKey] IS NOT NULL AND [BillReservationReleased] = 0");
 
-                    b.HasIndex("BillKey", "ProcessedAt")
-                        .HasFilter("[BillKey] IS NOT NULL AND [BillReservationReleased] = 1");
-
                     b.HasIndex("ClientId");
 
                     b.HasIndex("CreditCardId");
@@ -688,6 +710,9 @@ namespace PaymentSwitch.Processor.Migrations
                         .IsUnique();
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("BillKey", "ProcessedAt")
+                        .HasFilter("[BillKey] IS NOT NULL AND [BillReservationReleased] = 1");
 
                     b.HasIndex("NextAttemptAt", "Status");
 

@@ -20,7 +20,8 @@ public sealed class AcceptConfirmedQuoteUseCase(
 	IOptions<PaymentExecutionOptions> options,
 	IClock clock,
 	ICardMutationScope mutations,
-    IQuoteSubmissionRepository submissions)
+    IQuoteSubmissionRepository submissions,
+    IChargeFirstPaymentGateway? chargeFirstGateway = null)
 {
 	public async Task<PaymentExecutionResult> ExecuteAsync(
 		ConfirmedQuoteExecution execution,
@@ -47,6 +48,8 @@ public sealed class AcceptConfirmedQuoteUseCase(
                     {
                         var now = clock.UtcNow;
                         var billError = BillVerificationPolicy.Validate(execution, now);
+                        if (billError is null && accepted.ChargeFirst && evidence.BillingPeriod != accepted.BillingPeriod)
+                            billError = ("BILL_CHANGED", "The billing period changed. Consult again.");
                         if (billError is null)
                             accepted.SetBillVerification(execution.BillKey!, JsonSerializer.Serialize(evidence), evidence.ExpiresAt!.Value, now);
                         else if (billError.Value.Code != Payment.StaleBillVerification)
@@ -126,6 +129,9 @@ public sealed class AcceptConfirmedQuoteUseCase(
 				cancellationToken);
 			var executionOptions = options.Value;
 			var currency = currencyCatalog.GetRequired(execution.Currency);
+			var notificationEndpoint = chargeFirstGateway?.ResolveNotificationEndpoint(execution, operatorProvider);
+			if (notificationEndpoint is not null && !BillVerificationPolicy.MatchesDevelopmentBillIdentity(execution))
+				return await RejectAsync("BILL_IDENTITY_REQUIRED", "The quote has no supported billing period or account. Consult again.");
 			if (execution.BillKey is { } billKey)
 			{
 				var reservation = await paymentRepository.CheckBillReservationAsync(
@@ -174,6 +180,8 @@ public sealed class AcceptConfirmedQuoteUseCase(
 
 			if (execution.BillKey is { } key && execution.BillVerification is { } verification)
 				payment.SetBillVerification(key, JsonSerializer.Serialize(verification), verification.ExpiresAt!.Value, clock.UtcNow);
+			if (notificationEndpoint is not null)
+				payment.PinChargeFirst(notificationEndpoint, execution.BillVerification!.BillingPeriod!, executionOptions.MaxCompensationAttempts);
 
 			foreach (var component in execution.Components)
 			{

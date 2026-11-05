@@ -28,6 +28,7 @@ public sealed class CardDetachmentRepository(PaymentDbContext db) : ICardDetachm
 				|| s.CleanupState == "Pending" || s.CleanupState == "RequiresReview"), ct)) return true;
 		return await db.Payments.AnyAsync(p => matching.Select(c => c.Id).Contains(p.CreditCardId) && (!refundsSurviveDetachment ||
 			(p.Status != PaymentTransactionStatus.Completed && p.Status != PaymentTransactionStatus.Failed
-				&& p.Status != PaymentTransactionStatus.CompanyRolledBack && p.Status != PaymentTransactionStatus.Refunded)), ct);
+				&& p.Status != PaymentTransactionStatus.CompanyRolledBack && p.Status != PaymentTransactionStatus.Refunded
+				&& p.Status != PaymentTransactionStatus.Compensated)), ct);
 	}
 }

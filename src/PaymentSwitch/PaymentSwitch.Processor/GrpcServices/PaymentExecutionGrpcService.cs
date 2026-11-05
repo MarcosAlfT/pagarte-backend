@@ -38,7 +38,8 @@ public sealed class PaymentExecutionGrpcService(
                     evidence.ObservedBillKey, evidence.ServiceAmount?.MinorUnits ?? 0,
                     evidence.ServiceAmount?.CurrencyCode ?? string.Empty,
                     string.IsNullOrEmpty(evidence.CheckedAt) ? null : ParseDate(evidence.CheckedAt, "bill verification"),
-                    string.IsNullOrEmpty(evidence.ExpiresAt) ? null : ParseDate(evidence.ExpiresAt, "bill verification expiry"))
+                    string.IsNullOrEmpty(evidence.ExpiresAt) ? null : ParseDate(evidence.ExpiresAt, "bill verification expiry"),
+                    EmptyToNull(evidence.BillingPeriod))
             };
             return MapResult(await acceptConfirmedQuoteUseCase.ExecuteAsync(execution, context.CancellationToken));
         }
@@ -140,6 +141,8 @@ public sealed class PaymentExecutionGrpcService(
 				PaymentExecutionResultStatus.Declined => ExecutionStatus.Declined,
 				PaymentExecutionResultStatus.RollbackPending => ExecutionStatus.RollbackPending,
 				PaymentExecutionResultStatus.Failed => ExecutionStatus.Failed,
+				PaymentExecutionResultStatus.RefundPending => ExecutionStatus.RefundPending,
+				PaymentExecutionResultStatus.Refunded => ExecutionStatus.Refunded,
 				PaymentExecutionResultStatus.ManualIntervention => ExecutionStatus.ManualIntervention,
 				_ => ExecutionStatus.Processing
 			},

@@ -139,8 +139,9 @@ across API instances. The inquiry table retains keys for its lifetime.
 
 ## Change Guidance
 
-Composite pricing, live company verification contracts, and charge-first
-confirmation/full refund remain pending. See the [Quotes requirement](../requirements/quotes.md)
+PayableServices includes the verified billing period in the workload handoff
+and projects Processor's RefundPending and Refunded outcomes to consumed quotes.
+Composite pricing and live company verification remain pending. See the [Quotes requirement](../requirements/quotes.md)
 and [target flow](../flows/quote-review-and-payment.md).
 Deploy Processor's migration and bill-aware RPC before cutting over
 PayableServices. Unsubmitted inquiry-backed legacy quotes without bill evidence

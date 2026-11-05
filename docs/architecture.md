@@ -30,19 +30,21 @@ PayableServices.Api
 PaymentSwitch.Processor
   -> authenticates card and quote-execution workloads
   -> owns PaymentDb, card setup sessions/inbox, stored cards, payments, retry state, operators, and outbox
-  -> checks card, pays company, charges full total, and rolls back when required
+  -> pins execution mode per payment
+  -> for supported Development bills, charges, confirms with the company, or refunds in full
+  -> for company-first payments, pays the company, charges, and rolls back when required
   -> reconciles unknown outcomes and schedules durable retries
 
 PaymentSwitch.Worker
   -> consumes refund and notification work
-  -> updates refund state in PaymentDb through SQL
+  -> updates eligible legacy refund state in PaymentDb through guarded SQL
 
 MockCompany.Api (Development only)
   -> serves synthetic versioned catalogue snapshots and deterministic USD balances
 
 ExternalConnections
   -> maps company catalogue and amount-inquiry HTTP contracts
-  -> maps company payment/status/rollback HTTP contracts
+  -> maps company payment/status/rollback and bill acknowledgment HTTP contracts
   -> maps card registration/readiness/charge/status/refund operator contracts
 ```
 
@@ -57,24 +59,20 @@ Client with access token
   -> PayableServices atomically consumes the inquiry into one-service Quote snapshot
   -> client confirms with Quote ID + stored Card ID
   -> PayableServices loads the owned snapshot
-  -> authenticated workload gRPC handoff
   -> PayableServices commits Submitted + card + server claim time + immutable intent
-  -> authenticated SubmitClaimedQuote gRPC handoff
+  -> authenticate the configured-price or verified-bill gRPC handoff
   -> Processor validates timely bound claim, card ownership, totals, and idempotency
   -> Processor records one accepted Payment or immutable rejection by SourceQuoteId
   -> operator checks card readiness
       -> decline: final failure; a new attempt requires a new quote
-  -> company pays the service using service code + references
-      -> rejection: final failure without a card charge
-      -> unknown: durable reconciliation/retry
-  -> operator charges the complete quote total once
-      -> success: payment completes
-      -> retryable failure: durable retry
-      -> unknown: durable reconciliation; unsafe ambiguity goes to manual review
-      -> known final failure/cap: durable company rollback
+  -> charge-first mode: charge full total, then recover company acknowledgment
+      -> definitive rejection: refund the full charge
+  -> company-first mode: pay company, then charge full total
+      -> charge fails: roll back company when safe
   -> PayableServices refreshes execution status
       -> Completed: Quote = Paid
       -> final decline or completed rollback: Quote = PaymentFailed
+      -> compensation: Quote = RefundPending or Refunded
       -> retry, reconciliation, rollback, or manual review: Quote = Processing
 ```
 
@@ -95,7 +93,7 @@ and company rollback. See [Quote Lifecycle](flows/quote-lifecycle.md) and
 | Rich catalogue, routes, inquiries, and quotes | `PayableServices` |
 | Development catalogue and balance fixtures | `MockCompany.Api` |
 | Stored cards and payment execution | `PaymentSwitch.Processor` |
-| Company-first durable execution saga | `PaymentSwitch.Processor` |
+| Versioned execution and charge-first compensation | `PaymentSwitch.Processor` |
 | Later refund and notification work | `PaymentSwitch.Worker` |
 | Third-party contract adaptation | `ExternalConnections` |
 
@@ -129,8 +127,7 @@ longer reads Processor for this workflow. Processor does not own inquiries or qu
 - SQL Server stores context-owned state.
 - Processor uses its payment row as the durable saga schedule and concurrency
   boundary.
-- RabbitMQ carries refund and notification work; it no longer carries
-  post-charge company delivery.
+- RabbitMQ carries legacy refund and email notification work.
 - Money crosses service and message boundaries as signed 64-bit minor units plus
   an ISO currency code.
 
@@ -193,10 +190,10 @@ reserves the bill key atomically across clients and quotes. Migrate and deploy
 Processor before the PayableServices cutover. Legacy accepted payments retain
 their original evidence and execution order.
 
-Composite pricing and charge-first execution are pending. The accepted target
-charges the card before company notification. A definitive rejection requires
-a full refund coordinated between Processor and Worker. Later company settlement
-is outside this app. See the [Quotes requirement](requirements/quotes.md) and
+Charge-first execution is enabled for supported Development inquiry routes.
+Processor owns the compensation refund. Worker guards legacy refunds by persisted
+execution mode. Composite pricing and live-provider acceptance remain pending.
+See the [Quotes requirement](requirements/quotes.md) and
 [target flow](flows/quote-review-and-payment.md).
 
 See the [documentation index](README.md), [Quote Lifecycle](flows/quote-lifecycle.md),

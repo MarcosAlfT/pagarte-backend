@@ -49,7 +49,7 @@ public sealed class VerifySubmittedBillUseCase(IInquiryRepository inquiries,
                 ? "BILL_NO_LONGER_DUE"
                 : result.AmountMinorUnits != inquiry.AmountMinorUnits ? "BILL_CHANGED" : null;
         return new(error, operationKey, result.ProviderInquiryId, observed.Key, result.AmountMinorUnits,
-            result.Currency, checkedAt, expiry);
+            result.Currency, checkedAt, expiry, observed.BillingPeriod);
     }
 
     private async Task<bool> OriginalRouteIsEligibleAsync(Quote quote, string inquiryProvider, CancellationToken cancellationToken)

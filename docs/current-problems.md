@@ -15,7 +15,7 @@ Last reviewed for card-lifecycle implementation: 2026-11-03.
 | Remaining integration coverage | Partially resolved | Keep the current unit coverage and add the database-backed and transport-level scenarios listed below. |
 | Execution package carries connection data | Open | Resolve company endpoints and credentials server-side from stable route identifiers. |
 | Payment-method acceptance and recovery gaps | Open | Confirm bound dLocal setup/recovery/challenge contracts and complete live-provider/mobile acceptance. |
-| Revised quote pricing and payment execution | Open | Implement Composite pricing and charge-first company confirmation/full refund. Verify authoritative bill contracts with live companies. |
+| Revised quote pricing and payment execution | Open | Implement Composite pricing and verify live bill, acknowledgment, and compensation contracts before enabling charge-first execution beyond Development. |
 
 Seven quote-execution items have been verified as resolved and are listed at
 the end of this document.
@@ -175,12 +175,11 @@ acceptance or rejection durably; unknown/missing results do not release a consum
 quote. Development inquiry-backed quotes snapshot a Strategy-defined bill key
 and verify the bill before payment. Processor atomically reserves that key
 across quotes and clients.
-Current execution still calls
-the company before charging; the revised target charges first and then either
-confirms on company OK or refunds the full charge on definitive NOT OK. Unknown
-company/charge/refund outcomes need durable recovery and exclusive refund
-ownership across Processor and Worker. No company settlement is in scope;
-see the [accepted target flow](flows/quote-review-and-payment.md).
+Supported Development bills use charge-first execution. Processor confirms on
+matching company acknowledgment or refunds the full charge on definitive
+rejection. Processor owns compensation and Worker guards the legacy refund
+path. Live acceptance of the acknowledgment and refund contracts remains open.
+See the [accepted target flow](flows/quote-review-and-payment.md).
 Explicit quote cancellation (QUOTE-06) was removed from scope on 2026-11-05;
 it is not missing implementation. Existing Cancelled history is preserved.
 Pay now persists Submitted with its only intent before external work. Recorded
@@ -189,7 +188,7 @@ submission; a later eligible customer attempt requires a new quote.
 The accepted expiry boundary is the atomic server-side Unpaid -> Submitted claim,
 not Processor acceptance. Bound submission evidence and coordinated validator
 changes allow acceptance/recovery after the original quote deadline. Stale bill
-evidence must be refreshed before Processor starts the first company payment.
+evidence must be refreshed before Processor starts the first external payment operation.
 
 The following items were rechecked against the working tree on 2026-09-13:
 

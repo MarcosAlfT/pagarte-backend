@@ -161,7 +161,7 @@ acceptance criteria.
 | `QUOTE-04` | Expire unsubmitted quotes after five minutes | Complete | New quotes have an exact five-minute Unpaid window. The atomic Submitted claim binds server time, card, and immutable intent. Processor validates that timely claim even after expiry. SQL/HTTP/gRPC tests cover the deadline, late acceptance, fencing, restart, and legacy migration. | `PayableServices` and `PaymentSwitch.Processor` |
 | `QUOTE-05` | List a client's quotes | Complete | Owner-only summaries retain filters and bounded stable pages. Customer listing excludes consumed quotes. Reads make no provider/execution calls, and owned detail/status retains backend history. | `PayableServices` |
 | `QUOTE-06` | Cancel an unpaid quote | Out of scope | Explicit quote cancellation was removed from scope on 2026-11-05. Leaving the summary does not revoke the quote or change its deadline. No cancellation endpoint is required. Existing Cancelled values remain for historical compatibility. | `PayableServices` |
-| `QUOTE-07` | Consult again after expiry or unsuccessful payment | Partial | Manual new inquiry/quote creation, changed-bill invalidation, and protection against unresolved or successful payments are implemented with the Development company. Charge-first refund and live provider acceptance remain pending. | `PayableServices` and `PaymentSwitch.Processor` |
+| `QUOTE-07` | Consult again after expiry or unsuccessful payment | Partial | Development supports new inquiry/quote creation, changed-bill invalidation, and fresh verification after confirmed compensation. Unresolved and successful payments hold the bill reservation. Live provider acceptance remains pending. | `PayableServices` and `PaymentSwitch.Processor` |
 | `QUOTE-08` | Create a quote from a verified amount inquiry | Complete | Owned positive inquiry evidence supplies the base once through shared currency-scale conversion. Quote creation snapshots the authoritative Development bill key and atomically consumes the inquiry. | `PayableServices` |
 
 One quote currently represents one payable service and one payment attempt.
@@ -175,8 +175,8 @@ for late acceptance, concurrency, durable rejection, and workload enforcement.
 A single public quote-HTTP through Processor runtime test remains a later check.
 
 The revised requirement remains partially implemented. Composite pricing, live
-company verification contracts, and charge-first notification and full refund
-still require development. Effective
+company verification, acknowledgment, and refund contracts still require
+acceptance. Effective
 expiry and a not-found execution lookup do not prove a delayed submission is
 safe to replace. Leaving the summary after Pay does not cancel accepted or
 uncertain work. PAY-05 concerns payment-execution cancellation and retains its
@@ -195,16 +195,14 @@ independent operation policies still enforced.
 
 ## Payment Execution
 
-The rows below describe the existing company-first saga. The revised
-[Quotes requirement](requirements/quotes.md) adds pending charge-first company
-notification and full compensation refund; current Complete labels do not
-claim that the revised execution order has been delivered.
+The rows below cover the persisted company-first and Development charge-first
+execution modes. See the [Quotes requirement](requirements/quotes.md).
 
 | ID | Transaction | Status | Current implementation or missing work | Owner |
 | --- | --- | --- | --- | --- |
-| `PAY-01` | Confirm and pay a quote with a stored card | Complete | `ConfirmQuoteUseCase` durably consumes the quote and binds the card before dispatch. It checks fresh evidence for inquiry-backed bills, and technical replay resumes the original intent. Current execution is company-first. | `PayableServices` and `PaymentSwitch.Processor` |
+| `PAY-01` | Confirm and pay a quote with a stored card | Complete | `ConfirmQuoteUseCase` consumes the quote, binds the card, and checks fresh evidence for inquiry-backed bills. Processor pins execution mode and technical replay resumes the original intent. | `PayableServices` and `PaymentSwitch.Processor` |
 | `PAY-02` | Accept a payment idempotently | Complete | SourceQuoteId, SubmissionId, fingerprint, and recorded outcomes bind one execution. Processor reserves a verified bill atomically with acceptance, across different quotes and clients. | `PaymentSwitch.Processor` |
-| `PAY-03` | Execute the company-first payment saga | Complete | The saga checks card readiness, pays the company, charges the full total, reconciles unknown outcomes, and rolls back when required. | `PaymentSwitch.Processor` and `ExternalConnections` |
+| `PAY-03` | Execute the payment saga | Complete | Development charge-first payments charge the full total, then recover company acknowledgment or refund a definitive rejection. Company-first payments retain their original execution and rollback behavior. | `PaymentSwitch.Processor` and `ExternalConnections` |
 | `PAY-04` | Refresh payment execution status | Complete | Explicit status and leased background recovery use source quote ID without local PaymentId, including after expiry. A submitted intent without a found payment stays pending; restart recovery dispatches only its immutable original package. Fenced results/leases prevent stale responses reopening a quote. | `PayableServices` and `PaymentSwitch.Processor` |
 | `PAY-05` | Cancel a payment execution | Decision required | Cancellation is unsafe after an external side effect may have occurred. Valid cancellation states and compensation rules must be defined first. | `PaymentSwitch.Processor` |
 | `PAY-06` | View one completed or failed payment | Partial | Processor has `GetPaymentUseCase`, but no authenticated public HTTP transaction exposes it. | Public boundary decision required |
@@ -214,11 +212,9 @@ claim that the revised execution order has been delivered.
 
 ## Refunds and Disputes
 
-These rows describe the existing later-refund path. Automatic full-charge
-compensation for post-charge company rejection is pending revised Quotes work;
-it must coordinate Processor and Worker through one durable refund identity.
-The existing refund-retry transaction does not establish that compensation or
-unknown-refund recovery is implemented.
+These rows describe later refunds. Processor owns automatic full-charge
+compensation for supported Development payments. Worker guards its legacy
+refund path by persisted execution mode.
 
 | ID | Transaction | Status | Current implementation or missing work | Owner |
 | --- | --- | --- | --- | --- |

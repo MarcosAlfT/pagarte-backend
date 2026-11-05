@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text.Json;
 using PaymentSwitch.Processor.Application.Models;
 using PaymentSwitch.Processor.Domain.Entities;
 
@@ -6,6 +9,19 @@ namespace PaymentSwitch.Processor.Application.Services;
 internal static class BillVerificationPolicy
 {
     public const string RefreshMessage = "The bill must be verified again before payment.";
+
+    public static bool MatchesDevelopmentBillIdentity(ConfirmedQuoteExecution execution)
+    {
+        var period = execution.BillVerification?.BillingPeriod;
+        var account = execution.ReferenceValues.SingleOrDefault(reference => reference.Key == "accountNumber")?.Value;
+        if (period is not { Length: 7 } || account is not { Length: >= 8 and <= 20 } ||
+            !account.All(char.IsAsciiDigit) ||
+            !DateOnly.TryParseExact(period + "-01", "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+            return false;
+
+        var canonical = JsonSerializer.SerializeToUtf8Bytes(new[] { "mock-company", execution.ExternalServiceCode, account, period });
+        return execution.BillKey == Convert.ToHexStringLower(SHA256.HashData(canonical));
+    }
 
     public static (string Code, string Message)? Validate(ConfirmedQuoteExecution execution, DateTime utcNow)
     {

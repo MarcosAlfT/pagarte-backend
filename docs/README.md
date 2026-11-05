@@ -28,7 +28,7 @@ is explicitly marked as proposed.
 
 - [Authentication](flows/authentication.md)
 - [Quote Lifecycle](flows/quote-lifecycle.md)
-- [Quote Review, Expiry, and Payment Confirmation](flows/quote-review-and-payment.md) - accepted target with implemented submission, expiry, and Development bill verification. Charge-first execution is pending.
+- [Quote Review, Expiry, and Payment Confirmation](flows/quote-review-and-payment.md) - accepted target with implemented submission, expiry, and Development charge-first execution.
 - [Payment Lifecycle](flows/payment-lifecycle.md)
 - [Card Registration and Removal](flows/card-registration.md)
 
@@ -57,7 +57,7 @@ is explicitly marked as proposed.
 - [SQL Outbox for Post-Charge Delivery](decisions/0002-sql-outbox.md) (historical; superseded by ADR 0003)
 - [Quote Execution Saga and Legacy Quote Removal](decisions/0003-quote-execution-saga.md)
 - [Global Money Handling](decisions/0004-money-handling.md)
-- [Five-Minute Quotes and Charge-First Confirmation](decisions/0005-resumable-quotes-and-payment-revalidation.md) - revised accepted direction; implementation pending.
+- [Five-Minute Quotes and Charge-First Confirmation](decisions/0005-resumable-quotes-and-payment-revalidation.md) - accepted direction with Development execution implemented.
 
 ## Maintenance Rules
 

@@ -14,8 +14,8 @@ quote execution.
 - Payment-operator configuration and selection.
 - One payment and immutable execution snapshot per source quote.
 - Durable quote-submission acceptance/rejection outcomes.
-- Company-payment, card-readiness, final-charge, reconciliation, retry, and
-  company-rollback state transitions.
+- Card readiness, charge, company acknowledgment, compensation, reconciliation,
+  and company-first payment and rollback state transitions.
 - Persisted retry policy, attempt counters, next-attempt times, external
   references, and idempotency keys.
 - Internal gRPC implementations and the durable saga scheduler.
@@ -27,7 +27,6 @@ quote execution.
 - Customer-visible quotes or quote status.
 - Calculation of quote components or totals.
 - External credentials in execution packages.
-- Post-charge company delivery; the company is paid before final card charge.
 
 ## Runtime Boundary
 
@@ -164,10 +163,12 @@ confirmed rollback releases it. Evidence for a new
 payment must be fresh after release. If verification expires during card checks,
 Processor waits for PayableServices to refresh it before the first company payment.
 
-Charge-first execution remains pending. The target charges the card, then
-notifies the company, then completes on matching acknowledgment or refunds
-on definitive rejection. Coordinate the refund with Worker. See the
-[Quotes requirement](../requirements/quotes.md).
+Supported Development bills pin charge-first execution, the billing period,
+notification endpoint, and one compensation key on acceptance. Processor
+validates freshness before charging and commits charge evidence before notifying
+the company. It completes on matching acknowledgment or refunds the full charge
+on definitive rejection. An unknown result holds the bill reservation. Worker
+admits only matching legacy refunds. See the [Quotes requirement](../requirements/quotes.md).
 Deploy the Processor RPC and migration before PayableServices. Existing accepted
 work remains recoverable with its original evidence and execution order.
 Explicit quote cancellation is out of scope; navigating away does not stop

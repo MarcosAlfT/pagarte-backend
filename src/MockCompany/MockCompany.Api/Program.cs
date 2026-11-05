@@ -30,19 +30,85 @@ public static class Program
         app.MapPost("/payments", (HttpContext context) => Results.Ok(new { reference = "mock-payment-" + context.Request.Headers["Idempotency-Key"].ToString(), status = "SUCCEEDED" }));
         app.MapPost("/payments/rollback", () => Results.Ok(new { status = "SUCCEEDED" }));
         app.MapGet("/payments/{reference}", (string reference) => Results.Ok(new { reference, status = "SUCCEEDED" }));
+        app.MapPost("/payment-notifications", (HttpContext context, MockBillNotification request, MockResponses responses) =>
+            responses.Notify(context.Request.Headers["Idempotency-Key"].ToString(), request));
+        app.MapGet("/payment-notifications/{operationKey}", (string operationKey, MockResponses responses) =>
+            responses.NotificationStatus(operationKey));
         return app;
     }
 }
 
 public sealed record MockInquiry(string service_code, Dictionary<string, string> references, DateTime requested_at);
 public sealed record MockBill(string BillingPeriod, long AmountMinor, string Currency = "USD");
+public sealed record MockBillNotification(string bill_key, string service_code, string account_number, string billing_period,
+    long service_amount_minor, string currency, string payment_reference, string charge_reference);
 
-public sealed class MockResponses(TimeProvider clock)
+public sealed class MockResponses(TimeProvider clock, IConfiguration? configuration = null)
 {
     private readonly ConcurrentDictionary<string, (string Fingerprint, IResult Result)> results = new();
-    private readonly ConcurrentDictionary<(string Service, string Account), MockBill> bills = new();
+    private readonly string? statePath = configuration?["MockCompany:NotificationStatePath"];
+    private MockBillState state = LoadState(configuration?["MockCompany:NotificationStatePath"]);
+    private readonly object billLock = new();
 
-    public void SetBill(string service, string account, MockBill bill) => bills[(service, account)] = bill;
+    public void SetBill(string service, string account, MockBill bill)
+    {
+        lock (billLock)
+        {
+            var bills = new Dictionary<string, MockBill>(state.Bills) { [BillAddress(service, account)] = bill };
+            SaveState(state with { Bills = bills });
+        }
+    }
+
+    public IResult Notify(string operationKey, MockBillNotification payment)
+    {
+        if (string.IsNullOrWhiteSpace(operationKey) || operationKey.Length > 100 ||
+            string.IsNullOrWhiteSpace(payment.payment_reference) || string.IsNullOrWhiteSpace(payment.charge_reference) ||
+            string.IsNullOrWhiteSpace(payment.account_number) || string.IsNullOrWhiteSpace(payment.billing_period) ||
+            payment.service_amount_minor <= 0)
+            return Results.BadRequest();
+        var canonical = JsonSerializer.SerializeToUtf8Bytes(new[] { "mock-company", payment.service_code,
+            payment.account_number, payment.billing_period });
+        if (payment.bill_key != Convert.ToHexStringLower(SHA256.HashData(canonical)))
+            return Results.BadRequest();
+
+        lock (billLock)
+        {
+            if (state.Notifications.TryGetValue(operationKey, out var recorded))
+                return recorded.Payment == payment ? Acknowledgment(operationKey, recorded) : Results.Conflict();
+
+            var bill = FindBill(payment.service_code, payment.account_number);
+            var reason = bill switch
+            {
+                null => "bill_not_found",
+                _ when bill.BillingPeriod != payment.billing_period || bill.Currency != payment.currency => "bill_changed",
+                { AmountMinor: 0 } => "already_paid",
+                _ when bill.AmountMinor != payment.service_amount_minor => "bill_changed",
+                _ => null
+            };
+            var notification = new MockRecordedNotification(payment, reason);
+            var notifications = new Dictionary<string, MockRecordedNotification>(state.Notifications) { [operationKey] = notification };
+            var bills = new Dictionary<string, MockBill>(state.Bills);
+            if (reason is null) bills[BillAddress(payment.service_code, payment.account_number)] = bill! with { AmountMinor = 0 };
+            SaveState(new(bills, notifications));
+            return Acknowledgment(operationKey, notification);
+        }
+    }
+
+    private static IResult Acknowledgment(string operationKey, MockRecordedNotification notification) =>
+        Results.Ok(new
+            {
+                outcome = notification.Reason is null ? "accepted" : "rejected",
+                payment = notification.Payment,
+                reference = notification.Reason is null ? "mock-notification-" + operationKey : null,
+                reason = notification.Reason
+            });
+
+    public IResult NotificationStatus(string operationKey)
+    {
+        lock (billLock)
+            return state.Notifications.TryGetValue(operationKey, out var recorded)
+                ? Acknowledgment(operationKey, recorded) : Results.NotFound();
+    }
 
     public IResult Inquire(string key, MockInquiry request)
     {
@@ -59,11 +125,9 @@ public sealed class MockResponses(TimeProvider clock)
         // A deterministic provider-side timeout response; tests also simulate a transport cancellation.
         if (account == "10000005") return Results.StatusCode(408);
         if (account == "10000006") return Results.Ok(new { outcome = "amount_due", amount_minor = "bad", currency = "EUR" });
-        if (!bills.TryGetValue((request.service_code, account), out var bill))
-        {
-            if (account is not ("10000001" or "10000002")) return Results.NotFound();
-            bill = new("2026-10", account == "10000001" ? 12845L : 0L);
-        }
+        MockBill? bill;
+        lock (billLock) bill = FindBill(request.service_code, account);
+        if (bill is null) return Results.NotFound();
         var now = request.requested_at;
         if (now.Kind != DateTimeKind.Utc || now > clock.GetUtcNow().UtcDateTime || now > DateTime.MaxValue.AddDays(-8))
             return Results.BadRequest();
@@ -81,6 +145,42 @@ public sealed class MockResponses(TimeProvider clock)
             due_date = now.Date.AddDays(7)
         });
     }
+
+    private MockBill? FindBill(string service, string account)
+    {
+        if (service is not ("ELEC-EC" or "WATER-EC" or "NET-US")) return null;
+        if (state.Bills.TryGetValue(BillAddress(service, account), out var bill)) return bill;
+        return account is "10000001" or "10000002" ? new("2026-10", account == "10000001" ? 12845L : 0L) : null;
+    }
+
+    private static string BillAddress(string service, string account) => service + "\n" + account;
+
+    private static MockBillState LoadState(string? path) => path is not null && File.Exists(path)
+        ? JsonSerializer.Deserialize<MockBillState>(File.ReadAllText(path)) ?? throw new InvalidOperationException("Invalid mock bill state.")
+        : new(new(), new());
+
+    private void SaveState(MockBillState updated)
+    {
+        if (statePath is not null)
+        {
+            var path = Path.GetFullPath(statePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                File.WriteAllText(temporary, JsonSerializer.Serialize(updated));
+                File.Move(temporary, path, overwrite: true);
+            }
+            finally
+            {
+                if (File.Exists(temporary)) File.Delete(temporary);
+            }
+        }
+        state = updated;
+    }
+
+    private sealed record MockBillState(Dictionary<string, MockBill> Bills, Dictionary<string, MockRecordedNotification> Notifications);
+    private sealed record MockRecordedNotification(MockBillNotification Payment, string? Reason);
 }
 
 public static class MockCatalogue

@@ -65,6 +65,7 @@ public sealed class PaymentRepository(PaymentDbContext context) : IPaymentReposi
 			.Where(payment => payment.NextAttemptAt != null
 				&& payment.NextAttemptAt <= utcNow
 				&& payment.Status != PaymentSwitch.Messaging.PaymentTransactionStatus.Completed
+				&& payment.Status != PaymentSwitch.Messaging.PaymentTransactionStatus.Compensated
 				&& payment.Status != PaymentSwitch.Messaging.PaymentTransactionStatus.Failed
 				&& payment.Status != PaymentSwitch.Messaging.PaymentTransactionStatus.CompanyRolledBack
 				&& payment.Status != PaymentSwitch.Messaging.PaymentTransactionStatus.ManualIntervention)

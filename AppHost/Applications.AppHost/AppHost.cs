@@ -39,6 +39,7 @@ if (!builder.Environment.IsDevelopment()) throw new InvalidOperationException("T
 var mockCompany = builder.AddProject<Projects.MockCompany_Api>("mock-company", launchProfileName: null)
     .WithHttpEndpoint(name: "http")
     .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
+    .WithEnvironment("MockCompany__NotificationStatePath", Path.Combine(Path.GetTempPath(), "pagarte-mock-company", "bill-notifications.json"))
     .WithEnvironment("MockCompany__ApiKey", qecApiKey);
 
 // Client profiles API
@@ -50,6 +51,7 @@ var clientProfilesApi = builder.AddProject<Projects.ClientProfiles_Api>("client-
 
 // Payment switch processor
 var paymentSwitchProcessor = builder.AddProject<Projects.PaymentSwitch_Processor>("payment-switch-processor", launchProfileName: "PaymentSwitch.Processor")
+    .WaitFor(mockCompany)
     .WithEnvironment("RabbitMQ__Mode", "FromEnvironment")
     .WithEnvironment("ConnectionStrings__PagQueue", rabbitConnectionString)
     .WithEnvironment("ConnectionStrings__PaymentDb", paymentDbConnectionString)
@@ -57,6 +59,8 @@ var paymentSwitchProcessor = builder.AddProject<Projects.PaymentSwitch_Processor
     .WithEnvironment("CardOperationsAuth__ApiKey", cardOperationsKey)
     .WithEnvironment("CompanyCredentials__QEC__ApiKey", qecApiKey)
     .WithEnvironment("CompanyCredentials__MockCompany__ApiKey", qecApiKey)
+    .WithEnvironment("ChargeFirst__Enabled", "true")
+    .WithEnvironment("ChargeFirst__MockCompanyBaseUrl", mockCompany.GetEndpoint("http"))
     .WithEnvironment("PaymentMethods__TokenDigestKey", cardTokenDigestKey)
     .WithEnvironment("PaymentOperatorCallbackSecrets__mock-card", mockCardCallbackKey)
     .WithEnvironment("PaymentOperators__Integrations__mock-a__CallbackKeyReference", "mock-card")

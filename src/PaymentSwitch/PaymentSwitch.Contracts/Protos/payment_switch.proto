@@ -149,6 +149,7 @@ message BillVerificationEvidence {
   Money service_amount = 4;
   string checked_at = 5;
   string expires_at = 6;
+  string billing_period = 7;
 }
 
 message ConfirmQuoteRequest {
@@ -203,6 +204,8 @@ enum ExecutionStatus {
   EXECUTION_STATUS_ROLLBACK_PENDING = 4;
   EXECUTION_STATUS_FAILED = 5;
   EXECUTION_STATUS_MANUAL_INTERVENTION = 6;
+  EXECUTION_STATUS_REFUND_PENDING = 7;
+  EXECUTION_STATUS_REFUNDED = 8;
 }
 
 message ConfirmQuoteResponse {

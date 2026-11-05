@@ -4,7 +4,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Single-use submission, five-minute Unpaid expiry, mock bill identity and verification, cross-quote protection, and bound recovery implemented. Composite pricing and charge-first execution remain pending. |
+| Status | Single-use submission, five-minute Unpaid expiry, bill reservation, and charge-first execution with full compensation are implemented for supported Development bills. Composite pricing and live-provider acceptance remain pending. |
 | Transactions | QUOTE-01 through QUOTE-08; QUOTE-06 is out of scope; required payment-execution changes remain in scope |
 | Primary owner | PayableServices |
 | Integration owners | PaymentSwitch.Processor and ExternalConnections; coordinate refund compatibility with Worker |
@@ -37,8 +37,8 @@ with the company are outside this application.
   creation while Unpaid. A timely claim remains valid after that deadline.
   The migration preserves legacy snapshots and makes unexecuted legacy quotes
   non-payable without fabricating submission or bill evidence.
-- Current Processor execution calls the company before charging the card and
-  rolls back the company on charge failure. The new order is not implemented.
+- Eligible Development payments persist charge-first execution on acceptance.
+  Existing accepted payments and configured-price routes use company-first execution.
 - The Development company supplies an authoritative billing period. PayableServices
   snapshots the company, service, account, and period and freshly verifies that
   bill and its service amount after Pay. Processor atomically reserves the bill
@@ -187,9 +187,8 @@ The target quote statuses are distinct from payment-execution status:
 | RefundPending | The card was charged, the company definitively rejected it, and full refund is unresolved. |
 | Refunded | The operator confirmed the full refund; the consumed quote remains unusable. |
 
-Submitted and the existing Unpaid/Processing/Paid/PaymentFailed/Expired states
-are implemented by this slice. Invalidated, NoLongerDue, RefundPending, and
-Refunded quote transitions depend on the later charge-first work.
+Invalidated and NoLongerDue are implemented for inquiry-backed verification.
+RefundPending and Refunded are available for Development charge-first payments.
 Legacy Cancelled history remains non-payable. An uncertain dispatched
 submission stays unresolved until safely reconciled, rather than being declared
 Expired or reusable from the local clock alone. Freshness/operation policy can

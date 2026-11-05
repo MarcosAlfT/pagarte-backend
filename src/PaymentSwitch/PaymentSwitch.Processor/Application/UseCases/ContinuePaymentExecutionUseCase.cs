@@ -10,7 +10,8 @@ public sealed class ContinuePaymentExecutionUseCase(
 	ICardPaymentGateway cardPaymentGateway,
 	ICompanyPaymentGateway companyPaymentGateway,
 	IUnitOfWork unitOfWork,
-	IClock clock)
+	IClock clock,
+	IChargeFirstPaymentGateway? chargeFirstGateway = null)
 {
 	public async Task ExecuteAsync(
 		Guid paymentId,
@@ -28,6 +29,17 @@ public sealed class ContinuePaymentExecutionUseCase(
 			{
 				return;
 			}
+			if (payment.ChargeFirst && payment.NextAttemptAt is null) return;
+			if (payment.Status == PaymentTransactionStatus.CardReady && payment.BillKey is not null &&
+				(payment.BillVerificationExpiresAt is not { } expiresAt || expiresAt <= clock.UtcNow))
+			{
+				if (!payment.NeedsBillVerification)
+				{
+					payment.RequestBillVerification(clock.UtcNow);
+					await SaveAsync(payment, cancellationToken);
+				}
+				return;
+			}
 
 			var continueImmediately = payment.Status switch
 			{
@@ -35,6 +47,8 @@ public sealed class ContinuePaymentExecutionUseCase(
 					or PaymentTransactionStatus.CardCheckRetryScheduled
 					or PaymentTransactionStatus.CheckingCard =>
 					await CheckCardAsync(payment, cancellationToken),
+				PaymentTransactionStatus.CardReady when payment.ChargeFirst =>
+					await ChargeCardAsync(payment, cancellationToken),
 				PaymentTransactionStatus.CardReady
 					or PaymentTransactionStatus.CompanyPaymentRetryScheduled
 					or PaymentTransactionStatus.CompanyPaymentOutcomeUnknown
@@ -48,6 +62,10 @@ public sealed class ContinuePaymentExecutionUseCase(
 				PaymentTransactionStatus.RollingBackCompany
 					or PaymentTransactionStatus.RollbackRetryScheduled =>
 					await RollbackCompanyAsync(payment, cancellationToken),
+				PaymentTransactionStatus.ChargedAwaitingCompany or PaymentTransactionStatus.NotifyingCompany =>
+					await NotifyCompanyAsync(payment, cancellationToken),
+				PaymentTransactionStatus.CompensationPending or PaymentTransactionStatus.RefundingCompensation =>
+					await CompensateAsync(payment, cancellationToken),
 				_ => false
 			};
 
@@ -107,17 +125,6 @@ public sealed class ContinuePaymentExecutionUseCase(
 		Payment payment,
 		CancellationToken cancellationToken)
 	{
-		if (payment.BillKey is not null && payment.CompanyPaymentAttempts == 0 &&
-			(payment.BillVerificationExpiresAt is not { } expiresAt || expiresAt <= clock.UtcNow))
-		{
-			if (!payment.NeedsBillVerification)
-			{
-				payment.RequestBillVerification(clock.UtcNow);
-				await SaveAsync(payment, cancellationToken);
-			}
-			return false;
-		}
-
 		var firstCompanyAttempt = payment.Status == PaymentTransactionStatus.CardReady && payment.CompanyPaymentAttempts == 0;
 		PaymentOperationResult result;
 		if (payment.Status == PaymentTransactionStatus.CompanyPaymentOutcomeUnknown
@@ -205,6 +212,15 @@ public sealed class ContinuePaymentExecutionUseCase(
 		Payment payment,
 		CancellationToken cancellationToken)
 	{
+		if (payment.ChargeFirst && payment.ChargeAttempts >= payment.MaxChargeAttempts)
+		{
+			payment.MarkManualIntervention(clock.UtcNow, "CHARGE_REVIEW_REQUIRED", "The charge outcome requires operational review.");
+			await SaveAsync(payment, cancellationToken);
+			return false;
+		}
+		if (payment.ChargeFirst && payment.Status == PaymentTransactionStatus.ChargingCard)
+			payment.MarkChargeUnknown(clock.UtcNow, payment.OperatorPaymentId, "CHARGE_INTERRUPTED", "The previous charge outcome is unconfirmed.");
+
 		PaymentOperationResult result;
 		if (payment.Status == PaymentTransactionStatus.ChargeOutcomeUnknown
 			&& !string.IsNullOrWhiteSpace(payment.OperatorPaymentId))
@@ -235,9 +251,10 @@ public sealed class ContinuePaymentExecutionUseCase(
 		if (result.Outcome == PaymentOperationOutcome.Succeeded
 			&& !string.IsNullOrWhiteSpace(result.ExternalReference))
 		{
-			payment.MarkCompleted(result.ExternalReference, clock.UtcNow);
+			if (payment.ChargeFirst) payment.RecordConfirmedCharge(result.ExternalReference, clock.UtcNow);
+			else payment.MarkCompleted(result.ExternalReference, clock.UtcNow);
 			await SaveAsync(payment, cancellationToken);
-			return false;
+			return payment.ChargeFirst;
 		}
 
 		if (result.Outcome == PaymentOperationOutcome.Unknown
@@ -281,12 +298,62 @@ public sealed class ContinuePaymentExecutionUseCase(
 			return false;
 		}
 
+		if (payment.ChargeFirst)
+		{
+			payment.MarkFailed(clock.UtcNow, result.ErrorCode ?? "CARD_CHARGE_DECLINED", "The card charge was declined.");
+			await SaveAsync(payment, cancellationToken);
+			return false;
+		}
+
 		payment.BeginCompanyRollback(
 			clock.UtcNow,
 			result.ErrorCode ?? "CARD_CHARGE_FAILED",
 			result.ErrorMessage ?? "The card charge failed.");
 		await SaveAsync(payment, cancellationToken);
 		return await RollbackCompanyAsync(payment, cancellationToken);
+	}
+
+	private async Task<bool> NotifyCompanyAsync(Payment payment, CancellationToken cancellationToken)
+	{
+		if (payment.CompanyPaymentAttempts >= payment.MaxCompanyPaymentAttempts)
+		{
+			payment.AwaitCompanyAcknowledgment(clock.UtcNow);
+			await SaveAsync(payment, cancellationToken);
+			return false;
+		}
+
+		var recover = payment.CompanyPaymentAttempts != 0;
+		payment.BeginCompanyNotification(clock.UtcNow);
+		await SaveAsync(payment, cancellationToken);
+		var result = await chargeFirstGateway!.NotifyAsync(payment, recover, cancellationToken);
+		if (result.Outcome == PaymentOperationOutcome.Succeeded && result.ExternalReference is { Length: > 0 } reference)
+			payment.RecordCompanyAcknowledgment(reference, clock.UtcNow);
+		else if (result.Outcome == PaymentOperationOutcome.DefinitiveFailure)
+			payment.RequireCompensation(clock.UtcNow, result.ErrorMessage);
+		else
+			payment.AwaitCompanyAcknowledgment(clock.UtcNow);
+		await SaveAsync(payment, cancellationToken);
+		return payment.Status == PaymentTransactionStatus.CompensationPending;
+	}
+
+	private async Task<bool> CompensateAsync(Payment payment, CancellationToken cancellationToken)
+	{
+		if (payment.CompensationAttempts >= payment.MaxCompensationAttempts)
+		{
+			payment.AwaitCompensation(clock.UtcNow, requiresReview: true);
+			await SaveAsync(payment, cancellationToken);
+			return false;
+		}
+
+		payment.BeginCompensation(clock.UtcNow);
+		await SaveAsync(payment, cancellationToken);
+		var result = await chargeFirstGateway!.RefundAsync(payment, cancellationToken);
+		if (result.Outcome == PaymentOperationOutcome.Succeeded && result.ExternalReference is { Length: > 0 } refundId)
+			payment.RecordConfirmedCompensation(refundId, clock.UtcNow);
+		else
+			payment.AwaitCompensation(clock.UtcNow, result.Outcome == PaymentOperationOutcome.DefinitiveFailure);
+		await SaveAsync(payment, cancellationToken);
+		return false;
 	}
 
 	private async Task<bool> RollbackCompanyAsync(

@@ -10,5 +10,7 @@ public enum QuoteStatus
 	Processing = 5,
 	Submitted = 6,
 	Invalidated = 7,
-	NoLongerDue = 8
+	NoLongerDue = 8,
+	RefundPending = 9,
+	Refunded = 10
 }

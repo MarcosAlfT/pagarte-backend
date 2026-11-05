@@ -36,24 +36,38 @@ and declared country/currency support. A card issued outside the service
 country is not rejected merely for being foreign; operator capability and
 currency rules determine whether it can be used.
 
+## Development Charge-First Execution
+
+New inquiry-backed bills on the configured Development company and mock
+operator route pin charge-first execution at acceptance. Existing payments
+retain their recorded mode. Processor starts the first charge only with fresh
+bill evidence and a ready card.
+
+```text
+Accepted payment + reserved bill
+  -> verify readiness and freshness
+  -> persist charge attempt and charge the full quote total
+      -> unknown: recover with the same charge key or recorded operator reference
+      -> definitive decline: fail without notifying the company
+  -> persist charge evidence and notify company using the service amount
+      -> matching acknowledgment: complete and retain the bill reservation
+      -> unknown: look up or retry the original notification
+      -> matching definitive rejection: refund the full charge
+          -> unconfirmed refund: retain RefundPending and the bill reservation
+          -> confirmed refund: report Refunded and require new unpaid evidence for another attempt
+```
+
+Each operation commits its in-flight transition before contacting the provider.
+A capped unknown charge or company acknowledgment remains Processing with an
+operational error. An exhausted or definitively failed refund remains
+RefundPending with an operational error. Processor owns the refund operation
+and replays its original key. Worker accepts only eligible legacy refund work.
+
 ## Company-First Quote Execution
 
-The flow below is current implementation. The accepted
-[quote/payment flow](quote-review-and-payment.md) now proposes five-minute expiry
-only while Unpaid. A timely server-side Submitted claim permanently consumes
-the quote; fresh bill verification and Processor acceptance can continue after
-its original deadline. The target then uses card charge, company notification, and
-success on OK or full card refund on definitive NOT OK. Notification transfers
-no funds; later settlement is outside this app. Unknown outcomes require
-reconciliation, not guessed failure. Original quote expiry does not stop submitted
-or accepted work; fresh evidence and independent operation policies still apply.
-Implement the related [Quotes requirement](../requirements/quotes.md) across
-the affected contexts and coordinate Worker refunds before switching execution
-order; the company-first diagram below remains the implemented baseline.
-Single-use submission is already implemented: a timely durable Submitted claim,
-new authenticated RPC, and Processor acceptance/rejection record bind one card
-and immutable package. Original quote expiry does not block this handoff;
-leased PayableServices recovery resumes the same intent after restart.
+The company-first flow applies to payments pinned to that mode. Both modes
+bind one card and immutable submission package on a timely Pay claim.
+Leased recovery can resume that intent after the original quote deadline.
 
 ```text
 Authenticated client
@@ -137,7 +151,14 @@ cleanup states, unsupported capabilities, and the legacy-route limitation.
 
 ## Deployment Rule
 
-Before applying the Processor saga migration, use the old Worker to drain the
+Deploy the charge-first migration and updated Processor, Worker and
+PayableServices before enabling `ChargeFirst:Enabled`. AppHost enables this
+setting for the mock company and supplies `ChargeFirst:MockCompanyBaseUrl`.
+Older Worker instances must be stopped before enabling the flag. Rollback of the
+schema is blocked once charge-first payment evidence exists. Keep the original
+company endpoint and operator integration available for accepted payments.
+
+Before applying the historical company-first migration, use the old Worker to drain the
 legacy RabbitMQ `payment.request` queue, legacy payments in active statuses,
 and pending `payment.request` outbox messages. The migration checks the SQL
 states and throws instead of silently converting those in-flight operations.

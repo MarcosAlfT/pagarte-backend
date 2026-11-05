@@ -5,6 +5,7 @@ namespace PaymentSwitch.Worker.Interfaces
 {
     public interface IPaymentStatusRepository
     {
+        Task<bool> IsCurrentLegacyRefundAsync(RefundRequestMessage message, CancellationToken cancellationToken);
         Task UpdateStatusAsync(PaymentTransactionStatus status, Guid paymentId,
             string? companyReference = null, string? errorMessage = null);
         Task ScheduleRefundRetryAsync(Guid paymentId, DateTime nextRetryAt);
