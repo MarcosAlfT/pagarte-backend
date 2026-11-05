@@ -823,6 +823,47 @@ namespace PaymentSwitch.Processor.Migrations
                     b.ToTable("PaymentReferenceValues");
                 });
 
+            modelBuilder.Entity("PaymentSwitch.Processor.Domain.Entities.QuoteSubmissionOutcome", b =>
+                {
+                    b.Property<Guid>("SourceQuoteId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("PackageFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid?>("PaymentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("SubmissionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("SourceQuoteId");
+
+                    b.HasIndex("SubmissionId")
+                        .IsUnique();
+
+                    b.ToTable("QuoteSubmissionOutcomes");
+                });
+
             modelBuilder.Entity("PaymentSwitch.Processor.Domain.Entities.Service", b =>
                 {
                     b.Property<Guid>("Id")

@@ -633,6 +633,9 @@ namespace PayableServices.Persistence.Migrations
                     b.Property<Guid?>("InquiryId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int>("LifecycleVersion")
+                        .HasColumnType("int");
+
                     b.Property<Guid?>("PaymentId")
                         .HasColumnType("uniqueidentifier");
 
@@ -666,6 +669,40 @@ namespace PayableServices.Persistence.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
+                    b.Property<int>("SubmissionAttemptCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("SubmissionCompletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("SubmissionFingerprint")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid?>("SubmissionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SubmissionLeaseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("SubmissionLeaseUntil")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("SubmissionNextAttemptAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("SubmissionPackageJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SubmissionResultJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("SubmittedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("SubmittedCardId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<decimal>("TotalAmount")
                         .HasPrecision(38, 9)
                         .HasColumnType("decimal(38,9)");
@@ -684,6 +721,12 @@ namespace PayableServices.Persistence.Migrations
                         .HasFilter("[InquiryId] IS NOT NULL");
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("SubmissionId")
+                        .IsUnique()
+                        .HasFilter("[SubmissionId] IS NOT NULL");
+
+                    b.HasIndex("SubmissionNextAttemptAt", "SubmissionLeaseUntil");
 
                     b.ToTable("Quotes");
                 });

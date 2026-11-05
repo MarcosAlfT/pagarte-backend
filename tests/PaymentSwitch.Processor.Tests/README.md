@@ -14,6 +14,13 @@ TestServer runs the actual Payments HTTP/Processor gRPC routes, signed test JWTs
 identity resolution, and SQL migrations/constraints. Explicit recovery calls replace
 RabbitMQ/background loops. A separate per-test provider journal survives host restarts.
 
+`QuoteSubmissionGrpcTests` runs the actual PayableServices execution client over
+workload-authenticated SubmitClaimedQuote gRPC and SQL acceptance/rejection
+records. It verifies late acceptance of a timely claim, invalid timestamps,
+concurrent delivery, unchanged rejection after card eligibility changes, and
+blocking new execution through legacy ConfirmQuote. This is submission protocol
+coverage, not bill-key verification or charge-first execution acceptance.
+
 ## Local Runtime Configuration
 
 AppHost selects Development-only mock-a with EC/USD and synthetic removal/refund
@@ -134,6 +141,7 @@ A valid dLocal payment signature alone is not an accepted setup event.
 | Admin HTTP/gRPC/SQL | VerifiedAdmin/separate-key enforcement, audit replay/conflicts, stale-state rejection, safe retries, lost commits, and no late activation. |
 | Offline dLocal HTTP | Token-only/trusted-payer request mapping, exact-body signatures, separate accounts, strict metadata/reference checks, bounded responses/timeouts, no save retries, verified deletion, and signature tampering. |
 | Existing money movement | Full-total company-first saga; explicit PAID/SUCCESS, pending/unknown results, and mismatched charge-reference rejection. |
+| Claimed quote submission | Actual PayableServices handoff client, workload-authenticated gRPC/SQL, timely claim accepted after expiry, concurrent delivery, immutable rejection, legacy-new-execution refusal, and downgrade protection. |
 
 Mock-a/mock-b prove shared lifecycle routing within the synthetic adapter. Injected dLocal
 HTTP fixtures make no network calls and do not prove bound setup, Direct-token merchant
@@ -141,6 +149,12 @@ compatibility, live recovery, or mobile/issuer UI. Those remain in
 [Current Problems](../../docs/current-problems.md#6-payment-method-acceptance-and-recovery-gaps).
 
 ## Verification Record (Implementation Run)
+
+2026-11-04 submission slice: all 103 Processor/card/provider tests, 53
+PayableServices tests, nine security tests, and seven money tests passed.
+Only isolated test databases were migrated. New quote submission evidence and
+acceptance/rejection outcomes block destructive downgrade. The company-first
+saga is retained; bill-key verification and charge-first refund work remain pending.
 
 2026-11-03: 97 Processor/payment-method tests passed. After final full-response
 hardening, 32 focused dLocal/configuration tests passed again. AppHost built; EF found

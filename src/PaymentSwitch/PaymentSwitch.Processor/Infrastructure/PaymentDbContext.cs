@@ -15,6 +15,7 @@ namespace PaymentSwitch.Processor.Infrastructure
 		public DbSet<CardRegistrationSession> CardRegistrationSessions { get; set; }
 		public DbSet<CreditCard> CreditCards { get; set; }
 		public DbSet<Payment> Payments { get; set; }
+		public DbSet<QuoteSubmissionOutcome> QuoteSubmissionOutcomes { get; set; }
 		public DbSet<PaymentDetail> PaymentDetails { get; set; }
 		public DbSet<PaymentReferenceValue> PaymentReferenceValues { get; set; }
 		public DbSet<Service> Services { get; set; }
@@ -25,6 +26,17 @@ namespace PaymentSwitch.Processor.Infrastructure
 		protected override void OnModelCreating(ModelBuilder modelBuilder)
 		{
 			base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<QuoteSubmissionOutcome>(entity =>
+            {
+                entity.HasKey(x => x.SourceQuoteId);
+                entity.HasIndex(x => x.SubmissionId).IsUnique();
+                entity.Property(x => x.ClientId).HasMaxLength(100).IsRequired();
+                entity.Property(x => x.PackageFingerprint).HasMaxLength(64).IsRequired();
+                entity.Property(x => x.ErrorCode).HasMaxLength(100);
+                entity.Property(x => x.ErrorMessage).HasMaxLength(1000);
+                entity.Property(x => x.RecordedAt).HasConversion(v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+            });
 
 			modelBuilder.Entity<CardReviewOperation>(entity =>
 			{

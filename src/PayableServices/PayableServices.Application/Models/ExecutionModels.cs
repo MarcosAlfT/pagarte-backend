@@ -50,7 +50,9 @@ public sealed record QuoteExecutionPackage(
 	long TotalMinorUnits,
 	string Currency,
 	IReadOnlyCollection<ExecutionAmountComponent> Components,
-	IReadOnlyCollection<ExecutionReferenceValue> ReferenceValues);
+	IReadOnlyCollection<ExecutionReferenceValue> ReferenceValues,
+	Guid? SubmissionId = null,
+	DateTime? SubmittedAt = null);
 
 public sealed record ConfirmQuoteResult(
 	bool Accepted,
@@ -60,4 +62,5 @@ public sealed record ConfirmQuoteResult(
 	string? ErrorCode,
 	string? ErrorMessage,
 	bool Replayed,
-	bool Final);
+	bool Final,
+	bool SubmissionRecorded = false);

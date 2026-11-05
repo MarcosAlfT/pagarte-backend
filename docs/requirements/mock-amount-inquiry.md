@@ -26,13 +26,13 @@ are preserved and tested during quote creation.
 
 ## Objective
 
-For future quote behavior, the accepted [Quotes requirement](quotes.md)
-sets a fixed five-minute lifetime from quote creation, replacing the inherited
-inquiry-expiry cap in MAI-007/MAI-009. Creation still requires fresh inquiry
-evidence; Pay verifies the bill again. Expired/changed quotes require a new
-consultation and quote, not automatic refresh. Strategy-selected bill identity
-and post-charge company acknowledgment need additional mock contracts.
-This document's expiry/payment clauses remain the implemented baseline.
+The implemented [quote submission lifecycle](quotes.md) sets a fixed five-minute
+Unpaid window from quote creation, replacing the inherited inquiry-expiry cap.
+Creation still requires fresh inquiry evidence. A timely server-side Submitted
+claim permanently consumes the quote; Processor acceptance/recovery can continue
+after its original deadline. Fresh payment-time bill verification, Strategy-selected
+bill identity, and post-charge acknowledgment remain pending additional mock and
+application contracts. The execution saga currently remains company-first.
 
 Pagarte shall complete the Service Catalogue and Amount Inquiry section of
 the transaction inventory. Because external companies are not available yet,
@@ -328,7 +328,9 @@ and do not reserve an idempotency key.
   optional due date is independent of inquiry expiry.
 - Quote creation shall snapshot its own expiry and shall not extend the source
   inquiry's lifetime.
-- A quote created from an inquiry shall expire no later than that inquiry.
+- A newly created quote has CreatedAt + five minutes as its Unpaid deadline,
+  independently of the inquiry's earlier expiry. This does not refresh inquiry
+  evidence. A timely Submitted claim continues after that original quote deadline.
 
 ### `MAI-008` Idempotency
 

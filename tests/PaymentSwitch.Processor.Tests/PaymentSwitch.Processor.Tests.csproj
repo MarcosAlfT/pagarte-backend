@@ -16,6 +16,7 @@
     <ProjectReference Include="..\..\src\PaymentSwitch\PaymentSwitch.Processor\PaymentSwitch.Processor.csproj" />
     <ProjectReference Include="..\..\src\PaymentSwitch\PaymentSwitch.Worker\PaymentSwitch.Worker.csproj" />
     <ProjectReference Include="..\..\src\Payments\Payments.Api\Payments.Api.csproj" />
+    <ProjectReference Include="..\..\src\PayableServices\PayableServices.Infrastructure\PayableServices.Infrastructure.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />

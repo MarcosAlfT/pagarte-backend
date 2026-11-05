@@ -41,11 +41,25 @@ public sealed class ConfirmedQuoteValidator(ICurrencyCatalog currencyCatalog)
 			return "Company endpoints must be absolute HTTP or HTTPS addresses.";
 		}
 
-		if (execution.QuoteCreatedAt >= execution.QuoteExpiresAt
-			|| execution.QuoteExpiresAt < utcNow)
+		if (execution.QuoteCreatedAt >= execution.QuoteExpiresAt)
 		{
-			return "The confirmed quote is expired or has invalid timestamps.";
+			return "The confirmed quote has invalid timestamps.";
 		}
+
+        if (execution.SubmissionId is not null || execution.SubmittedAt is not null)
+        {
+            if (execution.SubmissionId is null || execution.SubmissionId == Guid.Empty)
+                return "Submission identifier is required.";
+            if (execution.SubmittedAt is not { } submittedAt ||
+                submittedAt.Kind != DateTimeKind.Utc || execution.QuoteCreatedAt.Kind != DateTimeKind.Utc ||
+                execution.QuoteExpiresAt - execution.QuoteCreatedAt != TimeSpan.FromMinutes(5) ||
+                submittedAt < execution.QuoteCreatedAt || submittedAt >= execution.QuoteExpiresAt || submittedAt > utcNow)
+                return "Submission must be a server UTC claim within the five-minute quote window.";
+        }
+        else if (execution.QuoteExpiresAt <= utcNow)
+        {
+            return "The confirmed quote is expired.";
+        }
 
 		if (!Enum.TryParse<MidpointRounding>(
 			execution.RoundingMode,
@@ -132,7 +146,9 @@ public sealed class ConfirmedQuoteValidator(ICurrencyCatalog currencyCatalog)
 			ReferenceValues = execution.ReferenceValues
 				.OrderBy(reference => reference.Key, StringComparer.Ordinal)
 		};
-		var bytes = JsonSerializer.SerializeToUtf8Bytes(canonical);
+		var bytes = execution.SubmissionId is null && execution.SubmittedAt is null
+            ? JsonSerializer.SerializeToUtf8Bytes(canonical)
+            : JsonSerializer.SerializeToUtf8Bytes(new { execution.SubmissionId, execution.SubmittedAt, Snapshot = canonical });
 		return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 	}
 

@@ -4,11 +4,12 @@
 
 This document describes current implementation. The accepted
 [review/expiry/payment flow](quote-review-and-payment.md) and
-[Quotes requirement](../requirements/quotes.md) define pending changes:
-five-minute quote expiry, Composite/Strategy pricing and business-key selection,
-and bill verification before Pay without repricing. Expired/changed quotes
-require a new consultation. Execution will charge first, then notify the company
-and complete on OK or fully refund on definitive NOT OK.
+[Quotes requirement](../requirements/quotes.md) retain pending Composite/Strategy
+pricing, bill identity/verification, cross-quote protection, and charge-first
+company acknowledgment/full refund. Current execution remains company-first.
+The five-minute Unpaid window, permanent Submitted claim, customer-list exclusion,
+and durable submission recovery are implemented. The accepted server claim must
+precede expiry; Processor acceptance and recovery may continue afterward.
 
 PayableServices is the sole customer-visible quote owner. One quote represents
 one payable service and one payment attempt.
@@ -33,12 +34,14 @@ Authenticated client
   -> finalize each amount component with ISO scale and ToEven rounding
   -> checked-sum the full positive total
   -> atomically consume inquiry and persist one immutable quote in PayableServicesDb
-  -> cap quote expiry at the effective inquiry expiry
+  -> set LifecycleVersion 1 and ExpiresAt = CreatedAt + five minutes
 ```
 
 Legacy services without `RequiresInquiry` retain configured-amount quoting.
 Inquiry-backed services reject direct quoting or supplied currency/reference
 overrides. Zero balances and failure outcomes cannot create quotes.
+Fresh inquiry evidence is required at creation; its shorter deadline does not
+shorten the new quote's five-minute Unpaid window.
 Provider minor units are converted through the shared currency scale; creation
 does not assume two decimal places. External mock feeds remain USD-only.
 
@@ -55,6 +58,9 @@ Date offsets normalize to UTC. Pagination defaults to page 1 with 20 rows;
 page size is limited to 100 and page number to 1,000,000. Invalid values,
 repeated/empty query values, and reversed date ranges return 400. Ordering is
 CreatedAt descending, then ID descending, for deterministic ties.
+The query includes only Unpaid/Expired rows with no SubmissionId or PaymentId.
+Used, failed, paid, processing, and legacy Cancelled rows never reappear in this
+customer list. Owned detail/status remains read-only access to stored history.
 
 Summaries include the immutable total, expiry, reference values, inquiry ID,
 and locally stored payment ID/lifecycle. Connection fields, credentials, and
@@ -65,8 +71,9 @@ to reconcile the payment association/state.
 Detail, history, and creation replay derive Expired for stored Unpaid quotes
 without a PaymentId at `now >= ExpiresAt`. Reads never persist this projection,
 reprice, contact the company, or call Processor. Processing and final states
-are preserved. Existing stored deadlines still apply; fixed five-minute creation
-is pending. Display expiry does not prove an uncertain submission cannot exist.
+are preserved. New creation uses five minutes; claimed submissions are never
+expired by the original deadline. Display expiry does not establish safe reuse
+of a possibly dispatched legacy execution.
 
 ## Confirmation
 
@@ -74,23 +81,31 @@ is pending. Display expiry does not prove an uncertain submission cannot exist.
 Authenticated client
   -> POST /api/quotes/{quoteId}/confirm with CreditCardId only
   -> load quote by authenticated client
-  -> reject closed or expired quote
-  -> build execution package only from the persisted snapshot
-  -> call authenticated Processor PaymentExecutionService
-  -> record returned PaymentId and current execution state
+  -> acquire the quote's SQL application lock
+  -> require unconsumed Unpaid version-1 quote and server time before ExpiresAt
+  -> commit Submitted + submission ID/time + card + immutable package/fingerprint + lease
+  -> release the SQL transaction; quote disappears from customer listing
+  -> discover existing payment by ClientId + SourceQuoteId
+  -> when absent, dispatch the same package through authenticated SubmitClaimedQuote
+  -> Processor atomically records accepted payment or immutable rejection
+  -> reacquire quote lock; only the current lease may save the result
 ```
 
 The client cannot override amount, currency, route, service code, references,
 or endpoints at confirmation.
 
-A confirmation rejected before Processor creates a payment, such as a foreign
-client's stored card, leaves the quote available for a corrected confirmation.
-Processor also rejects deleted, unverified, expired, or unsupported-market cards
-before creating a new execution. Card references and lifecycle state stay in
-Processor; see [Card Registration](card-registration.md) for removal/acceptance
-ordering and real-provider acceptance limits.
-Once an execution exists, a definitive decline closes the quote and another
-attempt requires a new quote even when all values are unchanged.
+A definitive rejection before payment creation closes the consumed quote as
+PaymentFailed. It never returns to Unpaid, even if card eligibility later changes.
+Technical same-card redelivery resumes/returns the original intent/result;
+another card conflicts. Processor validates the timely server claim, including
+the exact five-minute window, and can accept it after the original deadline.
+The legacy ConfirmQuote RPC only replays existing accepted work; it cannot
+authorize a new unclaimed payment. Card lifecycle rules remain in Processor;
+see [Card Registration](card-registration.md).
+
+The current company-first execution order is unchanged by this protocol. Fresh
+bill verification, bill-key protection, and charge-first compensation remain
+pending; this slice does not establish their provider contracts.
 
 ## Status Refresh
 
@@ -98,17 +113,30 @@ attempt requires a new quote even when all values are unchanged.
 updates the local quote. Lookup uses ClientId + SourceQuoteId even when local
 PaymentId is missing or quote evidence has expired. This recovers an accepted
 execution after its response or the local association commit was lost. It never
-dispatches a payment or revalidates the company bill. Not-found/unavailable
-results do not clear a saved association or establish safe cancellation/retry.
-Durable submission intent, automatic restart recovery, and confirmation-time
-recovery before expiry rejection remain pending.
+dispatches a payment or revalidates the company bill. For a consumed quote whose
+payment is not yet found, or whose status lookup is unavailable, it reports the
+original pending/final submission result. Unsubmitted legacy not-found remains
+an operation error. Lookup cannot release a consumed quote or reset it to Unpaid.
+
+`QuoteSubmissionRecoveryService` scans up to 100 due intents every ten seconds
+using fresh scopes. One-minute SQL leases and response fencing allow restart
+recovery without repeating a logical payment. Dispatch/status exceptions retain
+Submitted and the immutable package; transient work schedules another attempt.
+Accepted processing payments use status lookup only. Terminal results are cached
+durably, and stale leases/responses cannot overwrite them. No SQL lock spans gRPC.
 
 The local transitions are:
 
 ```text
 Unpaid
-  -> Processing       durable payment execution accepted
-  -> Expired          confirmation after expiry
+  -> Submitted        permanent atomic Pay claim before expiry
+  -> Expired          no submission claim before expiry
+
+Submitted
+  -> Processing       Processor accepted the payment
+  -> Paid             fast completion recovered or returned
+  -> PaymentFailed    Processor durably rejected the attempt without a payment
+  -> Submitted        dispatch/status unknown; recover the same intent
 
 Processing
   -> Paid             company accepted and full card charge succeeded
@@ -135,6 +163,16 @@ unresolved.
 - Identical repeats return the current payment with `replayed = true`.
 - Any different package or card for the same source quote is a conflict.
 - Database uniqueness handles concurrent duplicate confirmations.
+- Processor's QuoteSubmissionOutcomes records acceptance or final rejection by
+  unique SourceQuoteId/SubmissionId. A retry of a rejected request cannot later
+  become accepted. The RPC reports whether that outcome is durably recorded;
+  otherwise PayableServices retains pending state.
+- Unexecuted legacy unpaid quotes become Expired during migration; existing
+  snapshots/inquiry links are preserved and accepted work remains recoverable.
+  Both migrations block downgrade once submission evidence/outcomes exist.
+- Deploy Processor's new RPC and migration first, then cut over all older
+  PayableServices instances before exposing the new public Pay flow. An older
+  Processor cannot silently ignore metadata because the submission RPC is new.
 
 ## Flow Invariants
 

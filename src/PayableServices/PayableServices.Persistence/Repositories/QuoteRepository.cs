@@ -17,7 +17,8 @@ public sealed class QuoteRepository(PayableServicesDbContext dbContext) : IQuote
         CancellationToken cancellationToken = default)
     {
         var query = _dbContext.Quotes.AsNoTracking()
-            .Where(quote => quote.ClientId == clientId)
+            .Where(quote => quote.ClientId == clientId && quote.SubmissionId == null && quote.PaymentId == null &&
+                (quote.Status == QuoteStatus.Unpaid || quote.Status == QuoteStatus.Expired))
             .Select(quote => new
             {
                 Quote = quote,
@@ -65,6 +66,14 @@ public sealed class QuoteRepository(PayableServicesDbContext dbContext) : IQuote
             .Include(x => x.Items)
             .Include(x => x.ReferenceValues)
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+    public async Task<IReadOnlyCollection<Guid>> GetRecoverableSubmissionsAsync(
+        DateTime utcNow, CancellationToken cancellationToken = default) =>
+        await _dbContext.Quotes.AsNoTracking().Where(quote => quote.SubmissionId != null &&
+            quote.SubmissionCompletedAt == null && quote.SubmissionNextAttemptAt <= utcNow &&
+            (quote.SubmissionLeaseUntil == null || quote.SubmissionLeaseUntil <= utcNow))
+            .OrderBy(quote => quote.SubmissionNextAttemptAt).ThenBy(quote => quote.Id)
+            .Take(100).Select(quote => quote.Id).ToArrayAsync(cancellationToken);
 
     public Task<Quote> CreateAsync(Quote quote, CancellationToken cancellationToken = default)
     {

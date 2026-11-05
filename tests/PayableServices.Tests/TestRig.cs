@@ -40,10 +40,14 @@ public sealed class Faults : SaveChangesInterceptor
     public bool FailCompletion;
     public bool FailQuote;
     public bool FailExecutionCommit;
+    public bool FailSubmissionCommit;
     public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
         InterceptionResult<int> result, CancellationToken cancellationToken = default)
     {
         var db = eventData.Context!;
+        if (FailSubmissionCommit && db.ChangeTracker.Entries<PayableServices.Domain.Entities.Quote>().Any(x =>
+            x.State == EntityState.Modified && x.Entity.SubmissionId is not null))
+        { FailSubmissionCommit = false; throw new DbUpdateException("Synthetic submission commit failure."); }
         if (FailCompletion && db.ChangeTracker.Entries<PayableServices.Domain.Entities.AmountInquiry>().Any(x =>
             x.State == EntityState.Modified && x.Entity.Outcome != PayableServices.Domain.Entities.InquiryOutcome.Pending))
         { FailCompletion = false; throw new DbUpdateException("Synthetic completion persistence failure."); }
@@ -80,6 +84,7 @@ public sealed class TestRig : IAsyncDisposable
     public static async Task<TestRig> CreateAsync(bool activate = true)
     {
         var rig = new TestRig();
+        rig.Execution.Now = () => rig.Clock.UtcNow;
         rig.mock = MockCompany.Api.Program.Build(["--environment", "Development", "--MockCompany:ApiKey", "synthetic-test-key"], builder =>
         {
             builder.WebHost.UseTestServer();
@@ -185,6 +190,23 @@ public sealed class TestRig : IAsyncDisposable
     {
         using var scope = Services.CreateScope();
         await scope.ServiceProvider.GetRequiredService<PayableServices.Application.UseCases.CreateInquiryUseCase>().RecoverAsync(id);
+    }
+
+    public async Task RecoverQuote(Guid id)
+    {
+        using var scope = Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<PayableServices.Application.UseCases.ConfirmQuoteUseCase>().RecoverAsync(id);
+    }
+
+    public async Task RestartApiAsync()
+    {
+        await api.StopAsync();
+        await api.DisposeAsync();
+        var args = Settings.AsEnumerable().Where(x => x.Value is not null)
+            .SelectMany(x => new[] { "--" + x.Key, x.Value! })
+            .Concat(new[] { "--environment", "Development" }).ToArray();
+        api = await PayableServices.Api.Program.BuildAsync(args, ConfigureApi);
+        await api.StartAsync();
     }
     public async ValueTask DisposeAsync()
     {

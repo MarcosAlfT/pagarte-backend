@@ -193,7 +193,8 @@ public sealed class CreateQuoteUseCase(
                 RoundingMode = rounding.ToString(),
                 Status = QuoteStatus.Unpaid,
                 CreatedAt = now,
-                ExpiresAt = inquiry?.ExpiresAt ?? now.AddMinutes(60),
+                LifecycleVersion = 1,
+                ExpiresAt = now.AddMinutes(5),
                 TotalAmount = total.Amount,
                 TotalMinorUnits = total.MinorUnits
             };
