@@ -214,7 +214,7 @@ public sealed class ContinuePaymentExecutionUseCase(
 	{
 		if (payment.ChargeFirst && payment.ChargeAttempts >= payment.MaxChargeAttempts)
 		{
-			payment.MarkManualIntervention(clock.UtcNow, "CHARGE_REVIEW_REQUIRED", "The charge outcome requires operational review.");
+			payment.RequireChargeRecovery(clock.UtcNow);
 			await SaveAsync(payment, cancellationToken);
 			return false;
 		}
@@ -262,10 +262,11 @@ public sealed class ContinuePaymentExecutionUseCase(
 		{
 			if (payment.ChargeAttempts >= payment.MaxChargeAttempts)
 			{
-				payment.MarkManualIntervention(
-					clock.UtcNow,
-					result.ErrorCode ?? "CHARGE_OUTCOME_UNKNOWN",
-					result.ErrorMessage ?? "The charge outcome could not be confirmed safely.");
+				if (payment.ChargeFirst)
+					payment.RequireChargeRecovery(clock.UtcNow, result.ExternalReference);
+				else
+					payment.MarkManualIntervention(clock.UtcNow, result.ErrorCode ?? "CHARGE_OUTCOME_UNKNOWN",
+						result.ErrorMessage ?? "The charge outcome could not be confirmed safely.");
 				await SaveAsync(payment, cancellationToken);
 				return false;
 			}
@@ -292,8 +293,11 @@ public sealed class ContinuePaymentExecutionUseCase(
 
 		if (payment.BillKey is not null && result.Outcome == PaymentOperationOutcome.RetryableFailure)
 		{
-			payment.MarkManualIntervention(clock.UtcNow, "CHARGE_OUTCOME_UNKNOWN",
-				"The charge outcome must be confirmed before releasing this bill.");
+			if (payment.ChargeFirst)
+				payment.RequireChargeRecovery(clock.UtcNow, result.ExternalReference);
+			else
+				payment.MarkManualIntervention(clock.UtcNow, "CHARGE_OUTCOME_UNKNOWN",
+					"The charge outcome must be confirmed before releasing this bill.");
 			await SaveAsync(payment, cancellationToken);
 			return false;
 		}

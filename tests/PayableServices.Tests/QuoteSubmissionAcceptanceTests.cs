@@ -382,6 +382,10 @@ public sealed class QuoteSubmissionAcceptanceTests
         Assert.Equal("RefundPending", submitted.GetProperty("status").GetString());
         Assert.Equal("RefundPending", (await TestRig.Data(await client.GetAsync($"/api/quotes/{quoteId}"))).GetProperty("status").GetString());
 
+        rig.Execution.Results[(TestRig.Owner, quoteId)] = pending with { Status = QuoteExecutionStatus.Processing };
+        var stale = await TestRig.Data(await client.GetAsync($"/api/quotes/{quoteId}/execution"));
+        Assert.Equal("RefundPending", stale.GetProperty("status").GetString());
+
         rig.Execution.Results[(TestRig.Owner, quoteId)] = pending with { Status = QuoteExecutionStatus.Refunded, Final = true };
         var recovered = await TestRig.Data(await client.GetAsync($"/api/quotes/{quoteId}/execution"));
         Assert.Equal("Refunded", recovered.GetProperty("status").GetString());

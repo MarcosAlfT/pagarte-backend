@@ -63,6 +63,22 @@ operational error. An exhausted or definitively failed refund remains
 RefundPending with an operational error. Processor owns the refund operation
 and replays its original key. Worker accepts only eligible legacy refund work.
 
+### Operator Recovery
+
+`GET /api/admin/payments/recovery` lists stalled charge-first operations, oldest
+first. A verified admin can submit the listed payment version, a reason
+(`ProviderIncidentResolved` or `ProviderStatusAvailable`),
+and an idempotency key to `POST /api/admin/payments/recovery/{paymentId}`.
+Processor commits the audit and schedules one additional attempt. Retries of
+the command return the same audit. A stale payment version conflicts.
+
+The dispatcher reuses the persisted charge, acknowledgment, or refund key.
+Provider evidence determines the result. A still-unconfirmed operation returns
+to the queue after the attempt. The scheduling audit is available at
+`GET /api/admin/payments/recovery/audit/{id}`. Configure
+`PaymentRecoveryAuth:ApiKey` separately on Payments.Api and Processor.
+Development AppHost supplies the `payment-recovery-workload-api-key` parameter.
+
 ## Company-First Quote Execution
 
 The company-first flow applies to payments pinned to that mode. Both modes

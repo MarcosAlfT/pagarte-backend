@@ -716,6 +716,9 @@ namespace PaymentSwitch.Processor.Migrations
 
                     b.HasIndex("NextAttemptAt", "Status");
 
+                    b.HasIndex("Status", "LastUpdatedAt", "Id")
+                        .HasFilter("[ChargeFirst] = 1 AND [NextAttemptAt] IS NULL");
+
                     b.ToTable("Payments");
                 });
 
@@ -839,6 +842,53 @@ namespace PaymentSwitch.Processor.Migrations
                     b.HasKey("IntegrationId");
 
                     b.ToTable("PaymentOperatorRoutes");
+                });
+
+            modelBuilder.Entity("PaymentSwitch.Processor.Domain.Entities.PaymentRecoveryAction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("ExpectedVersion")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("nvarchar(12)");
+
+                    b.Property<Guid>("PaymentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ReasonCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("RequestKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<DateTime>("ScheduledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Stage")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PaymentId");
+
+                    b.HasIndex("Actor", "RequestKey")
+                        .IsUnique();
+
+                    b.ToTable("PaymentRecoveryActions");
                 });
 
             modelBuilder.Entity("PaymentSwitch.Processor.Domain.Entities.PaymentReferenceValue", b =>
@@ -970,6 +1020,15 @@ namespace PaymentSwitch.Processor.Migrations
                         .IsRequired();
 
                     b.Navigation("Payment");
+                });
+
+            modelBuilder.Entity("PaymentSwitch.Processor.Domain.Entities.PaymentRecoveryAction", b =>
+                {
+                    b.HasOne("PaymentSwitch.Processor.Domain.Entities.Payment", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("PaymentSwitch.Processor.Domain.Entities.PaymentReferenceValue", b =>

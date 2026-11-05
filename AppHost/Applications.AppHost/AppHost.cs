@@ -9,6 +9,7 @@ var payableServicesDbConnectionString = builder.AddParameter("payable-services-d
 var workloadApiKey = builder.AddParameter("payable-services-workload-api-key", secret: true);
 var mockCardCallbackKey = builder.AddParameter("mock-card-callback-signing-key", secret: true);
 var cardOperationsKey = builder.AddParameter("card-operations-workload-api-key", secret: true);
+var paymentRecoveryKey = builder.AddParameter("payment-recovery-workload-api-key", secret: true);
 var cardTokenDigestKey = builder.AddParameter("card-token-digest-key", secret: true);
 var qecApiKey = builder.AddParameter("qec-company-api-key", secret: true);
 var keycloakDbPassword = builder.AddParameter("keycloak-db-password", secret: true);
@@ -57,6 +58,7 @@ var paymentSwitchProcessor = builder.AddProject<Projects.PaymentSwitch_Processor
     .WithEnvironment("ConnectionStrings__PaymentDb", paymentDbConnectionString)
     .WithEnvironment("WorkloadAuth__ApiKey", workloadApiKey)
     .WithEnvironment("CardOperationsAuth__ApiKey", cardOperationsKey)
+    .WithEnvironment("PaymentRecoveryAuth__ApiKey", paymentRecoveryKey)
     .WithEnvironment("CompanyCredentials__QEC__ApiKey", qecApiKey)
     .WithEnvironment("CompanyCredentials__MockCompany__ApiKey", qecApiKey)
     .WithEnvironment("ChargeFirst__Enabled", "true")
@@ -102,6 +104,7 @@ var paymentsApi = builder.AddProject<Projects.Payments_Api>("payments-api")
     .WithEnvironment("PaymentSwitchProcessor__GrpcUrl", paymentSwitchProcessor.GetEndpoint("https"))
     .WithEnvironment("WorkloadAuth__ApiKey", workloadApiKey)
     .WithEnvironment("CardOperationsAuth__ApiKey", cardOperationsKey)
+    .WithEnvironment("PaymentRecoveryAuth__ApiKey", paymentRecoveryKey)
     .WaitFor(keycloak);
 
 // Payment switch worker

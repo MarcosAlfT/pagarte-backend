@@ -17,6 +17,7 @@ Payments.Api
   -> validates client access tokens
   -> resolves the internal Client.Id through ClientProfiles
   -> exposes public owned card-registration sessions and stored-card HTTP endpoints
+  -> exposes verified-admin payment recovery queue, scheduling, and audit lookup
   -> forwards signed setup notifications for provider verification
   -> calls PaymentSwitch.Processor over gRPC
 
@@ -34,6 +35,7 @@ PaymentSwitch.Processor
   -> for supported Development bills, charges, confirms with the company, or refunds in full
   -> for company-first payments, pays the company, charges, and rolls back when required
   -> reconciles unknown outcomes and schedules durable retries
+  -> persists audited recovery requests for stalled charge-first operations
 
 PaymentSwitch.Worker
   -> consumes refund and notification work
@@ -120,6 +122,8 @@ longer reads Processor for this workflow. Processor does not own inquiries or qu
 - Payments and PayableServices resolve `(iss, sub)` over a protected internal
   ClientProfiles HTTP endpoint before client-owned operations.
 - A workload API key secures internal card and quote-execution gRPC boundaries.
+  Payment recovery has a separate workload credential and requires VerifiedAdmin
+  at the HTTP boundary.
 - Card setup uses durable owned sessions, token claims, leases, and provider
   lookup. Callback signatures are verified in the adapter; notifications only
   schedule status lookup. The synthetic operator is Development-only.

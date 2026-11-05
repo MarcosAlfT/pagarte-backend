@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Net;
 using System.Text.Json;
 using Grpc.Core;
 using Microsoft.EntityFrameworkCore;
@@ -187,6 +188,73 @@ public sealed class ChargeFirstGrpcTests
         await rig.ContinuePayment(waiting.PaymentId!.Value);
         Assert.Equal(QuoteExecutionStatus.Completed,
             (await handoff.GetStatusAsync(package.ClientId, package.SourceQuoteId)).Status);
+    }
+
+    [Theory]
+    [InlineData("Charge")]
+    [InlineData("CompanyAcknowledgment")]
+    [InlineData("Refund")]
+    public async Task An_admin_can_schedule_one_audited_recovery_of_the_original_operation(string stage)
+    {
+        await using var rig = await CardTestRig.CreateAsync(chargeFirst: true);
+        rig.Settings["PaymentExecution:MaxChargeAttempts"] = "1";
+        rig.Settings["PaymentExecution:MaxCompanyPaymentAttempts"] = "1";
+        rig.Settings["PaymentExecution:MaxCompensationAttempts"] = "1";
+        await rig.RestartAsync();
+        var package = await CreatePackageAsync(rig);
+        using var channel = rig.Channel();
+        var handoff = Client(rig, channel);
+        if (stage == "CompanyAcknowledgment")
+        {
+            rig.DropNotificationResponse = true;
+            await handoff.ConfirmQuoteAsync(package);
+        }
+        else
+        {
+            if (stage == "Refund") rig.MockCompanyResponses.SetBill("ELEC-EC", "10000001", new("2026-10", 0));
+            rig.Faults.LosePaymentTransition = stage == "Charge"
+                ? PaymentTransactionStatus.ChargedAwaitingCompany : PaymentTransactionStatus.Compensated;
+            await Assert.ThrowsAsync<RpcException>(() => handoff.ConfirmQuoteAsync(package));
+            var interrupted = await handoff.GetStatusAsync(package.ClientId, package.SourceQuoteId);
+            rig.Clock.Advance(TimeSpan.FromMinutes(6));
+            await rig.ContinuePayment(interrupted.PaymentId!.Value);
+        }
+
+        var recovery = new PaymentRecoveryService.PaymentRecoveryServiceClient(channel);
+        var denied = await Assert.ThrowsAsync<RpcException>(async () => await recovery.ListAsync(new() { Limit = 10 },
+            new Metadata { { "x-workload-api-key", CardTestRig.WorkloadKey } }));
+        Assert.Equal(StatusCode.PermissionDenied, denied.StatusCode);
+        var execution = new PaymentExecutionService.PaymentExecutionServiceClient(channel);
+        denied = await Assert.ThrowsAsync<RpcException>(async () => await execution.GetExecutionStatusAsync(new(),
+            new Metadata { { "x-workload-api-key", CardTestRig.RecoveryKey } }));
+        Assert.Equal(StatusCode.PermissionDenied, denied.StatusCode);
+        using var customer = rig.Client();
+        using var admin = rig.Client(role: "admin");
+        const string path = "/api/admin/payments/recovery";
+        Assert.Equal(HttpStatusCode.Forbidden, (await customer.GetAsync(path)).StatusCode);
+        var queue = await CardTestRig.Data(await admin.GetAsync(path));
+        var item = Assert.Single(queue.GetProperty("items").EnumerateArray().ToArray());
+        Assert.Equal(stage, item.GetProperty("stage").GetString());
+        var paymentId = Guid.Parse(item.GetProperty("paymentId").GetString()!);
+        var input = new { expectedVersion = item.GetProperty("version").GetString(), reasonCode = "ProviderStatusAvailable" };
+        var requestPath = path + "/" + paymentId;
+        var first = await CardTestRig.Data(await CardTestRig.Send(admin, requestPath, input, "review-1"), HttpStatusCode.Accepted);
+        var replay = await CardTestRig.Data(await CardTestRig.Send(admin, requestPath, input, "review-1"), HttpStatusCode.Accepted);
+        Assert.Equal(first.GetProperty("id").GetString(), replay.GetProperty("id").GetString());
+        Assert.Equal(first.GetProperty("scheduledAt").GetString(), replay.GetProperty("scheduledAt").GetString());
+        Assert.Equal(HttpStatusCode.Conflict, (await CardTestRig.Send(admin, requestPath, input, "review-2")).StatusCode);
+        var audit = await CardTestRig.Data(await admin.GetAsync(path + "/audit/" + first.GetProperty("id").GetString()));
+        Assert.Equal(stage, audit.GetProperty("stage").GetString());
+        Assert.Contains(CardTestRig.Owner, audit.GetProperty("actor").GetString()!);
+        await rig.InDb(async db => Assert.Single(await db.PaymentRecoveryActions.ToArrayAsync()));
+
+        await rig.RestartAsync();
+        await rig.ContinuePayment(paymentId);
+        using var recoveredChannel = rig.Channel();
+        var result = await Client(rig, recoveredChannel).GetStatusAsync(package.ClientId, package.SourceQuoteId);
+        Assert.Equal(stage == "Refund" ? QuoteExecutionStatus.Refunded : QuoteExecutionStatus.Completed, result.Status);
+        Assert.Equal(stage == "Refund" ? 2 : 1, rig.JournalEntries);
+        Assert.Equal(1, rig.NotificationPosts);
     }
 
     private static PaymentSwitchExecutionClient Client(CardTestRig rig, Grpc.Net.Client.GrpcChannel channel) =>

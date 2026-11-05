@@ -2,6 +2,38 @@ syntax = "proto3";
 option csharp_namespace = "PaymentSwitch.Contracts";
 package payment_switch;
 
+service PaymentRecoveryService {
+  rpc List (ListPaymentRecoveriesRequest) returns (ListPaymentRecoveriesResponse);
+  rpc Schedule (SchedulePaymentRecoveryRequest) returns (PaymentRecoveryAuditDto);
+  rpc GetAudit (GetPaymentRecoveryAuditRequest) returns (PaymentRecoveryAuditDto);
+}
+
+message ListPaymentRecoveriesRequest { int32 limit = 1; }
+message ListPaymentRecoveriesResponse { repeated PaymentRecoveryItemDto items = 1; }
+message PaymentRecoveryItemDto {
+  string payment_id = 1;
+  string reference = 2;
+  string stage = 3;
+  string version = 4;
+  string updated_at = 5;
+}
+message SchedulePaymentRecoveryRequest {
+  string payment_id = 1;
+  string actor = 2;
+  string idempotency_key = 3;
+  string expected_version = 4;
+  string reason_code = 5;
+}
+message GetPaymentRecoveryAuditRequest { string id = 1; }
+message PaymentRecoveryAuditDto {
+  string id = 1;
+  string payment_id = 2;
+  string stage = 3;
+  string actor = 4;
+  string reason_code = 5;
+  string scheduled_at = 6;
+}
+
 // Operations require a separate workload credential and authenticated admin actor.
 service CardOperationsService {
   rpc ListReviews (ListCardReviewsRequest) returns (ListCardReviewsResponse);

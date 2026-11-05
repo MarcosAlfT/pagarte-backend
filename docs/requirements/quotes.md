@@ -49,6 +49,9 @@ with the company are outside this application.
   after restart/expiry with the same package and card; missing or unavailable
   Processor state does not release a consumed quote. Processor records acceptance
   or rejection durably for the new authenticated submission RPC.
+- Status lookup returns a recorded rejection to the quote owner. Verified
+  admins can schedule one audited recovery attempt for a stalled charge-first
+  operation. The dispatcher reuses the original provider operation key.
 - No production data exists. Historical/test records still must not acquire
   invented bill identities or pricing evidence during migration.
 

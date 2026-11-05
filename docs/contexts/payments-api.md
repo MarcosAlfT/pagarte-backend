@@ -2,13 +2,14 @@
 
 ## Purpose
 
-`Payments.Api` is the public HTTP boundary for client credit cards.
+`Payments.Api` hosts client credit-card routes and verified-admin recovery routes.
 
 ## Owns
 
 - Client card/session HTTP routes, including policy, defaults, and removal status.
 - Bounded provider callback transport.
-- VerifiedAdmin review/list/audit routes with a distinct workload credential.
+- VerifiedAdmin review/list/audit routes for cards and stalled charge-first
+  payments, with separate scoped workload credentials.
 - Authentication, identity resolution, request validation, and response mapping.
 
 ## Does Not Own
@@ -70,6 +71,9 @@ forward bounded raw bytes/allowlisted headers; adapters verify them.
 Admin routes derive actor from authenticated issuer/subject and accept coded reasons,
 expected state, action, and request key. CardOperationsAuth must differ from the general
 workload key. Requests cannot supply actor, success evidence, or provider references.
+Payment recovery lists stalled operations, schedules one additional attempt
+against the listed payment version, and reads the scheduling audit.
+`PaymentRecoveryAuth:ApiKey` must differ from both existing workload keys.
 
 Keep transports thin. See the [test guide](../../tests/PaymentSwitch.Processor.Tests/README.md)
 for routes/configuration and [remaining acceptance](../current-problems.md#6-payment-method-acceptance-and-recovery-gaps)

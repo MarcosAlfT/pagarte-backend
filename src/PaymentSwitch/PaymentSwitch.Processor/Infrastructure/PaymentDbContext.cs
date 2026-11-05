@@ -10,6 +10,7 @@ namespace PaymentSwitch.Processor.Infrastructure
 		public PaymentDbContext(DbContextOptions<PaymentDbContext> options) : base(options) { }
 
 		public DbSet<CardReviewOperation> CardReviewOperations { get; set; }
+		public DbSet<PaymentRecoveryAction> PaymentRecoveryActions { get; set; }
 		public DbSet<PaymentOperatorRoute> PaymentOperatorRoutes { get; set; }
 		public DbSet<CardSetupNotification> CardSetupNotifications { get; set; }
 		public DbSet<CardRegistrationSession> CardRegistrationSessions { get; set; }
@@ -37,6 +38,17 @@ namespace PaymentSwitch.Processor.Infrastructure
                 entity.Property(x => x.ErrorMessage).HasMaxLength(1000);
                 entity.Property(x => x.RecordedAt).HasConversion(v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
             });
+
+			modelBuilder.Entity<PaymentRecoveryAction>(entity =>
+			{
+				entity.HasKey(action => action.Id);
+				entity.Property(action => action.Actor).HasMaxLength(300).UseCollation("Latin1_General_100_BIN2");
+				entity.Property(action => action.RequestKey).HasMaxLength(100).UseCollation("Latin1_General_100_BIN2");
+				entity.Property(action => action.ExpectedVersion).HasMaxLength(12);
+				entity.Property(action => action.ReasonCode).HasMaxLength(50);
+				entity.HasIndex(action => new { action.Actor, action.RequestKey }).IsUnique();
+				entity.HasOne<Payment>().WithMany().HasForeignKey(action => action.PaymentId).OnDelete(DeleteBehavior.Restrict);
+			});
 
 			modelBuilder.Entity<CardReviewOperation>(entity =>
 			{
@@ -159,6 +171,8 @@ namespace PaymentSwitch.Processor.Infrastructure
 				entity.HasIndex(e => e.SourceQuoteId).IsUnique();
 				entity.HasIndex(e => e.ClientId);
 				entity.HasIndex(e => e.Status);
+				entity.HasIndex(e => new { e.Status, e.LastUpdatedAt, e.Id })
+					.HasFilter("[ChargeFirst] = 1 AND [NextAttemptAt] IS NULL");
 				entity.HasIndex(e => new { e.NextAttemptAt, e.Status });
 				entity.HasOne(e => e.CreditCard)
 					.WithMany(c => c.Payments)

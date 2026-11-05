@@ -112,6 +112,13 @@ public sealed class ConfirmQuoteUseCase(
         var quote = await quoteRepository.GetByIdAsync(snapshot.Id, cancellationToken)
             ?? throw new InvalidOperationException("Submission quote is missing.");
         if (!quote.OwnsSubmissionLease(lease)) return StoredResult(quote);
+        if (!CanObserve(quote, result))
+        {
+            quote.FinishSubmissionWork(lease, null, false, clock.UtcNow);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return StoredResult(quote);
+        }
         ApplyExecutionResult(quote, result);
         quote.FinishSubmissionWork(lease, JsonSerializer.Serialize(result), result.Final, clock.UtcNow);
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -154,7 +161,8 @@ public sealed class ConfirmQuoteUseCase(
         }
         // Processor may have accepted before the response or local commit was lost.
         // A missing execution does not authorize a new submission or cancellation.
-        if ((!result.Accepted && result.PaymentId is null) || result.ErrorCode == "BILL_VERIFICATION_STALE")
+        if ((!result.Accepted && result.PaymentId is null && !(result.Final && result.SubmissionRecorded)) ||
+            result.ErrorCode == "BILL_VERIFICATION_STALE")
         {
             return quote.SubmissionId is not null ? StoredResult(quote) : result;
         }
@@ -163,15 +171,20 @@ public sealed class ConfirmQuoteUseCase(
         quote = await quoteRepository.GetByIdAsync(quoteId, cancellationToken)
             ?? throw new InvalidOperationException("Quote is missing.");
         if (quote.SubmissionCompletedAt is not null) return StoredResult(quote);
+        if (!CanObserve(quote, result)) return StoredResult(quote);
         // Terminal legacy states are also protected against delayed status responses.
         if (quote.Status is QuoteStatus.Paid or QuoteStatus.PaymentFailed) return result;
         ApplyExecutionResult(quote, result);
         if (quote.SubmissionId is not null)
-            quote.ObserveSubmissionResult(JsonSerializer.Serialize(result), result.Final, clock.UtcNow);
+            quote.ObserveSubmissionResult(JsonSerializer.Serialize(result), result.Final, clock.UtcNow, scheduleRetry: false);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return result;
     }
+
+    private static bool CanObserve(Quote quote, ConfirmQuoteResult result) =>
+        quote.Status != QuoteStatus.RefundPending ||
+        result.Status is QuoteExecutionStatus.RefundPending or QuoteExecutionStatus.Refunded;
 
     private static QuoteExecutionPackage MapExecutionPackage(Quote quote, Guid creditCardId) =>
         new(

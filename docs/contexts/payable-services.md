@@ -93,7 +93,8 @@ Verified client -> ClientProfiles identity resolution -> inquiry reservation
   uncertain submission cannot exist or that replacement is safe.
 - Explicit execution refresh looks up Processor by ClientId + SourceQuoteId,
   including when local PaymentId is absent or the quote deadline has passed.
-  A found execution repairs the association/state; not-found or unavailable
+  A found execution repairs the association/state and an owned recorded
+  rejection closes the original submission. Not-found or unavailable
   results do not clear state or authorize another submission.
 - A SQL application lock on quote ID serializes Pay, recovery, and result
   updates across API instances. A valid server claim before expiry atomically

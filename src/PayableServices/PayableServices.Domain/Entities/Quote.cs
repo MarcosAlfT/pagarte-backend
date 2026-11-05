@@ -103,12 +103,12 @@ public sealed class Quote
         SubmissionLeaseUntil = null;
     }
 
-    public void ObserveSubmissionResult(string? resultJson, bool final, DateTime utcNow)
+    public void ObserveSubmissionResult(string? resultJson, bool final, DateTime utcNow, bool scheduleRetry = true)
     {
         if (SubmissionCompletedAt is not null) return;
         if (resultJson is not null) SubmissionResultJson = resultJson;
         SubmissionCompletedAt = final ? utcNow : null;
-        SubmissionNextAttemptAt = final ? null : utcNow.AddSeconds(10);
+        if (final || scheduleRetry) SubmissionNextAttemptAt = final ? null : utcNow.AddSeconds(10);
         if (final)
         {
             SubmissionLeaseId = null;

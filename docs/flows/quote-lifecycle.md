@@ -117,7 +117,8 @@ silently accept an inquiry quote without verification and reservation.
 updates the local quote. Lookup uses ClientId + SourceQuoteId even when local
 PaymentId is missing or quote evidence has expired. This recovers an accepted
 execution after its response or the local association commit was lost. It never
-dispatches a payment or revalidates the company bill. For a consumed quote whose
+dispatches a payment or revalidates the company bill. An owned recorded
+rejection closes the original submission through the same lookup. For a consumed quote whose
 payment is not yet found, or whose status lookup is unavailable, it reports the
 original pending/final submission result. Unsubmitted legacy not-found remains
 an operation error. Lookup cannot release a consumed quote or reset it to Unpaid.
@@ -128,8 +129,9 @@ recovery without repeating a logical payment. Dispatch/status exceptions retain
 Submitted and the immutable package; transient work schedules another attempt.
 Recovery looks up accepted work before verifying. If Processor reports stale
 evidence before the first company operation, recovery verifies again and
-resubmits evidence for the same intent. Terminal results are cached durably,
-and stale leases/responses cannot overwrite them. No SQL lock spans HTTP or gRPC.
+resubmits evidence for the same intent. Terminal results are cached durably.
+Stale responses cannot replace them or move RefundPending back to Processing.
+Status reads preserve the existing recovery schedule. No SQL lock spans HTTP or gRPC.
 
 The local transitions are:
 

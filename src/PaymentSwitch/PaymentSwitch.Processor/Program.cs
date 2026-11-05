@@ -12,6 +12,7 @@ using PaymentSwitch.Processor.Interfaces;
 using PaymentSwitch.Processor.Services;
 using Infrastructure.RabbitMQ;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using PaymentSwitch.Processor.Application.Models;
 using PaymentSwitch.Processor.Application.Services;
 using PaymentSwitch.Processor.Security;
@@ -60,6 +61,7 @@ namespace PaymentSwitch.Processor
 			builder.Services.AddScoped<ICreditCardRepository, CreditCardRepository>();
 			builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 			builder.Services.AddScoped<IQuoteSubmissionRepository, QuoteSubmissionRepository>();
+			builder.Services.AddScoped<IPaymentRecoveryRepository, PaymentRecoveryRepository>();
 			builder.Services.AddScoped<IPaymentOperatorRepository, PaymentOperatorRepository>();
 			builder.Services.AddScoped<IServiceRepository, ServiceRepository>();
 			builder.Services.AddScoped<IOutboxRepository, OutboxRepository>();
@@ -89,6 +91,7 @@ namespace PaymentSwitch.Processor
 			builder.Services.AddScoped<AcceptConfirmedQuoteUseCase>();
 			builder.Services.AddScoped<ContinuePaymentExecutionUseCase>();
 			builder.Services.AddScoped<GetPaymentExecutionStatusUseCase>();
+			builder.Services.AddScoped<ReviewPaymentRecoveryUseCase>();
 			builder.Services.AddOptions<CardRegistrationOptions>().Bind(configuration.GetSection("PaymentMethods"))
 				.Validate(value => !string.IsNullOrWhiteSpace(value.ConsentVersion) && value.ConsentVersion.Length <= 100,
 					"Configure a saved-card consent version of 1 to 100 characters.").ValidateOnStart();
@@ -128,7 +131,13 @@ namespace PaymentSwitch.Processor
 				.AddScheme<AuthenticationSchemeOptions, WorkloadApiKeyAuthenticationHandler>(
 					WorkloadApiKeyAuthenticationHandler.SchemeName,
 					_ => { });
-			builder.Services.AddAuthorization(options => options.AddPolicy("CardOperationsWorkload", policy => policy.RequireAuthenticatedUser().RequireClaim("card-operations", "true")));
+			builder.Services.AddAuthorization(options =>
+			{
+				options.DefaultPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser()
+					.RequireAssertion(context => !context.User.HasClaim("payment-recovery", "true")).Build();
+				options.AddPolicy("CardOperationsWorkload", policy => policy.RequireAuthenticatedUser().RequireClaim("card-operations", "true"));
+				options.AddPolicy("PaymentRecoveryWorkload", policy => policy.RequireAuthenticatedUser().RequireClaim("payment-recovery", "true"));
+			});
 
 			// gRPC server
 			builder.Services.AddGrpc();
@@ -160,6 +169,7 @@ namespace PaymentSwitch.Processor
 			// Stored-card and execution boundaries require workload authentication.
 			app.MapGrpcService<CreditCardGrpcService>().RequireAuthorization();
 			app.MapGrpcService<CardOperationsGrpcService>().RequireAuthorization("CardOperationsWorkload");
+			app.MapGrpcService<PaymentRecoveryGrpcService>().RequireAuthorization("PaymentRecoveryWorkload");
 			app.MapGrpcService<PaymentGrpcService>();
 			app.MapGrpcService<PaymentExecutionGrpcService>();
 			app.MapGrpcService<ServiceCatalogGrpcService>();

@@ -26,6 +26,10 @@ refund commits, company acknowledgment recovery across provider restart, retry
 exhaustion, late external settlement, Worker isolation, and original-mode recovery.
 Live company and operator acceptance remains pending.
 
+The recovery review cases use the verified-admin HTTP routes and a separate
+workload key. They cover an audited same-key retry for each stalled charge-first
+stage, stale-version conflicts, authorization, and restart before dispatch.
+
 ## Local Runtime Configuration
 
 AppHost selects Development-only mock-a with EC/USD and synthetic removal/refund
@@ -36,6 +40,7 @@ capabilities. Supply secrets through user secrets or the existing parameter mech
 | card-token-digest-key | Stable token claims; at least 32 ASCII characters. |
 | mock-card-callback-signing-key | Mock callback HMAC; at least 32 ASCII characters. |
 | card-operations-workload-api-key | Payments/Processor admin reviews; must differ from the general workload key. |
+| payment-recovery-workload-api-key | Payments/Processor recovery actions. Use a key distinct from both existing workload keys. |
 
 Keep values out of source control. Outside AppHost, configure:
 

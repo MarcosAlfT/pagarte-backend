@@ -16,10 +16,11 @@ using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
 using PayableServices.Application.Abstractions;
 using PayableServices.Persistence;
+using PaymentSwitch.Contracts;
 
 namespace PayableServices.Tests;
 
-public sealed class TestClock : TimeProvider, IClock
+public sealed class TestClock : TimeProvider, IClock, PaymentSwitch.Messaging.IClock
 {
     public DateTime UtcNow { get; set; } = new(2026, 11, 2, 12, 0, 0, DateTimeKind.Utc);
     public override DateTimeOffset GetUtcNow() => new(UtcNow);
@@ -80,6 +81,8 @@ public sealed class TestRig : IAsyncDisposable
     public HttpClient Admin { get; private set; } = null!;
     public Guid ServiceId { get; private set; }
     public Guid RouteId { get; private set; }
+    public Func<HttpMessageHandler>? ExecutionHandler { get; set; }
+    public HttpMessageHandler CreateCompanyHandler() => mock.GetTestServer().CreateHandler();
 
     public void SetBill(string account, string period, long amount, string currency = "USD") =>
         mock.Services.GetRequiredService<MockCompany.Api.MockResponses>().SetBill("ELEC-EC", account, new(period, amount, currency));
@@ -141,7 +144,11 @@ public sealed class TestRig : IAsyncDisposable
         builder.Configuration.AddConfiguration(Settings);
         var services = builder.Services;
         services.AddSingleton<IClock>(Clock);
-        services.AddSingleton<IPaymentExecutionClient>(Execution);
+        if (ExecutionHandler is null)
+            services.AddSingleton<IPaymentExecutionClient>(Execution);
+        else
+            services.AddGrpcClient<PaymentExecutionService.PaymentExecutionServiceClient>()
+                .ConfigurePrimaryHttpMessageHandler(ExecutionHandler);
         services.AddDbContext<PayableServicesDbContext>(options => options.UseSqlServer(Connection).AddInterceptors(Faults));
         services.AddHttpClient("CompanyInquiry").ConfigurePrimaryHttpMessageHandler(() => new ProviderHandler(mock.GetTestServer().CreateHandler(), Provider));
         services.AddHttpClient<Pagarte.Security.ClientIdentityResolver>().ConfigurePrimaryHttpMessageHandler(() => new ResolverHandler());

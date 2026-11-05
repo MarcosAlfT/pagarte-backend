@@ -46,8 +46,8 @@ included in the current statuses.
 | Status | Count |
 | --- | ---: |
 | Complete | 26 |
-| Partial | 23 |
-| Missing | 9 |
+| Partial | 25 |
+| Missing | 7 |
 | Security gap | 0 |
 | Decision required | 1 |
 | Out of scope | 1 |
@@ -203,7 +203,7 @@ execution modes. See the [Quotes requirement](requirements/quotes.md).
 | `PAY-01` | Confirm and pay a quote with a stored card | Complete | `ConfirmQuoteUseCase` consumes the quote, binds the card, and checks fresh evidence for inquiry-backed bills. Processor pins execution mode and technical replay resumes the original intent. | `PayableServices` and `PaymentSwitch.Processor` |
 | `PAY-02` | Accept a payment idempotently | Complete | SourceQuoteId, SubmissionId, fingerprint, and recorded outcomes bind one execution. Processor reserves a verified bill atomically with acceptance, across different quotes and clients. | `PaymentSwitch.Processor` |
 | `PAY-03` | Execute the payment saga | Complete | Development charge-first payments charge the full total, then recover company acknowledgment or refund a definitive rejection. Company-first payments retain their original execution and rollback behavior. | `PaymentSwitch.Processor` and `ExternalConnections` |
-| `PAY-04` | Refresh payment execution status | Complete | Explicit status and leased background recovery use source quote ID without local PaymentId, including after expiry. A submitted intent without a found payment stays pending; restart recovery dispatches only its immutable original package. Fenced results/leases prevent stale responses reopening a quote. | `PayableServices` and `PaymentSwitch.Processor` |
+| `PAY-04` | Refresh payment execution status | Complete | Explicit status and leased recovery use source quote ID without a local PaymentId. Lookup returns the owned payment or its durable rejection. A genuinely missing outcome remains pending. Public Pay and gRPC recovery are tested across restarts. | `PayableServices` and `PaymentSwitch.Processor` |
 | `PAY-05` | Cancel a payment execution | Decision required | Cancellation is unsafe after an external side effect may have occurred. Valid cancellation states and compensation rules must be defined first. | `PaymentSwitch.Processor` |
 | `PAY-06` | View one completed or failed payment | Partial | Processor has `GetPaymentUseCase`, but no authenticated public HTTP transaction exposes it. | Public boundary decision required |
 | `PAY-07` | View payment history | Partial | Processor has `GetPaymentHistoryUseCase`, but `Payments.Api` does not expose payment history. | Public boundary decision required |
@@ -228,12 +228,12 @@ refund path by persisted execution mode.
 
 | ID | Transaction | Status | Current implementation or missing work | Owner |
 | --- | --- | --- | --- | --- |
-| `OPS-01` | List payments requiring manual intervention | Missing | The saga can enter manual intervention, but no operator queue exists. | `PaymentSwitch.Processor` plus an operational API |
-| `OPS-02` | Reconcile or resolve a manual-intervention payment | Missing | No authorized operational command records the resolution and safely resumes or closes the saga. | `PaymentSwitch.Processor` |
+| `OPS-01` | List payments requiring manual intervention | Partial | Verified admins can list stalled charge-first payments by charge, company acknowledgment, or refund stage. Company-first intervention remains outside this queue. | `Payments.Api` and `PaymentSwitch.Processor` |
+| `OPS-02` | Reconcile or resolve a manual-intervention payment | Partial | A verified admin can schedule one audited recovery attempt with the existing provider operation key and expected payment version. Processor uses provider evidence to advance the payment. Broader manual resolution remains pending. | `Payments.Api` and `PaymentSwitch.Processor` |
 | `OPS-03` | Search payments for client support | Missing | Internal queries are client-oriented and there is no support authorization model. | Operational API decision required |
 | `OPS-04` | Receive and reconcile provider webhooks | Partial | Mock setup callbacks authenticate/deduplicate wakeups; dLocal signature primitives are offline-tested. Live setup/payment/refund webhook integration remains pending. | ExternalConnections and PaymentSwitch.Processor |
 | `OPS-05` | Reconcile provider settlement and produce financial reports | Missing | There is no settlement-file, ledger, or provider financial-reconciliation workflow. | New financial operations boundary likely required |
-| `OPS-06` | Audit privileged operational actions | Partial | Card-review intents/results audit actor, coded reason, request key, and state changes. Comprehensive append-only auditing across privileged operations remains open. | `Payments.Api` and `PaymentSwitch.Processor` for card reviews |
+| `OPS-06` | Audit privileged operational actions | Partial | Card review and payment recovery record the authenticated actor, reason, and request identity. The payment recovery audit also records the operation stage and expected version. Broader operational auditing remains open. | `Payments.Api` and `PaymentSwitch.Processor` |
 
 ## Security and Architecture Prerequisites
 
