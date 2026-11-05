@@ -65,8 +65,9 @@ outside this application. The current code still executes the company-first saga
   charge, company, or refund outcomes require durable reconciliation.
 - Company confirmation carries bill identity/service amount separately from the
   charged total. It records payment but performs no money transfer.
-- Processor owns compensation and bill-level duplicate protection. Coordinate
-  Worker refunds through one durable refund identity to prevent double refund.
+- Processor owns compensation and bill-level duplicate protection. The
+  compensation uses one durable refund identity. Worker guards legacy refunds
+  by execution mode so it cannot independently refund a charge-first payment.
 - Persist and atomically claim submission before dispatch, fence attempts, and
   recover by source quote ID even without local PaymentId. A not-found lookup
   alone cannot close an attempt that may still arrive. Even terminal rejection
@@ -77,19 +78,18 @@ outside this application. The current code still executes the company-first saga
 The [requirement](../requirements/quotes.md) and
 [target flow](../flows/quote-review-and-payment.md) replace the previous proposal.
 The five-minute quote lifetime supersedes the inherited inquiry-expiry cap in
-MAI-007/MAI-009 for future implementation; fresh evidence is still required at
-creation and bill verification within the submitted Pay action. This deadline
+MAI-007/MAI-009. Inquiry-backed creation requires fresh evidence and submitted
+Pay obtains separate bill verification. The quote deadline
 limits initial quote submission only; independent execution policies govern
 processing after the server has consumed the quote.
 
-PayableServices, Processor, ExternalConnections, mock fixtures, and Worker refund
-coordination need compatible changes. Drain or version current executions; do
-not reinterpret company-first work using the new order. Preserve historical flat
-snapshots without fabricating Strategy or bill evidence. Unexecuted legacy quotes
-without the new contract require a new inquiry rather than being made refreshable.
+Processor persists execution mode at acceptance. Company-first work continues
+in its original order. Historical flat snapshots retain their original evidence.
+Unexecuted legacy quotes without the new claim or required bill identity need
+a new consultation.
 
 A company rejection can leave a temporary card debit until the full refund
 completes. Pre-charge verification alone does not prevent another channel paying
 in the gap; company conflict detection and compensation handle that case.
-Current-state documentation remains accurate until implementation and acceptance
-tests demonstrate the revised behavior.
+The [implementation status](../requirements/quotes.md#implementation-status)
+records the delivered scope and links to open acceptance gaps.

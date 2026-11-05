@@ -18,21 +18,11 @@ public sealed class PaymentSwitchExecutionClient(
 		QuoteExecutionPackage package,
 		CancellationToken cancellationToken = default)
 	{
-		var request = new ConfirmQuoteRequest
-		{
-			ClientId = package.ClientId,
-			SourceQuoteId = package.SourceQuoteId.ToString(),
-			CreditCardId = package.CreditCardId.ToString(),
-			Snapshot = MapSnapshot(package)
-		};
-
-        if (package.SubmissionId is not { } submissionId || package.SubmittedAt is not { } submittedAt)
+        var request = MapRequest(package);
+        if (package.SubmissionId is null || package.SubmittedAt is null)
             return MapResponse(await client.ConfirmQuoteAsync(request, CreateHeaders(), cancellationToken: cancellationToken));
 
-        var submission = new SubmitClaimedQuoteRequest
-        {
-            Quote = request, SubmissionId = submissionId.ToString(), SubmittedAt = submittedAt.ToString("O")
-        };
+        var submission = MapSubmission(package, request);
         if (package.BillVerification is not { } verification)
             return MapResponse(await client.SubmitClaimedQuoteAsync(submission, CreateHeaders(), cancellationToken: cancellationToken));
 
@@ -56,6 +46,26 @@ public sealed class PaymentSwitchExecutionClient(
             }
         }, CreateHeaders(), cancellationToken: cancellationToken));
 	}
+
+    public async Task<ConfirmQuoteResult> RejectUnavailableRouteAsync(
+        QuoteExecutionPackage package, CancellationToken cancellationToken = default) =>
+        MapResponse(await client.RejectUnavailableQuoteRouteAsync(MapSubmission(package, MapRequest(package)),
+            CreateHeaders(), cancellationToken: cancellationToken));
+
+    private static ConfirmQuoteRequest MapRequest(QuoteExecutionPackage package) => new()
+    {
+        ClientId = package.ClientId,
+        SourceQuoteId = package.SourceQuoteId.ToString(),
+        CreditCardId = package.CreditCardId.ToString(),
+        Snapshot = MapSnapshot(package)
+    };
+
+    private static SubmitClaimedQuoteRequest MapSubmission(QuoteExecutionPackage package, ConfirmQuoteRequest request) => new()
+    {
+        Quote = request,
+        SubmissionId = package.SubmissionId?.ToString() ?? throw new InvalidOperationException("Submission ID is missing."),
+        SubmittedAt = package.SubmittedAt?.ToString("O") ?? throw new InvalidOperationException("Submission time is missing.")
+    };
 
 	public async Task<ConfirmQuoteResult> GetStatusAsync(
 		string clientId,

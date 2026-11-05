@@ -8,6 +8,10 @@ public interface IPaymentExecutionClient
 		QuoteExecutionPackage package,
 		CancellationToken cancellationToken = default);
 
+	Task<ConfirmQuoteResult> RejectUnavailableRouteAsync(
+		QuoteExecutionPackage package,
+		CancellationToken cancellationToken = default);
+
 	Task<ConfirmQuoteResult> GetStatusAsync(
 		string clientId,
 		Guid sourceQuoteId,

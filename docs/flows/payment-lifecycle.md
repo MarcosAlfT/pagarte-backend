@@ -93,6 +93,7 @@ Leased recovery can resume that intent after the original quote deadline.
 Authenticated client
   -> PayableServices: create immutable quote
   -> PayableServices: confirm quote with stored-card ID
+  -> check current eligibility of the quote's original route before dispatch
   -> for an inquiry-backed quote, verify the original unpaid bill with a fresh operation key
   -> authenticated Processor gRPC
       -> replay recorded outcome or validate timely bound claim, total, and card
@@ -129,12 +130,14 @@ the external call.
   fingerprint.
 - Identical confirmation calls return the existing payment; conflicting reuse
   is rejected.
-- One active reservation per bill key covers all clients and quote IDs.
-  Successful or uncertain work holds it. Failure before the first company
-  operation, definitive rejection of that first operation, or confirmed company
-  rollback releases it. A new attempt needs verification after release.
-- Company payment, card charge, and rollback use separate stable idempotency
-  keys.
+- One active reservation per verified bill covers all clients and quote IDs.
+  Successful and uncertain work keeps it. A definitive failure without payment
+  effects or confirmed compensation can release it. Company-first payments
+  can also release it after confirmed company rollback. A new attempt needs
+  fresh unpaid evidence after release.
+- Charge-first payments use separate stable keys for charge, company
+  acknowledgment, and refund. Company-first payments use separate keys for
+  company payment, card charge, and rollback.
 - Attempt caps, interval, counters, next attempt, external references, and
   outcomes are stored on the payment.
 - Unknown charge outcomes are not treated as failures because doing so could
@@ -142,10 +145,13 @@ the external call.
 
 ## Money
 
-The quote's finalized components are evidence for how the price was built.
-Processor validates their checked sum but performs one company payment and one
-card charge for the full total. Contracts and messages use signed 64-bit minor
-units plus ISO currency; external adapters convert through `MoneyValue`.
+Processor validates the display-ordered finalized leaves against the approved
+total using the same checked accumulation as quote creation. In
+charge-first mode the card charge and any compensation use that total, while
+company acknowledgment carries the verified service amount. Company-first
+execution uses the total for its company payment and card charge. Contracts
+and messages use signed 64-bit minor units and ISO currency. External adapters
+convert through `MoneyValue`.
 
 ## Later Refund Flow
 
@@ -177,6 +183,11 @@ setting for the mock company and supplies `ChargeFirst:MockCompanyBaseUrl`.
 Older Worker instances must be stopped before enabling the flag. Rollback of the
 schema is blocked once charge-first payment evidence exists. Keep the original
 company endpoint and operator integration available for accepted payments.
+
+Deploy Processor's `RejectUnavailableQuoteRoute` RPC before PayableServices
+with `PersistUnavailableQuoteRoute`. If Processor is unavailable when
+PayableServices records an unavailable route, the quote remains Submitted.
+Recovery sends the stored decision for the same submission.
 
 Before applying the historical company-first migration, use the old Worker to drain the
 legacy RabbitMQ `payment.request` queue, legacy payments in active statuses,

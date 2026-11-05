@@ -81,7 +81,7 @@ Processor: validate timely server claim; atomic acceptance and bill-key protecti
       -> unknown: reconcile same charge; do not notify yet
       -> confirmed charge:
           -> company adapter: send payment confirmation (no funds transfer)
-              -> matching OK: Succeeded
+              -> matching OK: Completed
               -> definitive NOT OK: refund full card charge
                   -> confirmed refund: Refunded
                   -> pending/unknown/failure: RefundPending; recover/escalate
@@ -89,10 +89,9 @@ Processor: validate timely server claim; atomic acceptance and bill-key protecti
 Processor -> PayableServices -> Mobile: payment status
 ```
 
-Processor owns durable orchestration and rejection compensation. The existing
-Worker refund path must coordinate with the same durable refund operation so
-one charge cannot be refunded twice. Adapters normalize evidence; they do not
-choose compensation or update application state.
+Processor owns durable orchestration and rejection compensation with one
+persisted refund key. Worker admits only matching company-first legacy refund
+work. Adapters normalize provider evidence and Processor applies the result.
 
 ## Amounts and Company Response
 
@@ -128,11 +127,10 @@ can authorize a later customer attempt; the original quote stays consumed.
 Navigating away does not revoke a submission; no quote-cancellation endpoint
 is required.
 
-Client payment statuses are Processing, Succeeded, Failed, RefundPending, and
-Refunded. Expiry/changed bill/verification errors before payment are ordinary
-operation results, not extra approval or freshness workflows. Accepted or
-unresolved payment prevents another payment for the same bill, even from a new
-quote; successful payments remain protected while external balances lag.
+The charge-first execution API returns Processing, Completed, Declined or
+Failed, RefundPending, and Refunded. Expiry, changed bills, and verification
+errors return ordinary operation results. Accepted, unresolved, and successful
+bill payments keep their reservation across quotes and clients.
 
 Quote status changes separately: Unpaid -> Submitted -> Processing -> Paid on
 confirmed success. Verification can close Submitted as PaymentFailed,
@@ -144,8 +142,9 @@ missing PaymentId or failure before execution cannot make the quote reusable.
 
 ## Implementation Boundary
 
-The current company-first saga must be drained or explicitly versioned during
-cutover. Existing active payments retain their original order/evidence. Legacy
-unexecuted quotes lacking the new identity/expiry contract require new inquiry;
-expired quotes are never reopened. See the requirement for acceptance scenarios
-and migration rules.
+Processor persists execution mode at acceptance. Supported Development bills
+can use charge-first execution, and existing payments retain their recorded
+mode and evidence. Legacy unexecuted quotes lacking the required identity or
+claim need a new consultation. See the [payment lifecycle](payment-lifecycle.md)
+for deployment and [current gaps](../current-problems.md#7-quote-acceptance-boundaries)
+for release acceptance.

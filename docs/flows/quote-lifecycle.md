@@ -67,6 +67,8 @@ those leaves are in its basis. Percentage rules use the already-rounded
 amounts of their dependencies. Fixed discounts take a positive magnitude
 and produce a negative line. Invalid definitions fail quote creation before
 the inquiry is consumed.
+Quote creation checks the finalized monetary leaves in the same display order
+used by Processor. Overflow at any step rejects the quote during creation.
 
 The grouped `breakdown` on quote detail contains subtotals and reference nodes.
 The existing `items` list and Processor handoff carry finalized monetary leaves.
@@ -84,7 +86,7 @@ repeated/empty query values, and reversed date ranges return 400. Ordering is
 CreatedAt descending, then ID descending, for deterministic ties.
 The query includes only Unpaid/Expired rows with no SubmissionId or PaymentId.
 Used, failed, paid, processing, and legacy Cancelled rows never reappear in this
-customer list. Owned detail/status remains read-only access to stored history.
+customer list. Owned quote detail provides read-only access to stored history.
 
 Summaries include the immutable total, expiry, reference values, inquiry ID,
 and locally stored payment ID/lifecycle. Connection fields, credentials, and
@@ -109,11 +111,15 @@ Authenticated client
   -> require unconsumed Unpaid version-1 quote and server time before ExpiresAt
   -> commit Submitted + submission ID/time + card + immutable package/fingerprint + lease
   -> release the SQL transaction; quote disappears from customer listing
-  -> discover existing payment by ClientId + SourceQuoteId
-  -> when absent, verify the bill against a fresh provider inquiry and original route
-  -> persist verification separately from the creation inquiry and original submission
-  -> submit the immutable intent and fresh evidence through authenticated SubmitVerifiedBill
-  -> Processor atomically records rejection or accepts and reserves the bill key
+  -> look up the owned payment or recorded rejection by ClientId + SourceQuoteId
+  -> if absent and inquiry-backed, verify the bill and original route
+      -> persist verification separately from the creation inquiry and submission
+      -> submit the bound intent and evidence through authenticated SubmitVerifiedBill
+  -> if absent and configured-price, check the original route against current configuration
+      -> eligible: submit the bound intent through authenticated SubmitClaimedQuote
+      -> unavailable: persist the decision and call authenticated RejectUnavailableQuoteRoute
+  -> Processor records rejection or accepts the payment
+      -> inquiry-backed acceptance also reserves the bill key atomically
   -> reacquire quote lock; only the current lease may save the result
 ```
 
@@ -130,9 +136,11 @@ The legacy ConfirmQuote RPC only replays existing accepted work; it cannot
 authorize a new unclaimed payment. Card lifecycle rules remain in Processor;
 see [Card Registration](card-registration.md).
 
-The existing configured-price path uses authenticated SubmitClaimedQuote.
-Bill-backed execution uses SubmitVerifiedBill so an older Processor cannot
-silently accept an inquiry quote without verification and reservation.
+Configured-price route rejection uses the same immutable submission. If
+Processor already accepted it, the earlier outcome wins. An observed
+unavailable route stays rejected for that submission even if reactivated.
+PayableServices stores the route decision before asking Processor to record
+the rejection. Recovery can resend that decision after a restart.
 
 ## Status Refresh
 
@@ -151,7 +159,7 @@ using fresh scopes. One-minute SQL leases and response fencing allow restart
 recovery without repeating a logical payment. Dispatch/status exceptions retain
 Submitted and the immutable package; transient work schedules another attempt.
 Recovery looks up accepted work before verifying. If Processor reports stale
-evidence before the first company operation, recovery verifies again and
+evidence before the first payment operation, recovery verifies again and
 resubmits evidence for the same intent. Terminal results are cached durably.
 Stale responses cannot replace them or move RefundPending back to Processing.
 Status reads preserve the existing recovery schedule. No SQL lock spans HTTP or gRPC.
@@ -166,6 +174,7 @@ Unpaid
 Submitted
   -> Processing       Processor accepted the payment
   -> Paid             fast completion recovered or returned
+  -> Refunded         fast compensation recovered or returned
   -> PaymentFailed    Processor durably rejected the attempt without a payment
   -> Invalidated      verification found changed bill evidence
   -> NoLongerDue       verification found zero remaining balance
@@ -174,9 +183,10 @@ Submitted
 Processing
   -> Paid             company accepted and full card charge succeeded
   -> PaymentFailed    definitive decline or completed company rollback
-  -> Invalidated      refreshed evidence found a changed bill before company payment
-  -> NoLongerDue       refreshed evidence found zero remaining balance before company payment
+  -> Invalidated      refreshed evidence found a changed bill before the first payment operation
+  -> NoLongerDue       refreshed evidence found zero remaining balance before the first payment operation
   -> RefundPending     company definitively rejected confirmation after the charge
+  -> Refunded          compensation completed before an intermediate state was observed
   -> Processing       retry, reconciliation, rollback pending, or manual review
 
 RefundPending
@@ -207,13 +217,19 @@ unresolved.
   unique SourceQuoteId/SubmissionId. A retry of a rejected request cannot later
   become accepted. The RPC reports whether that outcome is durably recorded;
   otherwise PayableServices retains pending state.
+
+## Deployment and Compatibility
+
 - Legacy unpaid quotes without a valid claim lifecycle became Expired. The
   bill-evidence migration invalidates still-unsubmitted inquiry-backed quotes
   without a bill identity. Existing snapshots/inquiry links are preserved and
   accepted work remains recoverable. Migration guards protect retained evidence.
-- Deploy Processor's new RPC and migration first, then cut over all older
-  PayableServices instances before exposing the new public Pay flow. An older
-  Processor cannot silently ignore metadata because the submission RPC is new.
+- Deploy Processor's submission RPCs and associated migrations before exposing
+  the public Pay flow from the updated PayableServices instances.
+- Deploy Processor's `RejectUnavailableQuoteRoute` RPC before cutting over
+  PayableServices with `PersistUnavailableQuoteRoute`. This migration adds
+  `SubmissionRouteUnavailable` with a default of `false` and blocks downgrade
+  once a quote has a recorded route decision.
 
 ## Flow Invariants
 

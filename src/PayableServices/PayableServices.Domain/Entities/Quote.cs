@@ -44,6 +44,7 @@ public sealed class Quote
     public DateTime? SubmissionNextAttemptAt { get; private set; }
     public DateTime? SubmissionCompletedAt { get; private set; }
     public string? SubmissionResultJson { get; private set; }
+    public bool SubmissionRouteUnavailable { get; private set; }
     public int SubmissionAttemptCount { get; private set; }
     public string? ExecutionErrorCode { get; set; }
     public string? ExecutionErrorMessage { get; set; }
@@ -94,6 +95,12 @@ public sealed class Quote
     {
         if (!OwnsSubmissionLease(leaseId)) throw new InvalidOperationException("Submission lease is stale.");
         BillVerificationJson = json;
+    }
+
+    public void RecordUnavailableRoute(Guid leaseId)
+    {
+        if (!OwnsSubmissionLease(leaseId)) throw new InvalidOperationException("Submission lease is stale.");
+        SubmissionRouteUnavailable = true;
     }
 
     public void FinishSubmissionWork(Guid leaseId, string? resultJson, bool final, DateTime utcNow)

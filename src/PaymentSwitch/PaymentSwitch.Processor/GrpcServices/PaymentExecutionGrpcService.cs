@@ -24,6 +24,17 @@ public sealed class PaymentExecutionGrpcService(
         catch (FormatException exception) { return InvalidRequest(exception.Message); }
     }
 
+    public override async Task<ConfirmQuoteResponse> RejectUnavailableQuoteRoute(
+        SubmitClaimedQuoteRequest request, ServerCallContext context)
+    {
+        try
+        {
+            return MapResult(await acceptConfirmedQuoteUseCase.ExecuteAsync(MapSubmission(request),
+                context.CancellationToken, rejectUnavailableRoute: true));
+        }
+        catch (FormatException exception) { return InvalidRequest(exception.Message); }
+    }
+
     public override async Task<ConfirmQuoteResponse> SubmitVerifiedBill(
         SubmitVerifiedBillRequest request, ServerCallContext context)
     {

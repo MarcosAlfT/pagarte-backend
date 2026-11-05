@@ -16,6 +16,8 @@ public sealed class ExecutionProbe : IPaymentExecutionClient
     public bool StatusUnavailable;
     public Func<DateTime>? Now;
     public bool ConfirmUnavailable;
+    public bool RejectUnavailable;
+    public int RouteRejectionCalls;
     public TaskCompletionSource? Entered;
     public TaskCompletionSource? Release;
     public Func<QuoteExecutionPackage, CancellationToken, Task<ConfirmQuoteResult>>? ConfirmOverride;
@@ -52,5 +54,15 @@ public sealed class ExecutionProbe : IPaymentExecutionClient
             ? result with { Replayed = true }
             : new ConfirmQuoteResult(false, null, null, QuoteExecutionStatus.Failed,
                 "EXECUTION_NOT_FOUND", "Payment execution was not found.", false, true));
+    }
+
+    public Task<ConfirmQuoteResult> RejectUnavailableRouteAsync(
+        QuoteExecutionPackage package, CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref RouteRejectionCalls);
+        if (RejectUnavailable) throw new HttpRequestException("Synthetic Processor rejection outage.");
+        return Task.FromResult(Results.GetOrAdd((package.ClientId, package.SourceQuoteId),
+            _ => new(false, null, null, QuoteExecutionStatus.Failed, "QUOTE_ROUTE_UNAVAILABLE",
+                "The original payment route is unavailable.", false, true, true)));
     }
 }

@@ -5,13 +5,12 @@ payment, and operational transactions. It separates current implementation
 facts from planned work so the team can deliver and close one transaction at a
 time.
 
-Historical baseline: main commit e5b50d0, reviewed on 2026-10-08. Current
-ownership/status was reconciled on 2026-11-05 with the Keycloak backend,
-catalogue/inquiry delivery, payment-method backend/offline-provider work, and
-the quote-history/explicit-status-recovery delivery merged in main commit 2cae99b.
-Historical Identity.Client use cases are retired source, not active transactions. Provider
-account-lifecycle release checks and real dLocal/mobile acceptance remain open;
-this inventory does not treat configured capabilities as completed acceptance.
+The 2026-11-05 review covers the five quote development points through
+Composite pricing, merged at `1d39f59`, and the subsequent route eligibility
+and overflow fixes. The inventory also reflects the Keycloak, catalogue,
+inquiry, and payment-method deliveries. Retired Identity.Client use cases
+are historical. Provider account-lifecycle checks and live dLocal and mobile
+acceptance remain open.
 
 ## Status Definitions
 
@@ -29,11 +28,10 @@ A transaction should move to `Complete` only after its use case, entry point,
 authorization, persistence, failure behavior, tests, and relevant documentation
 are complete.
 
-Status applies to the current transaction scope named in each row. Accepted
-revisions to quote creation/pricing and payment execution remain pending even
-where their existing baseline transaction is Complete. The Quotes and Payment
-Execution sections identify those differences; these counts do not measure
-completion of the revised Quotes requirement or production-provider acceptance.
+Status applies to the scope named in each row. The Quotes and Payment
+Execution sections distinguish the verified Development implementation from
+live-provider acceptance. The inventory counts track transactions across the
+application.
 
 ## Current Snapshot
 
@@ -142,22 +140,20 @@ and mobile/live acceptance. Offline HTTP tests do not close those gaps.
 ## Quotes
 
 The accepted [Quotes requirement](requirements/quotes.md) covers seven active
-quote transactions with [new lifecycle definitions](flows/quote-review-and-payment.md).
-QUOTE-06 is retained as out of scope following the 2026-11-05 decision to use
-expiry rather than an explicit quote-cancellation transaction.
+quote transactions. The [five development points](requirements/quotes.md#implementation-status)
+summarize the implementation. QUOTE-06 is out of scope under the 2026-11-05
+decision on quote expiry.
 Inquiry-backed quotes use the Development company's bill identity and fresh
 unpaid-bill verification. Explicit pricing definitions support nested
 breakdowns and versioned calculation. Expired or changed quotes require
-a new consultation; there is no automatic refresh or replacement approval.
-Payment charges the card first, then notifies the company: OK completes payment;
-definitive NOT OK requires a full refund. Company settlement is outside this app.
-The statuses below describe the current baseline, not completion of these new
-acceptance criteria.
+a new consultation. Eligible Development payments charge the card first and
+complete on matching company acknowledgment. Definitive rejection triggers
+a full refund. Processor pins execution mode for each accepted payment.
 
 | ID | Transaction | Status | Current implementation or missing work | Owner |
 | --- | --- | --- | --- | --- |
-| `QUOTE-01` | Create an itemized quote | Complete | Quote creation validates the service, route, references, and currency. It calculates explicit versioned pricing definitions and snapshots the Development bill key for inquiry-backed quotes. | `PayableServices` |
-| `QUOTE-02` | Display base value, taxes, fees, discounts, and total | Complete | Explicit definitions produce an immutable grouped breakdown and ordered finalized monetary leaves. Rule versions, rates, and bases remain available for audit. Historical flat quotes keep their original amounts. | `PayableServices` |
+| `QUOTE-01` | Create an itemized quote | Complete | Creation validates the service, route, references, currency, and pricing definition. It rejects ordered minor-unit overflow before saving a quote and snapshots the Development bill key for inquiry-backed quotes. | `PayableServices` |
+| `QUOTE-02` | Display base value, taxes, fees, discounts, and total | Complete | Explicit definitions produce an immutable grouped breakdown and finalized monetary leaves. Creation and Processor validate the same ordered leaf sum. Rule versions, rates, and bases are retained for audit. Historical flat quotes keep their original amounts. | `PayableServices` |
 | `QUOTE-03` | Retrieve a quote by ID | Complete | `GetQuoteUseCase` returns the owner's snapshot and effective lifecycle at the stored deadline without writes or provider/execution calls; foreign and unknown IDs return not found. | `PayableServices` |
 | `QUOTE-04` | Expire unsubmitted quotes after five minutes | Complete | New quotes have an exact five-minute Unpaid window. The atomic Submitted claim binds server time, card, and immutable intent. Processor validates that timely claim even after expiry. SQL/HTTP/gRPC tests cover the deadline, late acceptance, fencing, restart, and legacy migration. | `PayableServices` and `PaymentSwitch.Processor` |
 | `QUOTE-05` | List a client's quotes | Complete | Owner-only summaries retain filters and bounded stable pages. Customer listing excludes consumed quotes. Reads make no provider/execution calls, and owned detail/status retains backend history. | `PayableServices` |
@@ -176,19 +172,18 @@ for late acceptance, concurrency, durable rejection, and workload enforcement.
 Public quote HTTP tests exercise the actual Processor gRPC handoff, restart
 recovery, and the original finalized lines after a pricing configuration change.
 
-The revised requirement remains partially implemented. Live company
-verification, acknowledgment, and refund contracts still require
-acceptance. Effective
-expiry and a not-found execution lookup do not prove a delayed submission is
-safe to replace. Leaving the summary after Pay does not cancel accepted or
-uncertain work. PAY-05 concerns payment-execution cancellation and retains its
-separate Decision required status.
-The clarified target permanently consumes a quote on the first valid Pay:
-atomically persist Unpaid -> Submitted with its single intent before external
-work, then hide its customer summary. No failure, rejection, expiry, or refund
-restores that quote to Unpaid. This is implemented: recorded rejection leaves
-PaymentFailed, unknown dispatch remains Submitted, and customer listing excludes
-used summaries. Recovery uses the original immutable package and a fenced lease.
+The route and overflow fixes passed the 209-test regression run, including
+rejection across restart and route reactivation, delayed submission replay,
+and the case where the grouped total fits but the ordered leaf sum overflows.
+See the [acceptance guide](../tests/PayableServices.Tests/README.md) and
+[live acceptance gaps](current-problems.md#7-quote-acceptance-boundaries).
+Leaving the summary after Pay keeps the original submission in effect.
+PAY-05 separately covers payment-execution cancellation.
+The first valid Pay atomically changes Unpaid to Submitted, persists the
+original intent, and removes the summary from customer listing. A recorded
+rejection can close the quote as PaymentFailed, Invalidated, or NoLongerDue.
+Unknown dispatch remains Submitted. Recovery uses the immutable package
+and a fenced lease.
 Technical redelivery recovers the same intent/result; any later eligible
 customer payment requires a new inquiry/quote. QUOTE-04 limits the initial server
 claim while Unpaid; it never expires Submitted work. Processor acceptance and
@@ -202,8 +197,8 @@ execution modes. See the [Quotes requirement](requirements/quotes.md).
 
 | ID | Transaction | Status | Current implementation or missing work | Owner |
 | --- | --- | --- | --- | --- |
-| `PAY-01` | Confirm and pay a quote with a stored card | Complete | `ConfirmQuoteUseCase` consumes the quote, binds the card, and checks fresh evidence for inquiry-backed bills. Processor pins execution mode and technical replay resumes the original intent. | `PayableServices` and `PaymentSwitch.Processor` |
-| `PAY-02` | Accept a payment idempotently | Complete | SourceQuoteId, SubmissionId, fingerprint, and recorded outcomes bind one execution. Processor reserves a verified bill atomically with acceptance, across different quotes and clients. | `PaymentSwitch.Processor` |
+| `PAY-01` | Confirm and pay a quote with a stored card | Complete | Pay consumes the quote and binds the card. Both paths check the original route before dispatch. Inquiry-backed submissions also check fresh bill evidence. A configured-price route rejection is persisted on the quote and survives reactivation. | `PayableServices` and `PaymentSwitch.Processor` |
+| `PAY-02` | Accept a payment idempotently | Complete | SourceQuoteId, SubmissionId, fingerprint, and recorded outcomes bind one execution. Processor records an unavailable-route rejection for an unaccepted submission and replays any earlier outcome. A verified bill is reserved atomically with acceptance across quotes and clients. | `PaymentSwitch.Processor` |
 | `PAY-03` | Execute the payment saga | Complete | Development charge-first payments charge the full total, then recover company acknowledgment or refund a definitive rejection. Company-first payments retain their original execution and rollback behavior. | `PaymentSwitch.Processor` and `ExternalConnections` |
 | `PAY-04` | Refresh payment execution status | Complete | Explicit status and leased recovery use source quote ID without a local PaymentId. Lookup returns the owned payment or its durable rejection. A genuinely missing outcome remains pending. Public Pay and gRPC recovery are tested across restarts. | `PayableServices` and `PaymentSwitch.Processor` |
 | `PAY-05` | Cancel a payment execution | Decision required | Cancellation is unsafe after an external side effect may have occurred. Valid cancellation states and compensation rules must be defined first. | `PaymentSwitch.Processor` |
@@ -223,7 +218,7 @@ refund path by persisted execution mode.
 | `REF-01` | Request and authorize a refund | Missing | No public or operational use case validates a completed payment, starts refunding, and publishes the initial `refund.request`. | `PaymentSwitch.Processor` plus a public or operational boundary |
 | `REF-02` | Execute a refund | Partial | `ProcessRefundRequestUseCase` consumes a message and calls the payment-operator refund adapter, but the initiating transaction is missing. | `PaymentSwitch.Worker` |
 | `REF-03` | Retry a failed refund durably | Complete | Refund retry state and redispatch are implemented in Worker. | `PaymentSwitch.Worker` |
-| `REF-04` | View refund status | Missing | No client or operator-facing refund-status transaction exists. | Public boundary decision required |
+| `REF-04` | View later refund status | Missing | Later refunds lack a client or operator-facing status transaction. The owned quote execution endpoint reports automatic compensation as RefundPending or Refunded. | Public boundary decision required for later refunds |
 | `REF-05` | Open and manage a dispute or chargeback | Missing | No dispute aggregate, provider integration, or operational workflow exists. | Product and compliance decision required |
 
 ## Operations and Support
@@ -245,13 +240,13 @@ several transactions above.
 | ID | Prerequisite | Status | Required outcome |
 | --- | --- | --- | --- |
 | `SEC-01` | Authenticate client profile, card, and quote operations | Complete | Public profile, stored-card, and quote endpoints validate access tokens and derive client ownership from the token. |
-| `SEC-02` | Authenticate every internal Processor gRPC service | Partial | Card/execution gRPC require workload authentication; CardOperationsService requires a distinct operations credential. Payment-query/catalogue gRPC protection remains pending. |
-| `SEC-03` | Add administrator/support identities and permissions | Partial | Keycloak roles and VerifiedAdmin catalogue/card-review boundaries exist. Payment/refund manual-review and broader support permissions remain pending. |
+| `SEC-02` | Authenticate every internal Processor gRPC service | Partial | Card and quote-execution gRPC require workload authentication. Card operations and payment recovery each require a distinct credential. Payment-query and catalogue gRPC protection remain pending. |
+| `SEC-03` | Add administrator/support identities and permissions | Partial | VerifiedAdmin covers catalogue, card reviews, and stalled charge-first recovery. Company-first manual resolution and broader support permissions remain pending. |
 | `SEC-04` | Decide whether catalogue browsing is public or authenticated | Complete | The accepted amount-inquiry requirement preserves public catalogue browsing/details; HTTP tests verify that boundary while customer inquiries remain protected. |
 | `ARCH-01` | Resolve duplicate catalogue ownership and the external feed | Open | The mock HTTP feed is implemented. Resolve ownership/retirement of Processor's retained catalogue; real-provider catalogue integration remains later work. |
 | `ARCH-02` | Resolve company endpoints and credentials server-side | Open | The execution package should carry stable route or destination identifiers rather than connection details. |
 | `ARCH-03` | Implement PayableServices application-owned transaction boundaries | Complete | Registered IUnitOfWork owns commits; repositories stage writes. SQL transaction-owned application locks protect catalogue sync/activation, durable inquiry reservations/completion, and atomic quote consumption; HTTP runs outside transactions. |
-| `TEST-01` | Add database-backed and transport-level integration coverage | Partial | Quote HTTP/SQL tests cover claim/expiry/fencing/restart/migration; actual handoff-client gRPC/SQL tests cover workload auth, concurrency, late acceptance, and durable rejection. Card/provider suites retain existing coverage. A single public quote-HTTP through Processor runtime smoke and live-provider acceptance remain pending. |
+| `TEST-01` | Add database-backed and transport-level integration coverage | Partial | Public Pay runs through Processor gRPC and SQL in the two-host Development fixture, including lost responses and restart recovery. Full Docker/AppHost smoke, concurrent hosted dispatchers, and live-provider acceptance remain open. |
 
 See [Current Problems](current-problems.md) for the detailed architectural
 conflicts behind `ARCH-01` through `ARCH-03` and `TEST-01`.

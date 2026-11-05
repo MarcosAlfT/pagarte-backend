@@ -11,12 +11,13 @@ hosts with isolated databases. It drops the submission response after Processor
 commits acceptance, rejection, or a completed refund, restarts both hosts, and
 verifies owner-only status recovery and duplicate Pay delivery.
 The same cases change the pricing configuration after quote creation and verify
-that Processor receives the original approved breakdown and total.
+that Processor receives the original finalized monetary lines and approved total.
 
 `CompositeQuotePricingTests` configures a synthetic service with provider base,
 fixed charges, percentage fee and tax, and both discount strategies. It checks
 invalid groups and dependencies, immutable snapshot evidence, preserved flat
-quotes, and zero- and three-decimal currencies.
+quotes, zero- and three-decimal currencies, and an ordered leaf sum that
+overflows even though its grouped total fits.
 
 Windows SQL Server LocalDB is the default. Other SQL Server installations can
 be selected with the `PAGARTE_TEST_SQL` environment variable; the test rig replaces
@@ -43,28 +44,27 @@ commit. Concurrent HTTP calls exercise SQL locks and unique indexes.
 | Quote execution recovery | Injected local commit failure after the execution probe accepts, source-quote lookup without local PaymentId after expiry, same payment recovery, foreign-ID hiding, and unchanged local state on not-found/outage. |
 | Single-use submission / QUOTE-04 | Commit Submitted/card/server time/package before dispatch; concurrent replay and card conflicts, consumed-list exclusion, exact expiry, late acceptance, durable rejection, stale-response fencing, failed commits, API restart, and legacy migration. |
 | Bill verification | Stable account/period identity, fresh operation key and persisted evidence, changed identity/amount/currency, zero balance, malformed evidence, disabled route, and legacy quotes without identity. |
+| Configured-price route eligibility | Disabled or changed original route, a service newly requiring inquiry, and durable route rejection across restart and reactivation. |
 
-Run only the new slice with
+Run quote history and submission tests with
 `dotnet test tests/PayableServices.Tests/PayableServices.Tests.csproj --filter "FullyQualifiedName~QuoteHistoryAcceptanceTests|FullyQualifiedName~QuoteSubmissionAcceptanceTests"`.
 The execution probe uses the real Processor package validator and retains source-quote
 results. PayableServices lease fencing is tested over HTTP/SQL, while the probe
 does not exercise Processor gRPC/SQL acceptance or saga execution.
 The separate Processor `QuoteSubmissionGrpcTests` run the actual handoff client
 against authenticated gRPC/SQL for acceptance, rejection, concurrency, and timing.
-Charge-first confirmation and refund remain pending.
-Explicit quote cancellation (QUOTE-06) is out of scope; no cancellation endpoint
-or Pay/Cancel acceptance scenario is required. Existing Cancelled history stays.
-Single-use submission and customer filtering are implemented. Tests hold the
-first dispatch open, prove committed Submitted state and one-card ownership,
-advance beyond expiry, and verify the original payment completes without reuse.
-Restart and stale-lease tests resume/fence the immutable intent. Current Processor
-execution remains company-first; tests do not establish future bill contracts.
+The public recovery fixture covers the complete HTTP-to-gRPC flow for
+Development charge-first completion and compensation. The original flat
+quote path and the pinned company-first mode also have coverage. QUOTE-06
+is out of scope, with existing Cancelled history preserved.
+See [Current Problems](../../docs/current-problems.md#7-quote-acceptance-boundaries)
+for live acceptance gaps.
 
-Verified on 2026-11-04 with SQL Server LocalDB: all 53 PayableServices tests,
-103 Processor/card/provider tests, 7 shared-money tests, and 9 security tests
-passed. Downgrade guards are checked for consumed quotes and recorded rejection.
-The build reports existing dependency audit
-warnings for Microsoft.OpenApi and System.Security.Cryptography.Pkcs.
+On 2026-11-05, the quote regression run with the route eligibility and
+ordered-total overflow fixes passed all 209 tests across PayableServices (76),
+Processor (117), shared money (7), and security (9). Both EF models matched
+their migration snapshots. See [Quote Lifecycle](../../docs/flows/quote-lifecycle.md#deployment-and-compatibility)
+for the route-rejection deployment order.
 
 Run the existing `PaymentSwitch.Processor.Tests`, `Utilities.Money.Tests`, and
 `Pagarte.Security.Tests` suites for saga, money, and security regressions.
@@ -95,9 +95,10 @@ Run the existing `PaymentSwitch.Processor.Tests`, `Utilities.Money.Tests`, and
    deadline and verify that status/recovery still follows the same payment.
 
 Deploy/migrate Processor before cutting over all PayableServices instances.
-The PayableServices migration makes legacy unexecuted quotes Expired without
-inventing claim authority; accepted legacy payment history remains recoverable.
-Both migrations block downgrade once their submission records exist.
+The submission migration expires legacy unexecuted quotes without claim
+authority. The bill migration invalidates unsubmitted inquiry-backed quotes
+without bill identity. Accepted legacy payment history remains recoverable.
+Migration guards preserve recorded submissions and pricing evidence.
 
 Full Aspire startup with Keycloak is a separate local smoke check. The automated
 HTTP/SQL tests do not require Docker, an external company, or a live Keycloak

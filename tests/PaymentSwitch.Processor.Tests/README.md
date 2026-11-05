@@ -15,10 +15,12 @@ identity resolution, and SQL migrations/constraints. Explicit recovery calls rep
 RabbitMQ/background loops. A separate per-test provider journal survives host restarts.
 
 `QuoteSubmissionGrpcTests` runs the actual PayableServices execution client over
-workload-authenticated SubmitClaimedQuote and SubmitVerifiedBill gRPC and SQL
-acceptance/rejection records. It verifies late acceptance of a timely claim, invalid timestamps,
-concurrent delivery, unchanged rejection after card eligibility changes, and
-blocking new execution through legacy ConfirmQuote. Bill tests cover cross-client
+workload-authenticated `SubmitClaimedQuote`, `SubmitVerifiedBill`, and
+`RejectUnavailableQuoteRoute` RPCs backed by SQL. It verifies late acceptance of
+a timely claim, invalid timestamps, concurrent delivery, durable rejection after
+card eligibility changes, and legacy `ConfirmQuote` replay restrictions. The
+route tests verify that a recorded rejection blocks delayed acceptance and that
+an existing acceptance takes precedence. Bill tests cover cross-client
 reservation while in flight and after success, stale evidence at acceptance and
 before company payment, and fresh verification following reservation release.
 `ChargeFirstGrpcTests` covers fresh evidence before charge, lost charge and

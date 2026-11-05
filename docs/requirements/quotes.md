@@ -24,39 +24,22 @@ definitive NOT OK requires a full card refund. Company notification records the
 bill payment; it does not transfer money. Later reconciliation and settlement
 with the company are outside this application.
 
-## Current Baseline and Required Changes
+## Implementation Status
 
-- Itemized immutable quotes, owner-only detail/listing, inquiry consumption,
-  and durable single-use submission exist. Explicit quote
-  cancellation is out of scope; QUOTE-06 remains a historical identifier.
-- Explicit pricing definitions produce a nested breakdown and an immutable
-  snapshot of each rule, its finalized basis, and its finalized amount.
-  Existing flat snapshots retain their stored amounts and presentation.
-- Confirmation commits Submitted, selected card, server timestamp, immutable
-  package/fingerprint, and one submission ID before dispatch. Consumed quotes
-  are excluded from customer listing, including failed attempts. Rejections
-  recorded by Processor permanently close the original quote.
-- New configured-price and inquiry-backed quotes expire five minutes after
-  creation while Unpaid. A timely claim remains valid after that deadline.
-  The migration preserves legacy snapshots and makes unexecuted legacy quotes
-  non-payable without fabricating submission or bill evidence.
-- Eligible Development payments persist charge-first execution on acceptance.
-  Existing accepted payments and configured-price routes use company-first execution.
-- The Development company supplies an authoritative billing period. PayableServices
-  snapshots the company, service, account, and period and freshly verifies that
-  bill and its service amount after Pay. Processor atomically reserves the bill
-  key on acceptance across clients and quotes. Configured-price services have no
-  bill verification. Live company bill contracts remain pending.
-- Explicit refresh and leased background submission recovery find accepted
-  execution by source quote ID without local PaymentId. Original intents resume
-  after restart/expiry with the same package and card; missing or unavailable
-  Processor state does not release a consumed quote. Processor records acceptance
-  or rejection durably for the new authenticated submission RPC.
-- Status lookup returns a recorded rejection to the quote owner. Verified
-  admins can schedule one audited recovery attempt for a stalled charge-first
-  operation. The dispatcher reuses the original provider operation key.
-- No production data exists. Historical/test records still must not acquire
-  invented bill identities or pricing evidence during migration.
+| Development point | Current implementation |
+| --- | --- |
+| 1. Single-use submission | The five-minute deadline applies only while Unpaid. A timely Pay atomically binds the card, server claim time, submission ID, and immutable package. Submitted quotes leave the customer list and stay consumed. |
+| 2. Bill identity and verification | Development inquiry quotes snapshot the company, service, account, and provider period. PayableServices verifies the unpaid bill, amount, and currency. Both quote paths check the original route before dispatch. Processor reserves an inquiry-backed bill key atomically across quotes and clients. |
+| 3. Charge-first execution | Eligible Development payments pin charge-first mode. Processor charges the full quote total, completes on matching company acknowledgment, and owns the full compensation refund on definitive rejection. Previously accepted payments retain their recorded mode. |
+| 4. Durable recovery | Owner-scoped lookup returns a payment or recorded rejection by source quote ID. Leased workers resume the original intent, and verified admins can schedule an audited same-key retry for a stalled charge-first operation. |
+| 5. Composite and Strategy pricing | Explicit pricing definitions produce immutable grouped breakdowns and finalized monetary lines. Rule versions, rates, and bases are retained for audit. Existing flat quotes retain their stored amounts and presentation. |
+
+The migrations preserve legacy evidence. The submission migration expires
+unexecuted quotes from before the current claim lifecycle. The bill migration
+invalidates unsubmitted inquiry-backed quotes without bill identity.
+QUOTE-06 remains out of scope.
+Live-provider acceptance is tracked in
+[Current Problems](../current-problems.md#7-quote-acceptance-boundaries).
 
 ## Ownership
 
@@ -124,6 +107,7 @@ with the company are outside this application.
   rounding mode in this scope; reject overrides consistently at both boundaries.
 - A positive total equals the sum of finalized leaves exactly. Discounts are
   negative leaves. Groups are display subtotals, never independent charges.
+  Quote creation checks the same display-ordered minor-unit sum as Processor.
 - Snapshot leaves, grouping, rates/bases, Strategy IDs/versions, currency, route,
   and total once. Reads and payment submission do not reprice this snapshot.
 - All client-relevant charges are visible; internal metadata and credentials
@@ -311,12 +295,12 @@ After confirmed refund, a new attempt also requires fresh unpaid-bill evidence.
   once bill-level barriers allow; the original quote is permanently consumed.
   Leaving the summary does not revoke submission.
 
-| Durable execution situation | Client payment status | Next permitted work |
+| Durable execution situation | Current quote execution API status | Next permitted work |
 | --- | --- | --- |
 | Submission accepted; checking/charging; charge unknown | Processing | Continue/reconcile same payment. |
 | Card charged; company notification pending/unknown | Processing | Notify/reconcile only; no second charge. |
-| Card charged; matching company OK | Succeeded | Read history/receipt. |
-| Definite failure without charge | Failed | New consultation for another attempt. |
+| Card charged; matching company OK | Completed | Read the owned quote execution result. |
+| Definite failure without charge | Declined for a failed payment, or Failed for a recorded rejection | New consultation for another attempt. |
 | Company definitive NOT OK; refund pending/unknown | RefundPending | Refund/reconcile the original full charge. |
 | Operator confirms full refund | Refunded | New consultation if bill remains unpaid. |
 
@@ -380,29 +364,23 @@ SQL concurrency, restart recovery, and failure injection as well as unit tests.
 
 ## Delivery and Compatibility
 
-1. Implement Composite/pricing/key Strategies and persist their evidence, exact
-   five-minute expiry, target quote statuses/permanent consumption, customer-list
-   exclusion of consumed quotes, and ordinary new-inquiry/new-quote behavior.
-2. Extend provider-neutral bill verification and post-charge notification/status
-   contracts with distinct service and total amounts. Validate mock capabilities;
-   real adapters must demonstrate idempotency, lookup, acknowledgment/rejection,
-   and refund recovery before enabling this flow.
-3. Coordinate the atomic server-side Pay deadline, bound submission evidence,
-   duplicate protection, and post-deadline acceptance/recovery across PayableServices
-   and Processor. Revise the current execution expiry validator together with
-   that handoff. Implement charge -> notify -> complete
-   or refund with durable transitions and exclusive compensation ownership.
-4. Introduce an execution-flow version or drain old active executions before
-   cutover. Never resume a company-first payment using the new order. Coordinate
-   Worker refund messages/status updates so they cannot duplicate compensation.
-5. Preserve old quote/inquiry snapshots. Unexecuted legacy quotes without the new
-   identity/submission contract become non-payable and require a new inquiry; do not
-   bind them to today's bill or reopen expired records. Existing executions keep
-   their original evidence/flow. Represent old flat components as a legacy flat
-   snapshot (or presentation-only group), with unavailable Strategy evidence
-   explicitly absent; never invent versions, rates, or bill identities.
-6. Verify acceptance, update transaction completion with evidence, and only then
-   change current-state architecture/flow descriptions to the implemented behavior.
+- Deploy Processor's submission RPCs and associated migrations before the
+  PayableServices cutover. For configured-price route rejection, deploy
+  `RejectUnavailableQuoteRoute` before PayableServices applies
+  `PersistUnavailableQuoteRoute` and uses the new RPC.
+- Legacy unsubmitted quotes without the required claim or bill evidence require
+  a new quote and, for inquiry-backed services, a new inquiry. Existing
+  quote and inquiry snapshots are preserved. Historical flat snapshots retain
+  their original amounts, with unavailable Strategy evidence absent.
+- Existing payments retain their original evidence and pinned execution mode.
+  Worker guards its legacy refund path by execution mode, and Processor owns
+  charge-first compensation.
+- Live adapters must demonstrate authoritative bill verification, idempotency,
+  lookup, recoverable acknowledgment or rejection, and full refund recovery
+  before charge-first execution is enabled for their routes.
+
+See [Quote Lifecycle](../flows/quote-lifecycle.md#deployment-and-compatibility)
+and [Payment Lifecycle](../flows/payment-lifecycle.md#deployment-rule).
 
 ## Out of Scope
 

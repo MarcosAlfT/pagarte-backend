@@ -134,6 +134,32 @@ public sealed class CompositeQuotePricingTests
 
     private static async Task<Guid> InquireAsync(TestRig rig, HttpClient client) =>
         (await TestRig.Data(await rig.Inquire(client))).GetProperty("id").GetGuid();
+
+    [Fact]
+    public async Task Rejects_flattened_overflow_at_quote_creation_even_when_the_group_total_fits()
+    {
+        await using var rig = await TestRig.CreateAsync(activate: false);
+        using var client = rig.Client();
+        var serviceId = Guid.Parse("55555555-5555-5555-5555-555555555555");
+        var definition = new QuotePricingDefinition("root",
+            [new("root", "Total", ["base", "adjustments"]), new("adjustments", "Adjustments", ["fee", "discount"])],
+            [new("base", "ServiceAmount", "Base", "USD", "fixed", 1, Amount: (long.MaxValue - 1) / 100m),
+             new("fee", "Fee", "Fee", "USD", "fixed", 1, Amount: 0.02m),
+             new("discount", "Discount", "Discount", "USD", "fixed-discount", 1, Amount: 0.02m)]);
+        var request = new { serviceId, currency = "USD", referenceValues = new { accountNumber = "00123456" } };
+        await SyntheticQuotePricing.StoreAsync(rig, definition, serviceId);
+        var overflow = await client.PostAsJsonAsync("/api/quotes", request);
+        Assert.Equal(HttpStatusCode.BadRequest, overflow.StatusCode);
+        await rig.InDb(async db => Assert.Empty(await db.Quotes.ToArrayAsync()));
+
+        await SyntheticQuotePricing.StoreAsync(rig, SyntheticQuotePricing.Group(definition, "adjustments",
+            group => group with { Children = ["discount", "fee"] }), serviceId);
+        var quote = await TestRig.Data(await client.PostAsJsonAsync("/api/quotes", request));
+        Assert.Equal(long.MaxValue - 1, quote.GetProperty("totalMinorUnits").GetInt64());
+        var id = quote.GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync($"/api/quotes/{id}/confirm",
+            new { creditCardId = Guid.NewGuid() })).StatusCode);
+    }
 }
 
 internal static class SyntheticQuotePricing

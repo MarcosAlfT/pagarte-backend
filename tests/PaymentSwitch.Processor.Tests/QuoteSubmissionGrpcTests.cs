@@ -281,6 +281,31 @@ public sealed class QuoteSubmissionGrpcTests
         Assert.Equal(0, rig.Company.Calls);
     }
 
+    [Fact]
+    public async Task Route_rejection_fences_delayed_configured_submission_and_preserves_prior_acceptance()
+    {
+        await using var rig = await CardTestRig.CreateAsync();
+        var card = await SaveCard(rig);
+        using var channel = rig.Channel();
+        var handoff = new PaymentSwitchExecutionClient(new PaymentExecutionService.PaymentExecutionServiceClient(channel), rig.Settings);
+        var blocked = Package(rig, card);
+        var rejection = await handoff.RejectUnavailableRouteAsync(blocked);
+        Assert.True(rejection.SubmissionRecorded);
+        Assert.Equal("QUOTE_ROUTE_UNAVAILABLE", rejection.ErrorCode);
+        Assert.Equal(rejection.ErrorCode, (await handoff.GetStatusAsync(blocked.ClientId, blocked.SourceQuoteId)).ErrorCode);
+        var delayed = await handoff.ConfirmQuoteAsync(blocked);
+        Assert.True(delayed.Replayed);
+        Assert.Equal(rejection.ErrorCode, delayed.ErrorCode);
+        Assert.Equal(0, rig.Company.Calls);
+
+        var allowed = Package(rig, card);
+        var accepted = await handoff.ConfirmQuoteAsync(allowed);
+        var lateDenial = await handoff.RejectUnavailableRouteAsync(allowed);
+        Assert.Equal(accepted.PaymentId, lateDenial.PaymentId);
+        Assert.Equal(QuoteExecutionStatus.Completed, lateDenial.Status);
+        Assert.Equal(1, rig.Company.Calls);
+    }
+
     private static async Task<Guid> SaveCard(CardTestRig rig, string owner = CardTestRig.Owner)
     {
         using var client = rig.Client(owner);

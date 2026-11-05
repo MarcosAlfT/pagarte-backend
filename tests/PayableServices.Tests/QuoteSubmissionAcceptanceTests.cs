@@ -369,6 +369,88 @@ public sealed class QuoteSubmissionAcceptanceTests
     private static Task<HttpResponseMessage> Pay(HttpClient client, Guid quote, Guid card) =>
         client.PostAsJsonAsync($"/api/quotes/{quote}/confirm", new { creditCardId = card });
 
+    [Theory]
+    [InlineData("disabled")]
+    [InlineData("destination")]
+    [InlineData("requires-inquiry")]
+    public async Task Configured_price_pay_rejects_an_ineligible_original_route(string change)
+    {
+        await using var rig = await TestRig.CreateAsync(activate: false);
+        using var client = rig.Client();
+        var id = await CreateConfiguredQuoteAsync(client);
+        await rig.InDb(async db =>
+        {
+            var route = await db.PaymentRoutes.SingleAsync();
+            if (change == "disabled") route.IsActive = false;
+            if (change == "destination") route.CompanyPaymentEndpoint = "https://other-company.test/payments";
+            if (change == "requires-inquiry") (await db.PayableServices.SingleAsync()).RequiresInquiry = true;
+            await db.SaveChangesAsync();
+        });
+        var response = await Pay(client, id, Guid.NewGuid());
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("QUOTE_ROUTE_UNAVAILABLE", body.GetProperty("data").GetProperty("errorCode").GetString());
+        Assert.Equal(0, rig.Provider.Calls);
+        Assert.Equal(0, rig.Execution.ConfirmCalls);
+        Assert.Equal(1, rig.Execution.RouteRejectionCalls);
+        await rig.InDb(async db =>
+        {
+            var quote = await db.Quotes.SingleAsync();
+            Assert.True(quote.SubmissionRouteUnavailable);
+            Assert.Equal(QuoteStatus.PaymentFailed, quote.Status);
+            Assert.Null(quote.PaymentId);
+        });
+    }
+
+    [Fact]
+    public async Task Configured_price_recovery_preserves_observed_route_rejection_after_reactivation()
+    {
+        await using var rig = await TestRig.CreateAsync(activate: false);
+        using var client = rig.Client();
+        var id = await CreateConfiguredQuoteAsync(client);
+        var card = Guid.NewGuid();
+        // The first execution request was uncertain. Disable the route before recovery can dispatch again.
+        rig.Execution.ConfirmUnavailable = true;
+        Assert.Equal(HttpStatusCode.Accepted, (await Pay(client, id, card)).StatusCode);
+        await SetConfiguredRouteActiveAsync(rig, false);
+        rig.Execution.ConfirmUnavailable = false;
+        rig.Execution.RejectUnavailable = true;
+        rig.Clock.UtcNow = rig.Clock.UtcNow.AddSeconds(11);
+        await rig.RecoverQuote(id);
+        await rig.InDb(async db => Assert.True((await db.Quotes.SingleAsync()).SubmissionRouteUnavailable));
+        Assert.Equal(1, rig.Execution.ConfirmCalls);
+        Assert.Equal(1, rig.Execution.RouteRejectionCalls);
+
+        await SetConfiguredRouteActiveAsync(rig, true);
+        await rig.RestartApiAsync();
+        rig.Execution.RejectUnavailable = false;
+        rig.Clock.UtcNow = rig.Clock.UtcNow.AddSeconds(11);
+        await rig.RecoverQuote(id);
+        using var restarted = rig.Client();
+        Assert.Equal(HttpStatusCode.BadRequest, (await Pay(restarted, id, card)).StatusCode);
+        Assert.Equal(1, rig.Execution.ConfirmCalls);
+        Assert.Equal(2, rig.Execution.RouteRejectionCalls);
+        var newQuote = await CreateConfiguredQuoteAsync(restarted);
+        Assert.Equal(HttpStatusCode.OK, (await Pay(restarted, newQuote, card)).StatusCode);
+        Assert.Equal(2, rig.Execution.ConfirmCalls);
+    }
+
+    private static async Task<Guid> CreateConfiguredQuoteAsync(HttpClient client)
+    {
+        var result = await TestRig.Data(await client.PostAsJsonAsync("/api/quotes", new
+        {
+            serviceId = Guid.Parse("55555555-5555-5555-5555-555555555555"),
+            currency = "USD", referenceValues = new { accountNumber = "00123456" }
+        }));
+        return result.GetProperty("id").GetGuid();
+    }
+
+    private static Task SetConfiguredRouteActiveAsync(TestRig rig, bool active) => rig.InDb(async db =>
+    {
+        (await db.PaymentRoutes.SingleAsync()).IsActive = active;
+        await db.SaveChangesAsync();
+    });
+
     [Fact]
     public async Task A_consumed_quote_projects_pending_and_confirmed_compensation_without_returning_to_the_list()
     {
