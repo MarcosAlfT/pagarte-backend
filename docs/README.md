@@ -18,6 +18,8 @@ is explicitly marked as proposed.
 | Location | Purpose |
 | --- | --- |
 | `requirements/` | Product behavior, scope, and acceptance criteria. |
+| `templates/` | Reusable requirement and work-record structures. |
+| `work/` | Per-requirement investigation, stage status, review, and verification evidence; created as work starts. |
 | `standards/` | Maintained implementation and verification conventions. |
 | `decisions/` | Accepted architectural choices, rationale, and consequences. |
 | `contexts/` | Context ownership, current implementation, and domain-specific design. |
@@ -27,6 +29,25 @@ is explicitly marked as proposed.
 Keep one authoritative home for detailed guidance. Requirements link to design
 and standards rather than acting as the coding handbook. ADRs retain decision
 history; contexts explicitly distinguish implemented design from planned work.
+
+## Requirement Workflow
+
+Follow [Requirement Development](standards/requirement-workflow.md) for the same
+six-stage sequence on every requirement, including a dedicated documentation
+audit after development and before completion verification. The
+[pagarte-requirement skill](../.agents/skills/pagarte-requirement/SKILL.md) accepts
+short requests such as `Start a requirement for Payment Execution`,
+`Review payment-history for development`, `Develop payment-history`, and
+`Document payment-history`.
+
+Use the [requirement template](templates/requirement.md) for product behavior
+and the [work-record template](templates/requirement-work.md) for findings,
+readiness, progress, and evidence shared between chats. Existing requirements
+retain their IDs and can adopt the workflow without wholesale rewriting.
+After development, contexts, flows, standards, and decisions become the maintained
+reference for delivered behavior and design. Requirements retain scope and
+acceptance history and link to those references. Completion requires verified
+coverage and consistency of the affected documentation.
 
 ## Implementation Standards
 

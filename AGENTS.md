@@ -29,6 +29,21 @@
 Keep current implementation facts separate from proposed architecture. Do not
 describe a proposed boundary as implemented until the code follows it.
 
+## Requirement Workflow
+
+- Use [Requirement Development](docs/standards/requirement-workflow.md) and the
+  repository `pagarte-requirement` skill for requirement investigation, drafting,
+  readiness review, development, implementation documentation, and completion verification.
+- Preserve the six-stage sequence and its work record between chats. Short
+  stage requests are sufficient; infer the target only when unambiguous.
+- Keep product requirements in `docs/requirements/` and per-requirement progress
+  and evidence in `docs/work/`. Templates live in `docs/templates/`.
+- After development, audit affected reference documentation against the code.
+  Maintain delivered rules/design in contexts, flows, standards, and decisions;
+  requirements retain acceptance history and links to those references.
+- Do not mark work Complete until documentation coverage and consistency are
+  verified. Recheck affected documentation after later implementation fixes.
+
 ## Implementation Guidance
 
 - Follow [Application Design](docs/standards/application-design.md) for backend

@@ -11,7 +11,8 @@ source code and context documents before stating current ownership or behavior.
 Use the documentation homes defined in the
 [index](../../../docs/README.md#where-guidance-belongs):
 
-- Requirements contain product behavior, scope, and acceptance criteria.
+- Requirements contain requested product behavior, scope, and acceptance criteria;
+  after delivery they retain traceability and link to current reference documents.
 - Standards contain maintained implementation and verification conventions.
 - Contexts contain ownership, current implementation, and specialized design.
 - Flows describe behavior crossing runtime boundaries.
@@ -33,3 +34,18 @@ claims. Preserve historical verification dates; source inspection is not a new
 test run. Follow [Testing](../../../docs/standards/testing.md#evidence-and-limits)
 for documentation checks, preserve CRLF, and maintain index links. Documentation-only
 work does not change application code.
+
+For post-development documentation, follow
+[Document the Implementation](../../../docs/standards/requirement-workflow.md#5-document-the-implementation).
+Trace each delivered behavior/design decision from the actual diff and source to
+its maintained context, flow, standard, or ADR. A future maintainer should be able
+to understand the implementation from those documents without reading the original
+requirement. Keep requirement IDs and acceptance history; do not erase them or
+copy the entire specification into multiple reference documents.
+
+Record coverage and applicable summary/inventory/test-guide checks in the work
+record. Search for old behavior and inspect contradictions rather than relying
+only on link validation. Report code/requirement mismatches as gaps; documentation
+must not silently approve them. Missing coverage or known stale affected docs
+prevents documentation completion. Later implementation changes require rechecking
+the affected references.

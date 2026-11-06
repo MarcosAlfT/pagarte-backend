@@ -32,3 +32,11 @@ new ADR only when the user or team has actually accepted the decision.
 Select verification with [Testing](../../../docs/standards/testing.md) and the
 relevant suite guide. Report results, verification limits, and unresolved
 cross-context dependencies or ownership conflicts.
+
+For requirement-driven work, finish development with a handoff to the
+[documentation stage](../../../docs/standards/requirement-workflow.md#5-document-the-implementation).
+Keep required context/flow updates in the development change, then audit the
+maintained references against the final implementation. Requirements and work
+records alone are not implementation documentation. Do not claim the requirement
+Complete until documentation and completion verification have passed; later
+behavior fixes require another check of the affected references.
